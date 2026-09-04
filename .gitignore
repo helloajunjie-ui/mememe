@@ -22,3 +22,4 @@ workspace/exam6_download/
 _exam6_chain.html
 __pycache__/
 *.pyc
+data/backup_status.json
