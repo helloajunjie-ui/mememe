@@ -19,11 +19,13 @@ from tools.base import tool
 
 @tool(
     "ctx_search",
-    "从任务全量上下文存档检索早期信息。当用户引用更早的内容（如'之前提到的X'、'把之前的报告拿来'）"
-    "而当前窗口没有对应记录时使用：按你理解的关键词检索，返回命中回合及其前后各 context_rounds 回合"
-    "的上下文（带回合号与时间戳），据此回想，不要凭空编造缺失信息。",
+    "从任务全量上下文存档检索早期信息。**当你需要早期上下文时主动使用**——大多数情况是你自己有需求"
+    "（i need…：执行任务需要历史数据/之前的结论/早期对话/上次的方法），少数情况是用户引用更早的内容"
+    "（如'之前提到的X'、'把之前的报告拿来'）。按你理解的关键词检索，返回命中回合及其前后各"
+    " context_rounds 回合的上下文（带回合号与时间戳），据此回想，不要凭空编造缺失信息。"
+    "不要因为当前窗口没有而重做/重搜——先查存档。",
     {
-        "keyword": {"type": "string", "description": "检索关键词（由你按用户意图提取，如人名/主题/文件/时间相关词）", "required": True},
+        "keyword": {"type": "string", "description": "检索关键词（由你按自己的需求或用户意图提取，如人名/主题/文件/时间相关词）", "required": True},
         "task_id": {"type": "string", "description": "限定任务ID（留空自动搜最近任务）", "required": False},
         "context_rounds": {"type": "integer", "description": "命中回合前后各取多少回合（默认5）", "required": False},
         "limit": {"type": "integer", "description": "最多返回命中组数（默认3）", "required": False},
