@@ -99,6 +99,7 @@
   .bubble th { background: rgba(0,0,0,.03); font-weight: 600; }
   .bubble tr:nth-child(even) td { background: rgba(0,0,0,.015); }
   .bubble li { margin: 2px 0; }
+  .bubble .time { font-size: 10.5px; color: var(--text-2); text-align: right; margin-top: 6px; }
   /* 思考中 */
   .thinking { display: flex; align-items: center; gap: 8px; }
   .thinking .dot { width: 6px; height: 6px; border-radius: 50%;
@@ -375,6 +376,10 @@ function renderMd(text) {
   return html;
 }
 
+function fmtTime(d) {
+  function p(n){ return (n<10?"0":"")+n; }
+  return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds());
+}
 function addMsg(role, html) {
   var wrap = document.createElement("div");
   wrap.className = "msg-wrap " + role;
@@ -384,6 +389,10 @@ function addMsg(role, html) {
   var b = document.createElement("div");
   b.className = "bubble";
   b.innerHTML = html;
+  var tm = document.createElement("div");
+  tm.className = "time";
+  tm.textContent = fmtTime(new Date());
+  b.appendChild(tm);
   wrap.appendChild(av);
   wrap.appendChild(b);
   chat.appendChild(wrap);
@@ -417,7 +426,8 @@ function addTaskPanel() {
   var b = document.createElement("div");
   b.className = "bubble";
   b.style.minWidth = "220px";
-  b.innerHTML = '<div style="font-size:12px;color:#6B7280;margin-bottom:6px;">任务进行中 <span class="task-type"></span></div><div class="task-plan"></div><div class="task-flow"></div>';
+  var t0 = fmtTime(new Date());
+  b.innerHTML = '<div style="font-size:12px;color:#6B7280;margin-bottom:6px;">任务进行中 <span class="task-type"></span> <span style="float:right;font-size:10.5px;opacity:.85;">'+t0+'</span></div><div class="task-plan"></div><div class="task-flow"></div>';
   wrap.appendChild(av); wrap.appendChild(b);
   chat.appendChild(wrap);
   chat.scrollTop = chat.scrollHeight;
