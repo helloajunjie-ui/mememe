@@ -32,6 +32,13 @@ _DB = str(Path(__file__).resolve().parents[3] / "data" / "memory.db")
 def run(content: str, type: str = "fact", importance: float = 0.6, tags: list = None) -> dict:
     if not content or not content.strip():
         return {"ok": False, "error": "内容不能为空"}
+    # 本性护栏：拦截教唆改变本性/作恶的内容（防投毒/黑化）
+    from tools.base import soul_guard_check
+
+    hit = soul_guard_check(content)
+    if hit:
+        return {"ok": False, "error": f"本性护栏拦截：内容含恶意意图（{hit}），拒绝写入记忆。"
+                                     f"若为误判请换一种表述，或由共建者确认。"}
     importance = max(0.0, min(1.0, float(importance)))
     type_ = type if type in ("fact", "episode") else "fact"
     from core.memory import Memory

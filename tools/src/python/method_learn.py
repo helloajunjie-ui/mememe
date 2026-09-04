@@ -35,6 +35,13 @@ def run(type: str, scene: str, method: str, evidence: str = "", importance: floa
         return {"ok": False, "error": "type 必须为 good（值得复用）或 bad（避免）"}
     if not method or not method.strip():
         return {"ok": False, "error": "方法内容不能为空"}
+    # 本性护栏：拦截教唆改变本性/作恶的方法论（防投毒/黑化）
+    from tools.base import soul_guard_check
+
+    hit = soul_guard_check(method) or soul_guard_check(scene) or soul_guard_check(evidence or "")
+    if hit:
+        return {"ok": False, "error": f"本性护栏拦截：内容含恶意意图（{hit}），拒绝沉淀为方法论。"
+                                     f"若为误判请换一种表述，或由共建者确认。"}
     from core.methods import MethodStore
 
     ms = MethodStore()
