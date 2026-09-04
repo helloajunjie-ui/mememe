@@ -35,16 +35,17 @@ python -m venv .venv
 .venv\Scripts\python.exe main.py --task "帮我看看当前目录"   # 单次任务
 ```
 
-> 默认 LLM 端点：`https://api.deepseek.com`（OpenAI 兼容），可在 `config.yaml` 切换任意 OpenAI 兼容服务（含本地 Ollama）。
+> 默认 LLM 端点：`https://api.deepseek.com`（OpenAI 兼容）。配置优先级：`config/llm.json`（WebUI 面板保存）> `config.yaml` 的 `llm` 段 > 环境变量 `BAILING_API_KEY`；可切换任意 OpenAI 兼容服务（含本地 Ollama）。
 
 ## 能力概览
 
 | 能力 | 说明 |
 |------|------|
-| 24+ 内置工具 | 文件/网络/命令/记忆/方法论/工具管理/环境探查 |
+| 25 内置工具 | 文件/网络/命令/记忆/方法论/工具管理/环境探查 |
 | 工具自举 | `tool_create` 自写工具 → 校验 → 注册复用 |
 | 工具获取 | `tool_acquire` 国内节点优先（gitee/gitcode/github 镜像） |
 | 死循环检测 | LoopGuard：重复调用/连续失败/空转三类信号，soft 提示 + hard 熔断 |
+| 上下文两层逻辑 | 全量存档 + 最近 20 回合输入窗口 + `ctx_search` 按需回想（AI 需求导向，带回合号/时间戳） |
 | 跟随代理 | 用户开代理时直接走 `127.0.0.1:<端口>`（如 7897），不搞对抗 |
 | 自我备份 | `self_backup` 全量/轻量备份 → `self_restore` 复活 → `self_clone` 迁移 |
 | 环境快照 | 高频低变信息快照缓存，省时省 token |
@@ -55,9 +56,11 @@ python -m venv .venv
 ```
 mememe/
 ├── main.py                # 入口（交互/单次任务/自检）
-├── config.yaml            # 配置（LLM 端点、沙箱参数）
+├── config.yaml            # 默认配置（LLM 端点、沙箱参数；面板覆盖见 config/llm.json）
+├── config/llm.json        # AI 接入配置（WebUI 面板保存，优先于 config.yaml）
 ├── core/                  # 核心：agent 主循环、记忆、方法论、注册表、人性层
 ├── tools/                 # 工具框架 + 内置工具源码（python/go）
+├── webui/                 # 网页交互端（server.py + index.html，端口 8765）
 ├── data/persona.yaml      # 人格基座（通用，随仓库分发）
 ├── 设计文档.md             # 完整设计与迭代记录
 └── .gitignore             # 隔离实例私有数据
