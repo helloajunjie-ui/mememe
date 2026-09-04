@@ -104,6 +104,57 @@ def _run_task(tid: str, message: str) -> None:
         _tasks.fail(tid, f"白绫处理失败: {e}")
 
 
+# ---------- 整点反思调度（空闲时间自主自省） ----------
+# 共建者要求（2026-09-04）：白绫在空闲时自主反思、自我维护，而非只等任务。
+# 设计：每小时整点检查一次；若当前无任务在跑（空闲）则后台静默触发一次轻量自省，
+# 不进入前端任务队列、不打断用户操作；同一小时内只反思一次，错过整点等下一小时。
+_reflect_last_hour = None
+
+
+def _run_reflection() -> None:
+    """执行一次整点反思（后台静默，不入任务队列）。"""
+    try:
+        a = get_agent()
+        msg = ("（内部·整点例行反思）现在是你自主的整点反思时间。请简短地："
+               "①回顾最近一次任务或对话的得失，是否有可改进的执行模式；"
+               "②检查自身状态（记忆、方法论、工具、完整性）是否有需要维护的；"
+               "③如有新经验用 method_learn 沉淀；④发现异常或需共建者注意的事，明确报告。"
+               "保持轻量，几步内完成，不要创建长期任务。")
+        reply = a.turn(msg)
+        # 反思后清理可能留下的断点，避免干扰后续用户对话
+        try:
+            a.ongoing_task = None
+        except Exception:  # noqa: BLE001
+            pass
+        ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            a.self_model.set_state("last_reflection", ts)
+        except Exception:  # noqa: BLE001
+            pass
+        print(f"[reflection] {ts} 整点反思完成: {str(reply)[:120]}")
+    except Exception as e:  # noqa: BLE001
+        print(f"[reflection] 整点反思失败: {type(e).__name__}: {e}")
+
+
+def _reflection_scheduler() -> None:
+    """每小时整点：若空闲（无任务在跑）则触发一次白绫自主整点反思。"""
+    global _reflect_last_hour
+    while True:
+        try:
+            now = time.localtime()
+            key = (now.tm_year, now.tm_mon, now.tm_mday, now.tm_hour)
+            if key != _reflect_last_hour:
+                _reflect_last_hour = key  # 标记本小时已处理（错过整点则等下小时）
+                if _ready and _turn_lock.acquire(blocking=False):  # 空闲判定
+                    try:
+                        _run_reflection()
+                    finally:
+                        _turn_lock.release()
+        except Exception:  # noqa: BLE001
+            pass
+        time.sleep(30)  # 每 30 秒检查一次整点边界
+
+
 def _init_agent_async() -> None:
     """后台线程：初始化 Agent 并 boot。失败记原因。"""
     global _agent, _ready, _init_error
@@ -472,6 +523,8 @@ def main() -> None:
 
     # 后台线程异步初始化 Agent；服务端口立即监听（网页秒开）
     threading.Thread(target=_init_agent_async, daemon=True).start()
+    # 整点反思调度：空闲时自主自省（共建者要求·2026-09-04）
+    threading.Thread(target=_reflection_scheduler, daemon=True).start()
 
     print("白绫 Web 界面（API 服务）启动中 ...")
     print(f"  地址: http://{HOST}:{PORT}")
