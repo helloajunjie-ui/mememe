@@ -23,6 +23,7 @@ from core.llm import LLMGateway
 from core.loopguard import LoopGuard
 from core.memory import Memory
 from core.methods import MethodStore
+from core.context import ContextStore
 from core.registry import ToolRegistry
 from core.self_model import SelfModel
 from core.stages import TaskStageTracker
@@ -108,9 +109,14 @@ class Agent:
         self.motivation = Motivation()
         # 方法论库（自我评估沉淀）
         self.methods = MethodStore(os.path.join(self.data_dir, "methodology.json"))
-        # 工作记忆（会话消息）
+        # 工作记忆（会话消息；按上下文节点隔离，闲聊与任务不混流）
         self.history: List[Dict] = []
         self._fail_count: Dict[str, int] = {}
+        # 上下文节点库（任务/闲聊节点：截断存档、带时间戳、按需读取）
+        self.ctx = ContextStore(cfg["data_dir"])
+        self.ctx_mode: str = "chat"     # 当前上下文归属：chat | task
+        self.ctx_task_id: str = ""
+        self.ctx_start_idx: int = 0     # 当前任务在 history 中的起点（完成时摘除）
         # 进行中任务（工具步数超限等被截断时保存，支持续接，避免记忆断裂）
         self.ongoing_task: Optional[Dict] = None
         self.boot_mode = None
@@ -473,6 +479,17 @@ class Agent:
                 except Exception:  # noqa: BLE001
                     pass
 
+        # ---- 上下文节点化：任务/闲聊隔离 + 关联判定（方法论：节点隔离） ----
+        # 正在任务上下文（ctx_mode=task）且输入不是"继续"续接 → 视为新内容：
+        # 封存当前任务节点（断点不丢，可续接恢复），重置为干净上下文再处理本输入。
+        is_resume = bool(self.ongoing_task) and self._is_resume_request(user_input)
+        if self.ctx_mode == "task" and not is_resume:
+            self._archive_task_node()
+            # 摘除上一任务的轮次，只留一条摘要供引用（隔离，不混流）
+            self.history = self.history[: self.ctx_start_idx]
+            self.ctx_mode = "chat"
+            self._log("[ctx] 新内容隔离：封存上一任务节点，上下文已重置")
+
         self.history.append({"role": "user", "content": user_input})
         _emit({"type": "start", "task_type": "C0", "message": user_input})
 
@@ -586,6 +603,10 @@ class Agent:
             if tracker is None:
                 tracker = TaskStageTracker()
                 tracker.begin_task(user_input if not resume_ctx else self._resume_goal())
+                # 节点化：进入任务上下文，记录任务起点（完成时摘除轮次，隔离闲聊）
+                self.ctx_mode = "task"
+                self.ctx_task_id = tracker.task_id
+                self.ctx_start_idx = len(self.history)
                 self._log(f"[task] 任务开始：{tracker.task_id}（{tracker.dir}）")
             # 截断超出总额度的并行调用（成本精确控制）
             calls = resp["tool_calls"]
@@ -710,13 +731,26 @@ class Agent:
         # 情绪衰减 + 分轻重反思（不一次性堆叠）
         self.emotion.decay()
         self._reflect_light(user_input, content, used_tools)
-        # 任务结束：生成阶段总结并存档
+        # 任务结束：生成阶段总结并存档 + 节点化（存档 task 节点，摘除任务轮次，回闲聊模式）
         if tracker is not None and self.ongoing_task is None:
             success = not content.startswith("（") and not content.startswith("[任务未完成]")
             tracker.plan = plan
             archive = tracker.finish_task(content, success=success)
             self._log(f"[task] 任务结束，档案：{archive}")
             self._backup(force=True)  # 任务结束先备份（用户止损原则：状态变更立即保护）
+            self.ctx.save(ContextStore.make_task_node(
+                goal=tracker.goal, status="done" if success else "interrupted",
+                produced=[str(p) for p in tracker.dir.glob("**/*")] if tracker.dir else [],
+                task_id=tracker.task_id, archive=archive,
+                summary=content[:200],
+            ))
+            # 隔离：摘除本任务轮次（上下文不混流），留一条摘要供后续引用/联动
+            self.history = self.history[: self.ctx_start_idx]
+            self.history.append({"role": "system",
+                                 "content": f"（上一任务已完成：{tracker.goal[:60]}，档案 {archive}）"})
+            self.ctx_mode = "chat"
+            self.ctx_task_id = ""
+            self._log("[ctx] 任务完成：节点已存档，上下文摘除任务轮次，回闲聊模式")
         self.history.append({"role": "assistant", "content": content})
         _emit({"type": "done", "reply": content})
         return content
@@ -770,6 +804,26 @@ class Agent:
     def _is_resume_request(self, user_input: str) -> bool:
         low = user_input.lower()
         return any(k in low for k in self._RESUME_KEYWORDS)
+
+    def _archive_task_node(self) -> None:
+        """封存当前任务节点（任务被打断/用户开新内容时调用）。
+
+        不摧毁任何数据：任务断点（ongoing_task/档案）原样保留，仅写一条节点索引，
+        供后续"继续/引用"联动恢复。"""
+        try:
+            resume = dict(self.ongoing_task) if self.ongoing_task else None
+            if resume:
+                self.ctx.save(ContextStore.make_task_node(
+                    goal=resume.get("goal", "（进行中任务）"),
+                    status="interrupted",
+                    task_id=resume.get("task_id", self.ctx_task_id),
+                    archive=resume.get("archive", ""),
+                    summary="任务中断，断点已存，可续接恢复",
+                    resume=resume,
+                ))
+                self._log(f"[ctx] 任务节点封存（断点可续接）：{resume.get('task_id','')}")
+        except Exception as e:  # noqa: BLE001
+            self._log(f"[ctx] 封存任务节点失败: {e}")
 
     def _resume_goal(self) -> str:
         return f"（续接任务）{self.ongoing_task['goal']}" if self.ongoing_task else "续接任务"
@@ -902,6 +956,31 @@ class Agent:
 （对应五问：①=可行性的事实基础；②=如何做；③=可行性+后果+决定做还是换方式）
 
 【何时显式输出五问/三段】仅高风险操作（工具创建、依赖安装、文件写入、cmd_run 执行命令、影响用户决策）时，先简短陈述三段结论再行动。低风险操作（读取、搜索、常规问答）直接作答或直接调用工具，不输出。
+
+【处理问题总则·无弯路决策链】（处理任何问题先过这条链，一次判定，判定完不回退、不绕路）
+① 关联判定：这个输入和上文有关吗？无关 → 隔离（上下文已由系统按节点隔离，只读相关片段）；相关 → 联动（引用之前产物/档案时直接用）。
+② 知识自检：这题我知道吗？
+   - 完全知道 → 直接答，零工具（你是 AI，自带世界知识，不为自己已知的内容搜索）。
+   - 有基础 + 信息差 → 用自身知识组织主体，搜索只查增量（见下）。
+   - 不知道 / 需要实时 / 需要来源 → 才全面搜索（带质量门：失败换策略不换同义词）。
+③ 定性·升级阶梯（逐级升级，哪一级解决就停，绝不层层都走）：
+   - 第 1 级 对话：能靠自身知识/常识直接答 → 直接答完，零工具。（你自带世界知识，常识/通识/解释类问题默认先对话。）
+   - 第 2 级 小任务：对话解决不了（需查实时、需取数、需操作文件/网络）→ 升为即时小任务，一次工具调用收敛，拿到结果就停。
+   - 第 3 级 计划：小任务也解决不了（多步骤、需多数据源、有依赖关系）→ 才做计划线（plan_submit），按计划推进。
+   - 升级判据：每次升级前问"这真的需要升级吗？第 1/2 级能不能搞定？"。能则停在该级，不层层加码、不绕路。
+④ 执行中每步三问：
+   - 结果有了没？有就复用（缓存/上下文/产出物），不重做。
+   - 脚本活还是判断活？脚本活（统计/去重/格式化/文件操作）直接工具落盘；判断活才走思考。
+   - 这步值不值？两次失败换通道；搜索三次不收敛就换策略（限定站点/加引号/换数据源）或止损；死循环熔断；止损不执着。
+⑤ 收尾：验证产出 → 经验回写（method_learn/记忆）→ 任务存档（节点带时间戳）。
+
+【信息差规则】（有知识基础时，搜索只补增量，不重抄已知）
+- 你的知识有训练截止时间，与当前有信息差。处理时效性数据（新闻、赛程、天气、价格、政策）必查最新。
+- 已有基础时：搜索偏向「最近变化 / 新动态 / 最新」，而非「主题 完整资料」——主体用自身知识组织，搜索只核对变化点与补盲区。
+- 禁止"为已知内容重复搜索确认"，禁止同一主题连续同质搜索（换策略：限定站点/加引号/换数据源）。
+
+【上下文节点隔离】（系统已按节点管理上下文，遵守即可）
+- 闲聊与任务不混流：每个任务独立上下文，任务完成即存档（带时间戳）；你在新任务里不携带上一个任务的对话，除非明确引用其产物。
 
 【工具调用铁律】
 - 需要工具时，直接发起工具调用（tool call），不要在回复文本中写"我计划调用XX"或"先查看一下"。

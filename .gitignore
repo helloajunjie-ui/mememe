@@ -31,3 +31,5 @@ webui/server_out.log
 webui/server_err.log
 webui/_user_shot.png
 config/llm.json
+data/context_nodes/
+
