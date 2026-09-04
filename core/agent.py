@@ -27,6 +27,7 @@ from core.registry import ToolRegistry
 from core.self_model import SelfModel
 from core.stages import TaskStageTracker
 from core import platform as plat
+from core.integrity import ensure_and_check as integrity_check, check as integrity_verify
 from tools.src.python import backup_private
 
 MAX_TOOL_STEPS = 16  # 单轮最多工具调用总数（含并行，成本精确控制；复杂任务可分多轮续接）
@@ -112,9 +113,38 @@ class Agent:
                 self.registry.discover_builtin()  # 重新加载内置工具（关键：每次启动保证工具可用）
                 # 正常启动刷新环境画像（轻量）
                 env_probe.refresh(os.path.join(self.data_dir, "env_profile.json"))
+                self._integrity_check()  # 本体完整性自检：防篡改/感染（用户安全要求）
                 self._backup(force=False)  # 启动兜底：今日未备份则补（备份不依赖单点定时）
         self._log(f"[boot] 启动模式: {self.boot_mode}")
         return self.boot_mode
+
+    def _integrity_check(self) -> None:
+        """本体完整性自检：静态本体哈希基线比对，防篡改/感染。结果通知 AI。"""
+        try:
+            result = integrity_check()
+            action = result.get("action")
+            if action == "baseline_created":
+                self._log("[integrity] 首次运行：本体完整性基线已建立")
+                return
+            if result.get("ok"):
+                self._log(f"[integrity] 本体完整（{result.get('checked_count', 0)} 文件校验通过）")
+            else:
+                changed = result.get("changed", []) or []
+                missing = result.get("missing", []) or []
+                added = result.get("added", []) or []
+                detail = f"被篡改 {len(changed)}、缺失 {len(missing)}、新增 {len(added)}"
+                self._log(f"[integrity] 警告：本体完整性异常！{detail}")
+                self._log(f"[integrity] 变更文件：{changed[:5]}{'…' if len(changed) > 5 else ''}")
+                try:
+                    self.memory.add_fact(
+                        f"本体完整性异常（可能被篡改/感染）：{detail}。变更文件：{changed[:5]}。"
+                        f"处理：核对变更来源（合法迭代则更新基线，恶意则从 backups/ 或 git 恢复）。"
+                        f"状态文件 data/integrity_status.json",
+                        importance=0.95, tags=["安全", "完整性", "告警"])
+                except Exception:  # noqa: BLE001
+                    pass
+        except Exception as e:  # noqa: BLE001
+            self._log(f"[integrity] 完整性自检失败: {e}（不影响启动）")
 
     def _backup(self, force: bool = False) -> None:
         """多层兜底备份：启动自检（force=False 今日已有则跳过）+ 任务结束先备份（force=True 强制）。
