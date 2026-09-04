@@ -129,6 +129,58 @@
   }
   footer button:disabled { background: #A5B4FC; cursor: not-allowed; }
   .hint { font-size: 11px; color: var(--text-2); margin-left: auto; align-self: center; }
+
+  /* AI 配置面板 */
+  #cfgBtn {
+    margin-left: 12px; height: 32px; padding: 0 12px;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: #fff; color: var(--text); font-size: 13px; cursor: pointer;
+    white-space: nowrap;
+  }
+  #cfgBtn:hover { border-color: var(--accent); color: var(--accent); }
+  .modal {
+    position: fixed; inset: 0; background: rgba(15,23,42,.45);
+    display: flex; align-items: center; justify-content: center; z-index: 99;
+  }
+  .modal-card {
+    width: min(560px, 92vw); background: #fff; border-radius: 14px;
+    box-shadow: 0 12px 40px rgba(15,23,42,.25); overflow: hidden;
+  }
+  .modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; border-bottom: 1px solid var(--border); font-size: 15px;
+  }
+  .modal-x { cursor: pointer; font-size: 20px; color: var(--text-2); line-height: 1; }
+  .modal-x:hover { color: var(--text); }
+  .modal-body { padding: 16px 18px; max-height: 60vh; overflow-y: auto; }
+  .modal-foot {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 18px; border-top: 1px solid var(--border);
+  }
+  .cfg-row { margin-bottom: 14px; }
+  .cfg-row label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 5px; }
+  .cfg-row input {
+    width: 100%; box-sizing: border-box; padding: 9px 12px;
+    border: 1px solid var(--border); border-radius: 8px; font-size: 14px; outline: none;
+  }
+  .cfg-row input:focus { border-color: var(--accent); }
+  .cfg-row2 { display: flex; }
+  .cfg-mask { font-size: 12px; color: var(--text-2); margin-top: 4px; display: block; }
+  .cfg-presets { display: flex; flex-wrap: wrap; gap: 8px; }
+  .preset {
+    padding: 6px 12px; border: 1px solid var(--border); border-radius: 7px;
+    background: #f8f9ff; color: var(--text); font-size: 12px; cursor: pointer;
+  }
+  .preset:hover { border-color: var(--accent); color: var(--accent); }
+  .cfg-msg { font-size: 12px; margin-top: 4px; min-height: 18px; }
+  .cfg-msg.ok { color: #52C41A; }
+  .cfg-msg.err { color: #EA6668; }
+  .btn-ghost, .btn-primary {
+    padding: 8px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; border: none;
+  }
+  .btn-ghost { background: #eef0f7; color: var(--text); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-ghost:disabled, .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
   @media (max-width: 600px) {
     .bubble { max-width: 88%; }
     header .badges { display: none; }
@@ -144,9 +196,62 @@
   <div class="badges" id="badges">
     <span class="badge gray">启动中...</span>
   </div>
+  <button id="cfgBtn" onclick="openCfg()" title="AI 接入配置">⚙ 配置</button>
 </header>
 
 <main id="chat"></main>
+
+<!-- AI 接入配置面板 -->
+<div id="cfgModal" class="modal" style="display:none;">
+  <div class="modal-card">
+    <div class="modal-head">
+      <b>AI 接入配置</b>
+      <span class="modal-x" onclick="closeCfg()">×</span>
+    </div>
+    <div class="modal-body">
+      <div class="cfg-row">
+        <label>API 地址（OpenAI 兼容 base_url）</label>
+        <input id="cfgBase" type="text" placeholder="https://api.deepseek.com" />
+      </div>
+      <div class="cfg-row">
+        <label>API Key（留空 = 保留原值）</label>
+        <input id="cfgKey" type="password" placeholder="sk-..." autocomplete="off" />
+        <span class="cfg-mask" id="cfgKeyMask"></span>
+      </div>
+      <div class="cfg-row">
+        <label>模型名（model）</label>
+        <input id="cfgModel" type="text" placeholder="deepseek-chat" />
+      </div>
+      <div class="cfg-row2">
+        <div class="cfg-row" style="flex:1;margin-right:10px;">
+          <label>温度（0~2，默认 0.7）</label>
+          <input id="cfgTemp" type="number" step="0.1" min="0" max="2" />
+        </div>
+        <div class="cfg-row" style="flex:1;">
+          <label>max_tokens（默认 4096）</label>
+          <input id="cfgTokens" type="number" step="256" min="256" />
+        </div>
+      </div>
+      <div class="cfg-row">
+        <label>预设快捷切换</label>
+        <div class="cfg-presets">
+          <button class="preset" onclick="preset('deepseek')">DeepSeek</button>
+          <button class="preset" onclick="preset('openai')">OpenAI</button>
+          <button class="preset" onclick="preset('grok')">Grok</button>
+          <button class="preset" onclick="preset('ollama')">本地 Ollama</button>
+          <button class="preset" onclick="preset('moonshot')">Moonshot</button>
+        </div>
+      </div>
+      <div id="cfgMsg" class="cfg-msg"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-ghost" onclick="testCfg()">测试连接</button>
+      <span style="flex:1"></span>
+      <button class="btn-ghost" onclick="closeCfg()">取消</button>
+      <button class="btn-primary" onclick="saveCfg()">保存并重载</button>
+    </div>
+  </div>
+</div>
 
 <footer>
   <textarea id="input" placeholder="和白绫说点什么...（Enter 发送 / Shift+Enter 换行）"></textarea>
@@ -381,6 +486,86 @@ input.addEventListener("keydown", function(e){
 input.addEventListener("input", function(){
   input.style.height = "auto";
   input.style.height = Math.min(input.scrollHeight, 140) + "px";
+});
+
+/* ---------- AI 接入配置面板 ---------- */
+var cfgLoaded = false;
+function openCfg() {
+  document.getElementById("cfgModal").style.display = "flex";
+  if (cfgLoaded) return;
+  fetch("/api/config").then(function(r){return r.json();}).then(function(d){
+    cfgLoaded = true;
+    if (!d.ok) { cfgMsg("读取配置失败：" + (d.error || "未知错误"), true); return; }
+    document.getElementById("cfgBase").value = d.base_url || "";
+    document.getElementById("cfgModel").value = d.model || "";
+    document.getElementById("cfgTemp").value = d.temperature != null ? d.temperature : 0.7;
+    document.getElementById("cfgTokens").value = d.max_tokens != null ? d.max_tokens : 4096;
+    var m = d.api_key_masked || "";
+    document.getElementById("cfgKeyMask").textContent =
+        (d.has_key ? "当前已配置 Key：" + m + "（留空保存则保留原值）" : "尚未配置 API Key");
+  }).catch(function(e){ cfgMsg("读取配置失败：" + e, true); });
+}
+function closeCfg() { document.getElementById("cfgModal").style.display = "none"; }
+function cfgMsg(t, isErr) {
+  var el = document.getElementById("cfgMsg");
+  el.textContent = t;
+  el.className = "cfg-msg " + (isErr ? "err" : "ok");
+}
+function cfgPayload() {
+  return {
+    base_url: document.getElementById("cfgBase").value.trim(),
+    api_key: document.getElementById("cfgKey").value,
+    model: document.getElementById("cfgModel").value.trim(),
+    temperature: document.getElementById("cfgTemp").value,
+    max_tokens: document.getElementById("cfgTokens").value
+  };
+}
+function saveCfg() {
+  var btn = document.querySelector(".btn-primary");
+  btn.disabled = true; cfgMsg("保存并重载中...", false);
+  fetch("/api/config", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(cfgPayload())
+  }).then(function(r){return r.json();}).then(function(d){
+    btn.disabled = false;
+    if (!d.ok) { cfgMsg("保存失败：" + (d.error || "未知错误"), true); return; }
+    document.getElementById("cfgKey").value = "";
+    var m = d.api_key_masked || "";
+    document.getElementById("cfgKeyMask").textContent =
+        (d.has_key ? "当前已配置 Key：" + m + "（留空保存则保留原值）" : "尚未配置 API Key");
+    cfgMsg(d.llm_ready ? "已保存并生效 ✓" : "已保存，但 LLM 未就绪：" + (d.error || "缺少 API Key"), !d.llm_ready);
+    loadStatus();
+  }).catch(function(e){ btn.disabled = false; cfgMsg("保存失败：" + e, true); });
+}
+function testCfg() {
+  var btn = document.querySelectorAll(".btn-ghost")[0];
+  btn.disabled = true; cfgMsg("正在测试连接...", false);
+  fetch("/api/config/test", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(cfgPayload())
+  }).then(function(r){return r.json();}).then(function(d){
+    btn.disabled = false;
+    if (d.ok && d.reply) cfgMsg("连接成功 ✓ 模型回复：" + d.reply, false);
+    else cfgMsg("连接失败：" + (d.error || "未知错误"), true);
+  }).catch(function(e){ btn.disabled = false; cfgMsg("测试失败：" + e, true); });
+}
+function preset(name) {
+  var map = {
+    deepseek:  ["https://api.deepseek.com", "deepseek-chat"],
+    openai:    ["https://api.openai.com/v1", "gpt-4o-mini"],
+    grok:      ["https://api.x.ai/v1", "grok-3-mini"],
+    ollama:    ["http://127.0.0.1:11434/v1", "llama3"],
+    moonshot:  ["https://api.moonshot.cn/v1", "moonshot-v1-8k"]
+  };
+  var v = map[name];
+  if (!v) return;
+  document.getElementById("cfgBase").value = v[0];
+  document.getElementById("cfgModel").value = v[1];
+}
+document.getElementById("cfgModal").addEventListener("click", function(e){
+  if (e.target === this) closeCfg();
 });
 
 addMsg("bailing", renderMd("你好，我是**白绫**。\n\n我在这里运行，可以和我对话，也可以让我执行任务。\n\n- 直接发消息和我聊天\n- 让我查资料、跑命令、处理文件都可以\n\n开始吧。"));

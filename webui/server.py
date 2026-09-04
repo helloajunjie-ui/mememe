@@ -180,6 +180,8 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_index()
         elif path == "/api/status":
             self._handle_status()
+        elif path == "/api/config":
+            self._handle_config_get()
         elif m:
             self._handle_task(m.group(1))
         else:
@@ -189,6 +191,10 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/chat":
             self._handle_chat()
+        elif path == "/api/config":
+            self._handle_config_save()
+        elif path == "/api/config/test":
+            self._handle_config_test()
         else:
             self._send_json(404, {"ok": False, "error": "not found"})
 
@@ -250,6 +256,65 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"ok": False, "error": "任务不存在或已过期"})
             return
         self._send_json(200, {"ok": True, **t})
+
+    # ---------- AI 接入配置 API ----------
+    def _handle_config_get(self) -> None:
+        try:
+            a = get_agent()
+            self._send_json(200, {"ok": True, **a.llm_config_view()})
+        except AgentNotReady as e:
+            self._send_json(503, {"ok": False, "error": str(e)})
+        except Exception as e:  # noqa: BLE001
+            self._send_json(500, {"ok": False, "error": f"读取配置失败: {e}"})
+
+    def _handle_config_save(self) -> None:
+        data = self._read_json()
+        try:
+            a = get_agent()
+        except AgentNotReady as e:
+            self._send_json(503, {"ok": False, "error": str(e)})
+            return
+        # api_key 空/未传 = 保留原值（不清空既有密钥）
+        try:
+            r = a.reload_llm(
+                base_url=data.get("base_url") or None,
+                api_key=(data.get("api_key") or "").strip() or None,
+                model=data.get("model") or None,
+                temperature=data.get("temperature") if data.get("temperature") not in (None, "") else None,
+                max_tokens=data.get("max_tokens") if data.get("max_tokens") not in (None, "") else None,
+            )
+        except Exception as e:  # noqa: BLE001
+            self._send_json(400, {"ok": False, "error": f"配置无效: {e}"})
+            return
+        self._send_json(200, {"ok": True, "llm_ready": r.get("ok"), "error": r.get("error"),
+                              **a.llm_config_view()})
+
+    def _handle_config_test(self) -> None:
+        """用给定配置试发一条消息（不保存），验证 AI 接入可用。
+        表单字段留空 → 回退用当前已保存配置（玩家留空 key 也能测试已配置的接入）。"""
+        data = self._read_json()
+        from core.llm import LLMGateway
+        try:
+            a = get_agent()
+            cur = a._load_llm_cfg()
+        except AgentNotReady:
+            cur = {}
+        base = (data.get("base_url") or "").strip() or cur.get("base_url") or "https://api.deepseek.com"
+        key = (data.get("api_key") or "").strip() or cur.get("api_key")
+        model = (data.get("model") or "").strip() or cur.get("model") or "deepseek-chat"
+        try:
+            probe = LLMGateway(base_url=base, api_key=key, model=model)
+        except Exception as e:  # noqa: BLE001
+            self._send_json(400, {"ok": False, "error": f"配置无效: {e}"})
+            return
+        if not probe.ready:
+            self._send_json(200, {"ok": False, "error": "LLM 未就绪：请填写有效的 API Key"})
+            return
+        resp = probe.chat([{"role": "user", "content": "回复 OK 两个字即可"}], tools=None, tool_choice="none")
+        if resp.get("error"):
+            self._send_json(200, {"ok": False, "error": resp["error"]})
+        else:
+            self._send_json(200, {"ok": True, "reply": (resp.get("content") or "")[:100]})
 
 
 def _port_in_use(host: str, port: int) -> bool:

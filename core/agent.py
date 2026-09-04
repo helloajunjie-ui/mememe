@@ -55,15 +55,8 @@ class Agent:
             cfg["tools_dir"],
         )
         self.persona = self._load_persona()
-        llm_cfg = self.config["llm"]
-        self.llm = LLMGateway(
-            base_url=llm_cfg["base_url"],
-            api_key=self._load_api_key(llm_cfg["api_key_env"]),
-            model=llm_cfg["model"],
-            temperature=llm_cfg["temperature"],
-            max_tokens=llm_cfg["max_tokens"],
-            timeout=llm_cfg["timeout_seconds"],
-        )
+        llm_cfg = self._load_llm_cfg()
+        self.llm = self._new_llm(llm_cfg)
         # 人性层
         self.emotion = EmotionState()
         self.motivation = Motivation()
@@ -89,6 +82,83 @@ class Agent:
                     if line.startswith(f"{env_name}="):
                         return line.split("=", 1)[1].strip().strip('"').strip("'")
         return None
+
+    # ---------- AI 接入配置（config/llm.json，用户面板配置优先于 config.yaml） ----------
+    def _llm_cfg_path(self) -> str:
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config", "llm.json")
+
+    def _read_user_llm_cfg(self) -> Dict:
+        p = self._llm_cfg_path()
+        if os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except (OSError, json.JSONDecodeError):
+                return {}
+        return {}
+
+    def _load_llm_cfg(self) -> Dict:
+        """合并 config.yaml llm 默认 + config/llm.json 用户面板覆盖；api_key 取面板>env>.env。"""
+        base = dict(self.config.get("llm", {}))
+        over = self._read_user_llm_cfg()
+        for k in ("base_url", "model", "temperature", "max_tokens", "timeout_seconds"):
+            if over.get(k) is not None:
+                base[k] = over[k]
+        key = (over.get("api_key") or "").strip()
+        if not key:
+            key = self._load_api_key(base.get("api_key_env", "BAILING_API_KEY")) or ""
+        base["api_key"] = key
+        return base
+
+    def _new_llm(self, cfg: Dict) -> LLMGateway:
+        return LLMGateway(
+            base_url=cfg.get("base_url", "https://api.deepseek.com"),
+            api_key=cfg.get("api_key"),
+            model=cfg.get("model", "deepseek-chat"),
+            temperature=float(cfg.get("temperature", 0.7)),
+            max_tokens=int(cfg.get("max_tokens", 4096)),
+            timeout=int(cfg.get("timeout_seconds", 60)),
+        )
+
+    def reload_llm(self, base_url: Optional[str] = None, api_key: Optional[str] = None,
+                   model: Optional[str] = None, temperature: Optional[float] = None,
+                   max_tokens: Optional[int] = None) -> Dict:
+        """更新 AI 接入配置（存 config/llm.json）并重建 LLM 客户端。api_key 空/None=保留原值。"""
+        over = self._read_user_llm_cfg()
+        if base_url is not None:
+            over["base_url"] = str(base_url).strip()
+        if model is not None:
+            over["model"] = str(model).strip()
+        if temperature is not None:
+            over["temperature"] = float(temperature)
+        if max_tokens is not None:
+            over["max_tokens"] = int(max_tokens)
+        if api_key is not None and str(api_key).strip():
+            over["api_key"] = str(api_key).strip()
+        else:
+            over.pop("api_key", None)  # 空 → 保留原值
+        p = self._llm_cfg_path()
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(over, f, ensure_ascii=False, indent=2)
+        self.llm = self._new_llm(self._load_llm_cfg())
+        err = getattr(self.llm, "_init_error", None)
+        return {"ok": self.llm.ready, "error": err}
+
+    def llm_config_view(self) -> Dict:
+        """当前生效的 AI 接入配置（api_key 打码回显，不泄漏明文）。"""
+        cfg = self._load_llm_cfg()
+        key = cfg.get("api_key") or ""
+        masked = ("*" * (len(key) - 4) + key[-4:]) if len(key) > 4 else ("***" if key else "")
+        return {
+            "base_url": cfg.get("base_url", ""),
+            "model": cfg.get("model", ""),
+            "temperature": float(cfg.get("temperature", 0.7)),
+            "max_tokens": int(cfg.get("max_tokens", 4096)),
+            "has_key": bool(key),
+            "api_key_masked": masked,
+            "ready": self.llm.ready,
+        }
 
     def _load_persona(self) -> Dict:
         p = os.path.join(self.data_dir, "persona.yaml")

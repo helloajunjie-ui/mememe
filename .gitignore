@@ -30,3 +30,4 @@ data/integrity_status.json
 webui/server_out.log
 webui/server_err.log
 webui/_user_shot.png
+config/llm.json
