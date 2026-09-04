@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "backup_zip": "F:\\me\\self-agent\\backups\\private_20260904_115532.zip",
+  "manifest": "F:\\me\\self-agent\\backups\\private_20260904_115532.json",
+  "size_bytes": 34695,
+  "size_readable": "33.9 KB",
+  "files": [
+    "data/memory.db",
+    "data/self.yaml",
+    "data/methodology.json",
+    "data/registry.json",
+    "data/registry.json.bak_wordcount",
+    "data/snapshots.json",
+    "data/env_profile.json",
+    "config.yaml",
+    ".env"
+  ],
+  "missing": [],
+  "pruned_old": 0,
+  "note": "任务结束备份",
+  "updated_at": "2026-09-04T11:55:32"
+}

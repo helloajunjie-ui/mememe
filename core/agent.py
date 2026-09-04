@@ -27,6 +27,7 @@ from core.registry import ToolRegistry
 from core.self_model import SelfModel
 from core.stages import TaskStageTracker
 from core import platform as plat
+from tools.src.python import backup_private
 
 MAX_TOOL_STEPS = 16  # 单轮最多工具调用总数（含并行，成本精确控制；复杂任务可分多轮续接）
 
@@ -111,8 +112,43 @@ class Agent:
                 self.registry.discover_builtin()  # 重新加载内置工具（关键：每次启动保证工具可用）
                 # 正常启动刷新环境画像（轻量）
                 env_probe.refresh(os.path.join(self.data_dir, "env_profile.json"))
+                self._backup(force=False)  # 启动兜底：今日未备份则补（备份不依赖单点定时）
         self._log(f"[boot] 启动模式: {self.boot_mode}")
         return self.boot_mode
+
+    def _backup(self, force: bool = False) -> None:
+        """多层兜底备份：启动自检（force=False 今日已有则跳过）+ 任务结束先备份（force=True 强制）。
+
+        用户止损思维（2026-09-04）：单点定时（22:00）可能漏，组合成三层保障：
+        ①系统计划任务（schtasks 每日 22:00，物理层）②启动自检（今日无则补）
+        ③任务结束强制备份（状态变更立即保护）。保证"每天至少一份复活点 + 每次任务成果被保护"。
+        """
+        try:
+            if not force:
+                today = datetime.datetime.now().strftime("%Y%m%d")
+                backup_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backups")
+                if os.path.isdir(backup_root):
+                    for f in os.listdir(backup_root):
+                        if f.startswith(f"private_{today}") and f.endswith(".zip"):
+                            return  # 今日已有备份
+            r = backup_private.run(note="启动兜底备份" if not force else "任务结束备份")
+            self._log(f"[backup] {'任务结束' if force else '启动兜底'}备份完成（{r.get('size_readable', '?')}）")
+            # 备份结果通知 AI（自我感知）：成功记低权重轨迹，失败记高权重告警
+            try:
+                if r.get("ok"):
+                    self.memory.add_fact(
+                        f"自我备份完成：{r.get('backup_zip', '?')}（{r.get('size_readable', '?')}，"
+                        f"原因：{r.get('note', '')}）。状态文件 data/backup_status.json",
+                        importance=0.25, tags=["备份", "自我感知"])
+                else:
+                    self.memory.add_fact(
+                        f"自我备份失败：{r.get('error', '未知错误')}（原因：{r.get('note', '')}）。"
+                        f"需排查 backups/ 与 data/backup_status.json",
+                        importance=0.8, tags=["备份", "告警"])
+            except Exception:  # noqa: BLE001
+                pass
+        except Exception as e:  # noqa: BLE001
+            self._log(f"[backup] 备份失败: {e}（不影响主流程）")
 
     def _awaken(self) -> None:
         """觉醒六问：①我是谁 ②我在哪 ③我要做什么 ④我可以用什么 ⑤有何任务 ⑥如何完成。"""
@@ -367,6 +403,7 @@ class Agent:
             success = not content.startswith("（") and not content.startswith("[任务未完成]")
             archive = tracker.finish_task(content, success=success)
             self._log(f"[task] 任务结束，档案：{archive}")
+            self._backup(force=True)  # 任务结束先备份（用户止损原则：状态变更立即保护）
         self.history.append({"role": "assistant", "content": content})
         return content
 

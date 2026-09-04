@@ -30,44 +30,68 @@ _PRIVATE_FILES = [
 # 复活必需的非实例文件（配置/密钥——仅进私有备份，不进公开仓库）
 _CORE_FILES = ["config.yaml", ".env"]
 
+# 备份状态文件：每次备份结果写到这里，让 AI（白绫）能自我感知备份状态（结果/运行通知 AI）
+_STATUS_FILE = Path("data/backup_status.json")
+
+
+def _write_status(payload: dict) -> None:
+    """写备份状态文件（data/backup_status.json）。无论成功失败都写，AI 启动/运行时读取感知。"""
+    try:
+        status_path = _PROJECT_ROOT / _STATUS_FILE
+        status_path.parent.mkdir(parents=True, exist_ok=True)
+        payload["updated_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+        status_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError:
+        pass
+
 
 def run(note: str = "") -> dict:
     _BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     zip_path = _BACKUP_ROOT / f"private_{ts}.zip"
 
-    added, missing = [], []
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for rel in _PRIVATE_FILES + _CORE_FILES:
-            src = _PROJECT_ROOT / rel
-            if src.exists():
-                zf.write(src, arcname=rel)
-                added.append(rel)
-            else:
-                missing.append(rel)
+    try:
+        added, missing = [], []
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for rel in _PRIVATE_FILES + _CORE_FILES:
+                src = _PROJECT_ROOT / rel
+                if src.exists():
+                    zf.write(src, arcname=rel)
+                    added.append(rel)
+                else:
+                    missing.append(rel)
 
-    manifest = {
-        "type": "private_backup",
-        "created_at": datetime.datetime.now().isoformat(timespec="seconds"),
-        "files": added,
-        "missing": missing,
-        "note": note,
-        "usage": "复活：解压本 zip 回项目根；程序本体从 mememe 仓库 clone 后覆盖 data/ 即可得到原实例",
-    }
-    meta = _BACKUP_ROOT / f"private_{ts}.json"
-    meta.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        manifest = {
+            "type": "private_backup",
+            "created_at": datetime.datetime.now().isoformat(timespec="seconds"),
+            "files": added,
+            "missing": missing,
+            "note": note,
+            "usage": "复活：解压本 zip 回项目根；程序本体从 mememe 仓库 clone 后覆盖 data/ 即可得到原实例",
+        }
+        meta = _BACKUP_ROOT / f"private_{ts}.json"
+        meta.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    size = zip_path.stat().st_size
-    return {
-        "ok": True,
-        "backup_zip": str(zip_path),
-        "manifest": str(meta),
-        "size_bytes": size,
-        "size_readable": _fmt(size),
-        "files": added,
-        "missing": missing,
-        "note": note,
-    }
+        pruned = _prune_old()  # 保留策略：只留最近 30 份
+        size = zip_path.stat().st_size
+        result = {
+            "ok": True,
+            "backup_zip": str(zip_path),
+            "manifest": str(meta),
+            "size_bytes": size,
+            "size_readable": _fmt(size),
+            "files": added,
+            "missing": missing,
+            "pruned_old": pruned,
+            "note": note,
+        }
+    except Exception as e:  # noqa: BLE001
+        result = {"ok": False, "error": f"备份失败: {e}", "note": note}
+        _write_status(result)  # 失败也通知 AI
+        return result
+
+    _write_status(result)  # 成功通知 AI：data/backup_status.json
+    return result
 
 
 def _fmt(n: int) -> str:
@@ -76,6 +100,26 @@ def _fmt(n: int) -> str:
     if n >= 1 << 10:
         return f"{n / (1 << 10):.1f} KB"
     return f"{n} B"
+
+
+# 保留策略：backups/ 只保留最近 N 份私有备份 zip（任务结束高频备份后防无限膨胀）
+_KEEP_ZIPS = 30
+
+
+def _prune_old() -> int:
+    """清理 backups/ 下的 private_*.zip，仅保留最新 _KEEP_ZIPS 份。返回删除数。"""
+    try:
+        zips = sorted(_BACKUP_ROOT.glob("private_*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
+        removed = 0
+        for old in zips[_KEEP_ZIPS:]:
+            try:
+                old.unlink()
+                removed += 1
+            except OSError:
+                pass
+        return removed
+    except OSError:
+        return 0
 
 
 if __name__ == "__main__":
