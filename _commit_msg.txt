@@ -1,0 +1,9 @@
+启动脚本统一为「启动.bat」（替代 start_webui.bat）
+
+- 同目录自动定位（%~dp0），无硬编码路径
+- Python 环境自举：有 venv 直接用；无则系统 python / py 创建；再无则
+  华为云国内镜像下载 Python 3.11.9 静默安装
+- 依赖安装走清华镜像，.deps_ok 标记避免重复安装
+- start 分离启动 pythonw，服务后台运行，命令行窗口自动关闭
+- 不内置杀进程（白绫 server 自身为双进程设计）
+- 已实测：干净环境跑通，服务 /api/status ready=true
