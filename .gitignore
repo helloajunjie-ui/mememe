@@ -39,3 +39,4 @@ config/workflow_schedule.yaml
 data/operation.log
 workspace/workflows/
 workspace/*.txt
+data/ws_write_trace.jsonl
