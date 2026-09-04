@@ -25,3 +25,7 @@ __pycache__/
 data/backup_status.json
 data/integrity_baseline.json
 data/integrity_status.json
+
+# webui 运行时日志（不入库）
+webui/server_out.log
+webui/server_err.log

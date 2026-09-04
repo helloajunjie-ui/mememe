@@ -16,7 +16,9 @@ from typing import Any, Dict, List, Optional
 class Memory:
     def __init__(self, db_path: str = "data/memory.db"):
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        self.conn = sqlite3.connect(db_path)
+        # check_same_thread=False：允许跨线程使用（webui 后台线程初始化 Agent，HTTP 线程调用 turn）。
+        # 安全前提：调用方对 turn 串行化（webui _turn_lock），memory 单连接操作短、互斥。
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self._init_schema()
 
