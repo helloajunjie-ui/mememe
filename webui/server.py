@@ -182,6 +182,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_status()
         elif path == "/api/config":
             self._handle_config_get()
+        elif path == "/api/models":
+            self._handle_models_get()
         elif m:
             self._handle_task(m.group(1))
         else:
@@ -195,6 +197,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_config_save()
         elif path == "/api/config/test":
             self._handle_config_test()
+        elif path == "/api/models/fetch":
+            self._handle_models_fetch()
         else:
             self._send_json(404, {"ok": False, "error": "not found"})
 
@@ -315,6 +319,37 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {"ok": False, "error": resp["error"]})
         else:
             self._send_json(200, {"ok": True, "reply": (resp.get("content") or "")[:100]})
+
+    # ---------- 模型列表 API ----------
+    def _handle_models_get(self) -> None:
+        """返回缓存的模型列表（面板下拉）。"""
+        try:
+            a = get_agent()
+            self._send_json(200, {"ok": True, **a.models_view()})
+        except AgentNotReady as e:
+            self._send_json(503, {"ok": False, "error": str(e)})
+        except Exception as e:  # noqa: BLE001
+            self._send_json(500, {"ok": False, "error": f"读取模型列表失败: {e}"})
+
+    def _handle_models_fetch(self) -> None:
+        """用表单/当前配置自动获取模型列表并保存。"""
+        data = self._read_json()
+        try:
+            a = get_agent()
+        except AgentNotReady as e:
+            self._send_json(503, {"ok": False, "error": str(e)})
+            return
+        try:
+            r = a.fetch_models(
+                base_url=(data.get("base_url") or "").strip() or None,
+                api_key=(data.get("api_key") or "").strip() or None,
+            )
+        except Exception as e:  # noqa: BLE001
+            self._send_json(500, {"ok": False, "error": f"获取模型列表异常: {e}"})
+            return
+        self._send_json(200, {"ok": r.get("ok", False), "error": r.get("error"),
+                              "models": r.get("models", []), "count": r.get("count", 0),
+                              "source": r.get("source")})
 
 
 def _port_in_use(host: str, port: int) -> bool:

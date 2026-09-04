@@ -97,6 +97,12 @@ class Agent:
                 return {}
         return {}
 
+    def _save_user_llm_cfg(self, over: Dict) -> None:
+        p = self._llm_cfg_path()
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(over, f, ensure_ascii=False, indent=2)
+
     def _load_llm_cfg(self) -> Dict:
         """合并 config.yaml llm 默认 + config/llm.json 用户面板覆盖；api_key 取面板>env>.env。"""
         base = dict(self.config.get("llm", {}))
@@ -137,13 +143,69 @@ class Agent:
             over["api_key"] = str(api_key).strip()
         else:
             over.pop("api_key", None)  # 空 → 保留原值
-        p = self._llm_cfg_path()
-        os.makedirs(os.path.dirname(p), exist_ok=True)
-        with open(p, "w", encoding="utf-8") as f:
-            json.dump(over, f, ensure_ascii=False, indent=2)
+        self._save_user_llm_cfg(over)
         self.llm = self._new_llm(self._load_llm_cfg())
         err = getattr(self.llm, "_init_error", None)
         return {"ok": self.llm.ready, "error": err}
+
+    @staticmethod
+    def _has_local_proxy(port: int = 7897) -> bool:
+        """检测本机是否有本地代理在监听（clash-verge 等 mixed-port）。"""
+        import socket
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.3):
+                return True
+        except OSError:
+            return False
+
+    def fetch_models(self, base_url: Optional[str] = None, api_key: Optional[str] = None) -> Dict:
+        """自动获取 OpenAI 兼容端点的模型列表（GET /models），成功则保存缓存到 config/llm.json。
+        代理策略（方法论 id 22）：本地端点直连；外部端点先走默认（环境代理），失败且本机有 127.0.0.1:7897 时跟随本地代理。"""
+        cfg = self._load_llm_cfg()
+        base = ((base_url or "").strip().rstrip("/") or (cfg.get("base_url") or "").rstrip("/"))
+        key = ((api_key or "").strip() or cfg.get("api_key") or "").strip()
+        if not base:
+            return {"ok": False, "error": "未配置 API 地址"}
+        if not key:
+            return {"ok": False, "error": "未配置 API Key，无法获取模型列表"}
+        import httpx
+        local = base.startswith(("127.0.0.1", "localhost", "http://127.", "http://localhost"))
+        if base.endswith("/v1"):
+            candidates = [base + "/models"]
+        else:
+            candidates = [base + "/models", base + "/v1/models"]
+        last_err = "未知错误"
+        for url in candidates:
+            attempts = 1 if local else 2
+            for attempt in range(attempts):
+                try:
+                    kwargs = dict(timeout=15, headers={"Authorization": f"Bearer {key}"})
+                    if attempt == 1:
+                        kwargs["proxy"] = "http://127.0.0.1:7897"
+                    r = httpx.get(url, **kwargs)
+                    r.raise_for_status()
+                    data = r.json()
+                    ids = sorted({m.get("id") for m in data.get("data", []) if m.get("id")})
+                    if ids:
+                        over = self._read_user_llm_cfg()
+                        over["models"] = ids
+                        over["models_updated_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+                        self._save_user_llm_cfg(over)
+                        self._log(f"[llm] 获取模型列表 {len(ids)} 个（{url}）")
+                        return {"ok": True, "models": ids, "source": url, "count": len(ids)}
+                    last_err = f"端点 {url} 返回空模型列表"
+                    break
+                except Exception as e:  # noqa: BLE001
+                    last_err = f"{type(e).__name__}: {e}"
+                    if attempt == 0 and not local and self._has_local_proxy():
+                        continue
+                    break
+        return {"ok": False, "error": f"获取模型列表失败: {last_err}"}
+
+    def models_view(self) -> Dict:
+        """返回缓存的模型列表（配置面板下拉用）。"""
+        over = self._read_user_llm_cfg()
+        return {"models": over.get("models", []), "updated_at": over.get("models_updated_at")}
 
     def llm_config_view(self) -> Dict:
         """当前生效的 AI 接入配置（api_key 打码回显，不泄漏明文）。"""

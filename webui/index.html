@@ -165,6 +165,8 @@
   }
   .cfg-row input:focus { border-color: var(--accent); }
   .cfg-row2 { display: flex; }
+  .cfg-model-row { display: flex; gap: 8px; align-items: center; }
+  .cfg-model-row input { flex: 1; }
   .cfg-mask { font-size: 12px; color: var(--text-2); margin-top: 4px; display: block; }
   .cfg-presets { display: flex; flex-wrap: wrap; gap: 8px; }
   .preset {
@@ -219,8 +221,13 @@
         <span class="cfg-mask" id="cfgKeyMask"></span>
       </div>
       <div class="cfg-row">
-        <label>模型名（model）</label>
-        <input id="cfgModel" type="text" placeholder="deepseek-chat" />
+        <label>模型名（可从列表选，也可手动输入）</label>
+        <div class="cfg-model-row">
+          <input id="cfgModel" type="text" list="cfgModelList" placeholder="deepseek-chat" />
+          <button class="preset" id="cfgFetchModels" onclick="fetchModels()" title="从当前 API 地址自动获取模型列表">获取模型</button>
+        </div>
+        <datalist id="cfgModelList"></datalist>
+        <span class="cfg-mask" id="cfgModelHint"></span>
       </div>
       <div class="cfg-row2">
         <div class="cfg-row" style="flex:1;margin-right:10px;">
@@ -490,8 +497,51 @@ input.addEventListener("input", function(){
 
 /* ---------- AI 接入配置面板 ---------- */
 var cfgLoaded = false;
+function fillModelList(models, hint) {
+  var dl = document.getElementById("cfgModelList");
+  dl.innerHTML = "";
+  (models || []).forEach(function(m){
+    var op = document.createElement("option");
+    op.value = m;
+    dl.appendChild(op);
+  });
+  document.getElementById("cfgModelHint").textContent =
+      hint || ((models && models.length) ? "已加载 " + models.length + " 个模型" : "");
+}
+function loadModelCache() {
+  fetch("/api/models").then(function(r){return r.json();}).then(function(d){
+    if (d.ok) fillModelList(d.models, d.models && d.models.length
+        ? "已缓存 " + d.models.length + " 个模型（可点\"获取模型\"刷新）"
+        : "尚未获取过模型列表，可点\"获取模型\"自动获取");
+  }).catch(function(){});
+}
+function fetchModels() {
+  var btn = document.getElementById("cfgFetchModels");
+  btn.disabled = true;
+  cfgMsg("正在获取模型列表...", false);
+  fetch("/api/models/fetch", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(cfgPayload())
+  }).then(function(r){return r.json();}).then(function(d){
+    btn.disabled = false;
+    if (d.ok && d.models && d.models.length) {
+      fillModelList(d.models, "已获取 " + d.models.length + " 个模型并保存");
+      var cur = document.getElementById("cfgModel").value.trim();
+      if (!cur && d.models.indexOf("deepseek-chat") >= 0) {
+        document.getElementById("cfgModel").value = "deepseek-chat";
+      } else if (!cur) {
+        document.getElementById("cfgModel").value = d.models[0];
+      }
+      cfgMsg("模型列表已更新 ✓", false);
+    } else {
+      cfgMsg("获取失败：" + (d.error || "未知错误"), true);
+    }
+  }).catch(function(e){ btn.disabled = false; cfgMsg("获取失败：" + e, true); });
+}
 function openCfg() {
   document.getElementById("cfgModal").style.display = "flex";
+  loadModelCache();
   if (cfgLoaded) return;
   fetch("/api/config").then(function(r){return r.json();}).then(function(d){
     cfgLoaded = true;
