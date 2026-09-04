@@ -235,8 +235,9 @@
         <label>模型名（点下拉选，也可手动输入）</label>
         <div class="cfg-model-row">
           <div class="cfg-combo">
-            <input id="cfgModel" type="text" placeholder="deepseek-chat"
-                   oninput="filterModels()" onfocus="showModels(true)" />
+            <input id="cfgModel" type="text" placeholder="点击选择模型" readonly
+                   onfocus="showModels()" onclick="showModels()"
+                   title="点击下拉选择模型" style="cursor:pointer" />
             <div class="cfg-mlist" id="cfgMList"></div>
           </div>
           <button class="preset" id="cfgFetchModels" onclick="fetchModels()" title="从当前 API 地址自动获取模型列表">获取模型</button>
@@ -577,28 +578,15 @@ function fillModelList(models, hint) {
   document.getElementById("cfgModelHint").textContent =
       hint || (_models.length ? "已加载 " + _models.length + " 个模型" : "");
 }
-function showModels(forceAll) {
+function showModels() {
   if (!_models.length) return;
-  if (forceAll) {
-    var box = document.getElementById("cfgMList");
-    box.querySelectorAll(".mi").forEach(function(d){
-      if (!d.classList.contains("empty")) d.style.display = "";
-    });
-  } else {
-    filterModels();
-  }
+  var box = document.getElementById("cfgMList");
+  box.querySelectorAll(".mi").forEach(function(d){
+    if (!d.classList.contains("empty")) d.style.display = "";
+  });
   document.getElementById("cfgMList").classList.add("show");
 }
 function hideModels() { document.getElementById("cfgMList").classList.remove("show"); }
-function filterModels() {
-  var q = document.getElementById("cfgModel").value.trim().toLowerCase();
-  var box = document.getElementById("cfgMList");
-  box.querySelectorAll(".mi").forEach(function(d){
-    if (d.classList.contains("empty")) return;
-    d.style.display = (!q || d.textContent.toLowerCase().indexOf(q) >= 0) ? "" : "none";
-  });
-  box.classList.add("show");
-}
 document.addEventListener("click", function(e){
   if (!e.target.closest(".cfg-combo")) hideModels();
 });
