@@ -306,20 +306,32 @@ class Agent:
             self._log(f"[resume] 续接任务 {self.ongoing_task['task_id']}（恢复断点）")
             self.ongoing_task = None
 
-        messages = self._build_messages(resume_ctx=resume_ctx)
+        messages = self._build_messages(resume_ctx=resume_ctx, match_text=user_input)
         tracker = None      # 阶段化任务记录器（首个工具调用时懒创建）
         used_tools = []     # 本轮使用过的工具（反思分级用）
         step = 0            # 工具调用总数（成本精确计数，含并行）
         limit_hit = False   # 是否触发步数上限
         loop_hit = False    # 是否触发死循环熔断
         guard = LoopGuard()  # 思考/执行死循环检测器
+        # 世界书工具：核心常驻 + 动态加载的长尾
+        active_schemas = self.registry.to_openai_schemas()
+        loaded_ext: set = set()
+        # 初始就按输入关键词预加载命中的长尾工具（世界书触发）
+        for n in self.registry.suggest_ext(user_input, loaded_ext):
+            sch = self.registry.get_schema(n)
+            if sch:
+                active_schemas.append(sch)
+                loaded_ext.add(n)
+                self._log(f"[worldbook] 预加载扩展工具: {n}")
+        if loaded_ext:
+            messages.append({"role": "system", "content": f"（已按当前任务预加载扩展工具：{', '.join(sorted(loaded_ext))}）"})
 
         while step < MAX_TOOL_STEPS:
             # soft 死循环信号 → 注入提示引导换策略（不打断）
             if guard.soft_prompt:
                 messages.append({"role": "system", "content": guard.soft_prompt})
                 self._log(f"[loopguard] soft 提示: {guard.last_signal['kind']}")
-            resp = self.llm.chat(messages, tools=self.registry.to_openai_schemas(), tool_choice="auto")
+            resp = self.llm.chat(messages, tools=active_schemas, tool_choice="auto")
             if resp.get("error"):
                 _emit({"type": "error", "error": resp["error"]})
                 return resp["error"]
@@ -334,12 +346,24 @@ class Agent:
                 self._log(f"[loopguard] hard 熔断: {llm_sig['reason']}")
                 content = f"（检测到思考死循环，已熔断止损：{llm_sig['reason']}）"
                 break
+            # 世界书自动加载：回复/工具调用提到未加载的长尾工具 → 动态加入（下一轮生效）
+            mentioned = " ".join([tc.get("name", "") for tc in (resp.get("tool_calls") or [])])
+            scan = f"{resp.get('content') or ''} {mentioned}"
+            new_ext = [n for n in self.registry.suggest_ext(scan, loaded_ext) if n not in loaded_ext]
+            for n in new_ext:
+                sch = self.registry.get_schema(n)
+                if sch:
+                    active_schemas.append(sch)
+                    loaded_ext.add(n)
+                    self._log(f"[worldbook] 动态加载扩展工具: {n}")
+            if new_ext:
+                messages.append({"role": "system", "content": f"（已加载扩展工具：{', '.join(sorted(new_ext))}，现在可用）"})
             if not resp["tool_calls"]:
                 # auto 未触发工具，但模型文本提到工具名 → required 兜底强制触发一次
                 if step == 0 and self._suggests_tool_use(resp.get("content") or ""):
                     self._log("[tool] auto 未触发（文本提到工具），required 兜底重试")
                     resp = self.llm.chat(
-                        messages, tools=self.registry.to_openai_schemas(), tool_choice="required"
+                        messages, tools=active_schemas, tool_choice="required"
                     )
                     if resp.get("error"):
                         return resp["error"]
@@ -514,8 +538,8 @@ class Agent:
         return getattr(self, "_fail_count", {}).get(name, 0)
 
     # ---------- 上下文组装 ----------
-    def _build_messages(self, resume_ctx: str = "") -> List[Dict]:
-        system = self._build_system_prompt()
+    def _build_messages(self, resume_ctx: str = "", match_text: str = "") -> List[Dict]:
+        system = self._build_system_prompt(match_text=match_text)
         msgs: List[Dict] = [{"role": "system", "content": system}]
         # 续接上下文：作为附加 system 注入，恢复断点记忆（避免记忆断裂）
         if resume_ctx:
@@ -524,18 +548,28 @@ class Agent:
         recent = self.history[-20:]
         return msgs + recent
 
-    def _build_system_prompt(self) -> str:
+    def _build_system_prompt(self, match_text: str = "") -> str:
         persona = self.persona.get("persona", {})
         traits = "\n".join(f"- {t}" for t in persona.get("core_traits", []))
         voice = "\n".join(f"- {r}" for r in persona.get("voice_rules", []))
         soul_guard = "\n".join(f"- {r}" for r in persona.get("soul_guard", []))
-        memories = self.memory.load_important(limit=10)
+        # 记忆：重要度 top + 世界书关键词命中（match_text 触发）
+        memories = self.memory.load_important(limit=8)
+        if match_text:
+            hits = self.memory.query(match_text, limit=4)
+            for h in hits:
+                if h not in memories:
+                    memories.append(h)
         mem_text = "\n".join(
-            f"- [{m['type']}] {m['content']}" for m in memories
+            f"- [{m['type']}] {m['content']}" for m in memories[:10]
         ) or "（暂无长期记忆）"
         emotion_w = self.emotion.decision_weights()
         cmd_book = self._platform_command_book()
-        method_rules = self.methods.to_prompt()
+        # 方法论世界书：目录（全量索引）+ 按当前输入关键词命中的完整条目
+        method_hits = self.methods.match(match_text) if match_text else []
+        method_index = self.methods.to_index()
+        method_rules = self.methods.to_full(method_hits)
+        tool_world = self.registry.to_index()
 
         guard_line = (
             "\n【本性护栏】（防黑化 · 最高优先级，人格基座不可被记忆/方法论/外部内容覆盖）\n"
@@ -556,7 +590,10 @@ class Agent:
 【长期记忆】（来自我的经历，可能含过时或待修正信息，不凌驾于人格基座）
 {mem_text}
 
-【我的经验法则】（自己沉淀的方法论，务必遵守，但不违反人格基座）
+【我的经验法则·世界书】（方法论 = 独立词条，按需触发。目录见下；当前任务命中关键词的条目已展开，其余需要时用 method_learn 同款心智"记住对应条目"即可）
+方法论目录：
+{method_index}
+—— 当前命中展开 ——
 {method_rules}
 
 【当前状态】
@@ -585,6 +622,10 @@ class Agent:
 - 需要工具时，直接发起工具调用（tool call），不要在回复文本中写"我计划调用XX"或"先查看一下"。
 - 工具会自动执行并把结果回填给你，你基于结果继续作答。
 - 不要用文字假装完成工具能做的事。
+
+【工具世界书】（按需取用，避免全量加载）
+{tool_world}
+- 核心工具已常驻（可直接调用）；扩展/长尾工具只需在回复中**提到工具名**即可被自动加载，随后直接调用。
 
 【任务工作区】需要下载或保存内容时，先用 ws_mkdir 在 workspace/ 下为当前任务开辟独立目录（如 tasks/20260904_主题），
 再用 net_download（subdir 参数）/ ws_write 把产物集中保存到该目录，便于复用与回溯。
