@@ -21,6 +21,7 @@ import os
 import re
 import socket
 import sqlite3
+import subprocess
 import sys
 import threading
 import time
@@ -362,11 +363,96 @@ def _port_in_use(host: str, port: int) -> bool:
             return True
 
 
+def _cmd_out(args: list, timeout: int = 15) -> str:
+    """运行系统命令并返回多编码安全解码的输出（utf-8 → gbk → latin-1 → replace）。
+
+    中文 Windows 下 netstat/tasklist/taskkill 输出为 GBK，`text=True` 用 UTF-8
+    解码会 UnicodeDecodeError 且 stdout 变 None——统一走 bytes + 回退解码
+    （方法论 #35 的经验）。
+    """
+    try:
+        r = subprocess.run(args, capture_output=True, timeout=timeout)
+    except Exception:  # noqa: BLE001
+        return ""
+    raw = r.stdout or b""
+    for enc in ("utf-8", "gbk", "latin-1"):
+        try:
+            return raw.decode(enc)
+        except (UnicodeDecodeError, ValueError):
+            continue
+    return raw.decode("utf-8", "replace")
+
+
+def _pid_alive(pid: str) -> bool:
+    """检查进程是否存活（Windows: tasklist；POSIX: os.kill(pid,0)）。"""
+    if os.name == "nt":
+        return f"{pid}" in _cmd_out(["tasklist", "/FI", f"PID eq {pid}"])
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def _kill_old_instance(port: int) -> list:
+    """清理占用目标端口的旧实例进程（实例唯一：先清理再运行）。
+
+    Windows：netstat -ano 定位 LISTENING 的 PID → taskkill /F 强杀，
+    轮询确认死亡，仍存活则 PowerShell Stop-Process 兜底。
+    POSIX（Linux/macOS）：lsof -ti :port → kill -9。
+    只杀占用本服务端口的进程，绝不无差别清进程。
+    """
+    killed: list = []
+    pids: set = set()
+    if os.name == "nt":
+        out = _cmd_out(["netstat", "-ano"])
+        for line in out.splitlines():
+            # 只匹配本服务监听地址的 LISTENING 行，避免误杀其他含端口号的进程
+            if f"{HOST}:{port}" in line and "LISTENING" in line.upper():
+                parts = line.split()
+                if parts and parts[-1].isdigit():
+                    pids.add(parts[-1])
+    else:
+        out = _cmd_out(["lsof", "-ti", f":{port}"])
+        pids = {p for p in out.split() if p.isdigit()}
+
+    for pid in pids:
+        if os.name == "nt":
+            _cmd_out(["taskkill", "/F", "/PID", pid])
+            dead = False
+            for _ in range(6):  # 轮询确认死亡（约 5s）
+                time.sleep(0.8)
+                if not _pid_alive(pid):
+                    dead = True
+                    break
+            if not dead:  # taskkill 未生效 → PowerShell Stop-Process 兜底
+                _cmd_out(["powershell", "-NoProfile", "-Command",
+                          f"Stop-Process -Id {pid} -Force"], timeout=20)
+                time.sleep(1)
+        else:
+            _cmd_out(["kill", "-9", pid])
+            time.sleep(1)
+        killed.append(pid)
+    return killed
+
+
 def main() -> None:
     if _port_in_use(HOST, PORT):
-        print(f"端口 {PORT} 已被占用——可能已有一个白绫界面在运行（浏览器打开 http://{HOST}:{PORT} 即可）。")
-        print("如需重启，请先关闭旧服务。")
-        sys.exit(1)
+        print(f"端口 {PORT} 已被占用——检测到旧实例，清理后重启 ...")
+        killed = _kill_old_instance(PORT)
+        if killed:
+            print(f"  已清理旧实例进程: {', '.join(killed)}")
+        # 等待端口释放（最多 15s）
+        released = False
+        for _ in range(30):
+            time.sleep(0.5)
+            if not _port_in_use(HOST, PORT):
+                released = True
+                break
+        if not released:
+            print(f"端口 {PORT} 仍被占用，无法启动。请手动检查占用进程（可能是非白绫程序）。")
+            sys.exit(1)
+        print("端口已释放，启动新实例 ...")
 
     # 后台线程异步初始化 Agent；服务端口立即监听（网页秒开）
     threading.Thread(target=_init_agent_async, daemon=True).start()
