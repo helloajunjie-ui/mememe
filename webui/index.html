@@ -512,6 +512,7 @@ input.addEventListener("input", function(){
 /* ---------- AI 接入配置面板 ---------- */
 var cfgLoaded = false;
 var _models = [];
+var _curMask = "";  // 当前已配置 Key 的打码串（用于判断用户是否改动了 Key）
 function fillModelList(models, hint) {
   _models = models || [];
   var box = document.getElementById("cfgMList");
@@ -600,9 +601,13 @@ function openCfg() {
     document.getElementById("cfgModel").value = d.model || "";
     document.getElementById("cfgTemp").value = d.temperature != null ? d.temperature : 0.7;
     document.getElementById("cfgTokens").value = d.max_tokens != null ? d.max_tokens : 4096;
+    // Key：打码回填到密码框（直观看到"已配置"），用户不改动则保存时保留原值
     var m = d.api_key_masked || "";
-    document.getElementById("cfgKeyMask").textContent =
-        (d.has_key ? "当前已配置 Key：" + m + "（留空保存则保留原值）" : "尚未配置 API Key");
+    _curMask = m;
+    document.getElementById("cfgKey").value = m;
+    document.getElementById("cfgKeyMask").textContent = d.has_key
+        ? "当前已配置 Key：" + m + "（不修改直接保存 = 保留原值；重新输入 = 更新）"
+        : "尚未配置 API Key（填写并保存后生效）";
   }).catch(function(e){ cfgMsg("读取配置失败：" + e, true); });
 }
 function closeCfg() { document.getElementById("cfgModal").style.display = "none"; }
@@ -612,9 +617,12 @@ function cfgMsg(t, isErr) {
   el.className = "cfg-msg " + (isErr ? "err" : "ok");
 }
 function cfgPayload() {
+  var k = document.getElementById("cfgKey").value;
+  // Key 未改动（空 或 仍是打码回填值）→ 传空 = 后端保留原值
+  var newKey = (k && k !== _curMask) ? k : "";
   return {
     base_url: document.getElementById("cfgBase").value.trim(),
-    api_key: document.getElementById("cfgKey").value,
+    api_key: newKey,
     model: document.getElementById("cfgModel").value.trim(),
     temperature: document.getElementById("cfgTemp").value,
     max_tokens: document.getElementById("cfgTokens").value
@@ -630,10 +638,13 @@ function saveCfg() {
   }).then(function(r){return r.json();}).then(function(d){
     btn.disabled = false;
     if (!d.ok) { cfgMsg("保存失败：" + (d.error || "未知错误"), true); return; }
-    document.getElementById("cfgKey").value = "";
+    // 保存成功后打码回填（新 Key 生效则更新打码串）
     var m = d.api_key_masked || "";
+    _curMask = m;
+    document.getElementById("cfgKey").value = m;
     document.getElementById("cfgKeyMask").textContent =
-        (d.has_key ? "当前已配置 Key：" + m + "（留空保存则保留原值）" : "尚未配置 API Key");
+        (d.has_key ? "当前已配置 Key：" + m + "（不修改直接保存 = 保留原值；重新输入 = 更新）"
+                   : "尚未配置 API Key（填写并保存后生效）");
     cfgMsg(d.llm_ready ? "已保存并生效 ✓" : "已保存，但 LLM 未就绪：" + (d.error || "缺少 API Key"), !d.llm_ready);
     loadStatus();
   }).catch(function(e){ btn.disabled = false; cfgMsg("保存失败：" + e, true); });

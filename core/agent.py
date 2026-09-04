@@ -139,10 +139,9 @@ class Agent:
             over["temperature"] = float(temperature)
         if max_tokens is not None:
             over["max_tokens"] = int(max_tokens)
+        # 仅当提供非空 api_key 才更新；空/None = 保留原值（不清空）
         if api_key is not None and str(api_key).strip():
             over["api_key"] = str(api_key).strip()
-        else:
-            over.pop("api_key", None)  # 空 → 保留原值
         self._save_user_llm_cfg(over)
         self.llm = self._new_llm(self._load_llm_cfg())
         err = getattr(self.llm, "_init_error", None)
