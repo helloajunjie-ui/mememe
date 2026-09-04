@@ -45,7 +45,7 @@ python -m venv .venv
 
 | 能力 | 说明 |
 |------|------|
-| 25 内置工具 | 文件/网络/命令/记忆/方法论/工具管理/环境探查 |
+| 25 核心内置工具 | 文件/网络/命令/记忆/方法论/工具管理/环境探查/上下文回想（MCP 工具按需注入，不占此数） |
 | MCP 万能接口 | `mcp_connect` 连接 MCP server（Blender 等）→ `mcp_scan` 同步工具进名单 → 像普通工具一样调用；`config/mcp.json` 保存配置（模板见 `config/mcp.example.json`） |
 | 工具自举 | `tool_create` 自写工具 → 校验 → 注册复用 |
 | 工具获取 | `tool_acquire` 国内节点优先（gitee/gitcode/github 镜像） |
@@ -56,6 +56,10 @@ python -m venv .venv
 | 自我备份 | `self_backup` 全量/轻量备份 → `self_restore` 复活 → `self_clone` 迁移 |
 | 环境快照 | 高频低变信息快照缓存，省时省 token |
 | 阶段化执行 | 任务分阶段记录存档，断点可续接、可复盘 |
+| 工作流（多节点流水线） | 节点数由白绫自主拆解、执行中可动态追加；节点间只传存储路径/完成结果，产物落 `workspace/workflows/<id>/`；可持久化、断点恢复、带时间戳执行日志 |
+| 工作流定时启动 | `config/workflow_schedule.yaml` 设定时间与任务，到点且空闲时自动触发执行 |
+| 统一操作日志 | 每次工具调用由逻辑层自动记录到 `data/operation.log`（不依赖 AI 自觉），全流程可追溯 |
+| 每日私有备份 | `backup_private.py` 定时打包私有实例数据（记忆/自我状态/方法论/注册表/快照/配置）到 `backups/`，作为复活点；程序本体更新走公开仓库 |
 
 ## 目录结构
 
@@ -65,12 +69,16 @@ mememe/
 ├── config.yaml            # 默认配置（LLM 端点、沙箱参数；面板覆盖见 config/llm.json）
 ├── config/llm.json        # AI 接入配置（WebUI 面板保存，优先于 config.yaml）
 ├── config/mcp.json        # MCP server 配置（本地实例，不入库；模板见 config/mcp.example.json）
+├── config/study.yaml      # 自主时间配置（使用者控制学习方向与时间；模板见 study.example.yaml）
+├── config/workflow_schedule.yaml  # 工作流定时启动配置（本地实例；模板见 workflow_schedule.example.yaml）
 ├── core/                  # 核心：agent 主循环、记忆、方法论、注册表、MCP、人性层
 ├── tools/                 # 工具框架 + 内置工具源码（python/go）
 ├── webui/                 # 网页交互端（server.py + index.html，端口 8765）
 ├── workspace/tasks/       # 任务档案（阶段记录 + meta 断点 + 全量消息存档，续接/回想的数据源）
+├── workspace/workflows/   # 工作流产物与存档（多节点流水线，本地不入库）
 ├── backups/               # 自保存续备份（复活/迁移）
 ├── data/persona.yaml      # 人格基座（通用，随仓库分发）
+├── data/operation.log     # 统一操作日志（逻辑层自动记录每次工具调用，本地运行产物）
 ├── 设计文档.md             # 完整设计与迭代记录
 └── .gitignore             # 隔离实例私有数据
 ```
@@ -90,5 +98,3 @@ mememe/
 - Python 3.13+（兼容 3.10+）
 - 网络：需可达 LLM API；海外站点受限时跟随本机代理
 - 平台：Windows / Linux / macOS（优先系统自带命令）
-
-- **工作流（多节点流水线）**：多任务节点串联（节点数由白绫自主拆解、可动态追加），节点间通过存储路径/完成结果传递，产物落可控目录；可持久化、断点恢复、带时间戳执行日志、定时启动。
