@@ -33,3 +33,4 @@ webui/_user_shot.png
 config/llm.json
 data/context_nodes/
 
+config/mcp.json

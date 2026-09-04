@@ -9,6 +9,7 @@
 - **自我认知**：首次运行记录自我、检查环境、保存状态（我是谁 / 我在哪 / 我有什么工具）
 - **长期记忆**：`memory.db` 记住事实，`methodology.json` 沉淀方法论（什么方法有效 / 什么坑要避免）
 - **工具自举**：内置工具不足时，可自己创建工具、从网络获取工具并注册复用
+- **MCP 万能接口**：通过 Model Context Protocol 连接支持 API 的外部软件（如 Blender 5.2 的 `blender-mcp`），把第三方工具注册进名单统一调用
 - **死循环检测**：确定性规则熔断思考/执行死循环，不浪费 token
 - **网络策略**：跟随本机代理访问外网（不搞对抗），多通道下载、环境快照省时省 token
 - **自我备份**：`self_backup / self_restore / self_clone` 支持复活与迁移
@@ -42,6 +43,7 @@ python -m venv .venv
 | 能力 | 说明 |
 |------|------|
 | 25 内置工具 | 文件/网络/命令/记忆/方法论/工具管理/环境探查 |
+| MCP 万能接口 | `mcp_connect` 连接 MCP server（Blender 等）→ `mcp_scan` 同步工具进名单 → 像普通工具一样调用；`config/mcp.json` 保存配置（模板见 `config/mcp.example.json`） |
 | 工具自举 | `tool_create` 自写工具 → 校验 → 注册复用 |
 | 工具获取 | `tool_acquire` 国内节点优先（gitee/gitcode/github 镜像） |
 | 死循环检测 | LoopGuard：重复调用/连续失败/空转三类信号，soft 提示 + hard 熔断 |
@@ -59,7 +61,8 @@ mememe/
 ├── main.py                # 入口（交互/单次任务/自检）
 ├── config.yaml            # 默认配置（LLM 端点、沙箱参数；面板覆盖见 config/llm.json）
 ├── config/llm.json        # AI 接入配置（WebUI 面板保存，优先于 config.yaml）
-├── core/                  # 核心：agent 主循环、记忆、方法论、注册表、人性层
+├── config/mcp.json        # MCP server 配置（本地实例，不入库；模板见 config/mcp.example.json）
+├── core/                  # 核心：agent 主循环、记忆、方法论、注册表、MCP、人性层
 ├── tools/                 # 工具框架 + 内置工具源码（python/go）
 ├── webui/                 # 网页交互端（server.py + index.html，端口 8765）
 ├── workspace/tasks/       # 任务档案（阶段记录 + meta 断点 + 全量消息存档，续接/回想的数据源）

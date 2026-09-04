@@ -113,6 +113,10 @@ class Agent:
             os.path.join(self.data_dir, "registry.json"),
             cfg["tools_dir"],
         )
+        # MCP 万能接口：注入 McpManager，供 MCP 工具执行转发调用（见设计文档 5.37）
+        from core.mcp import get_mcp_manager
+        self.mcp = get_mcp_manager(os.path.join(cfg["data_dir"], "..", "config", "mcp.json"))
+        self.registry.mcp = self.mcp
         self.persona = self._load_persona()
         llm_cfg = self._load_llm_cfg()
         self.llm = self._new_llm(llm_cfg)
@@ -307,13 +311,38 @@ class Agent:
             else:
                 self.boot_mode = "NORMAL_BOOT"
                 self.self_model.boot_increment()
+                # 读回磁盘持久化工具（自建 Python/Go/MCP 工具），再重载内置（保证最新代码）
+                self.registry.load()
                 self.registry.discover_builtin()  # 重新加载内置工具（关键：每次启动保证工具可用）
                 # 正常启动刷新环境画像（轻量）
                 env_probe.refresh(os.path.join(self.data_dir, "env_profile.json"))
                 self._integrity_check()  # 本体完整性自检：防篡改/感染（用户安全要求）
                 self._backup(force=False)  # 启动兜底：今日未备份则补（备份不依赖单点定时）
+                self._sync_mcp()  # 同步已配置 MCP server 的工具（失败不阻塞启动）
         self._log(f"[boot] 启动模式: {self.boot_mode}")
         return self.boot_mode
+
+    def _sync_mcp(self) -> None:
+        """启动时同步已配置 MCP server 的工具进工具名单。
+
+        磁盘 registry 已含 MCP 工具（上次同步过）则直接复用，不重复枚举（效率优先）；
+        否则轻量同步一次。任何失败只记录日志，不阻塞启动。
+        """
+        try:
+            if not self.mcp.servers:
+                return
+            has_mcp = any(t.get("source") == "mcp" for t in self.registry.tools.values())
+            if has_mcp:
+                n = sum(1 for t in self.registry.tools.values() if t.get("source") == "mcp")
+                self._log(f"[mcp] 已加载 {n} 个 MCP 工具（复用磁盘名单）")
+                return
+            res = self.mcp.sync_to_registry(self.registry)
+            if res.get("failed"):
+                self._log(f"[mcp] 部分 server 同步失败: "
+                          f"{[f['server'] + ': ' + str(f.get('error'))[:80] for f in res['failed']]}")
+            self._log(f"[mcp] 同步 {res.get('count', 0)} 个 MCP 工具进工具名单")
+        except Exception as e:  # noqa: BLE001
+            self._log(f"[mcp] 启动同步失败（不阻塞启动）: {type(e).__name__}: {e}")
 
     def _integrity_check(self) -> None:
         """本体完整性自检：静态本体哈希基线比对，防篡改/感染。结果通知 AI。"""

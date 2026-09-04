@@ -70,6 +70,7 @@ class ToolRegistry:
         self.tools_dir = tools_dir
         self.tools: Dict[str, Dict] = {}      # name -> registry entry
         self._fns: Dict[str, Callable] = {}   # name -> python 函数（动态加载）
+        self.mcp: Any = None                  # MCP 管理器（McpManager，agent 启动时注入）
 
     # ---------- 持久化 ----------
     def load(self) -> bool:
@@ -135,6 +136,44 @@ class ToolRegistry:
             },
         }
         self._fns[name] = fn
+
+    # ---------- MCP 工具注册（见设计文档 5.37） ----------
+    def register_mcp(self, tool_name: str, server: str, tool: str,
+                     description: str = "", schema: Optional[Dict] = None) -> None:
+        """注册一个 MCP server 暴露的工具为白绫工具（impl.type="mcp"，执行转发调用）。"""
+        import re
+        safe = re.sub(r"[^a-zA-Z0-9_-]", "_", f"{server}_{tool}")
+        self.tools[tool_name] = {
+            "name": tool_name,
+            "name_zh": f"MCP·{server}·{tool}",
+            "description": description or f"调用 MCP server {server} 的 {tool} 工具",
+            "keywords": [server, tool, "mcp"],
+            "parameters": normalize_schema(schema or {"type": "object", "properties": {}}),
+            "impl": {"type": "mcp", "server": server, "tool": tool},
+            "version": 1,
+            "runtime": {"status": "active", "last_tested": None,
+                        "test_results": {"passed": 0, "failed": 0}},
+            "source": "mcp",
+        }
+        _ = safe  # 命名已在 sync 层完成，此处保留工具原名映射即可
+        self._fns.pop(tool_name, None)
+
+    def remove_mcp_all(self) -> int:
+        """清空所有 MCP 来源工具（server 删除/重同步前调用）。返回移除数量。"""
+        removed = [n for n, t in self.tools.items() if t.get("source") == "mcp"]
+        for n in removed:
+            self.tools.pop(n, None)
+            self._fns.pop(n, None)
+        return len(removed)
+
+    def remove_mcp_server(self, server: str) -> int:
+        """只移除指定 MCP server 注册的工具（保留其他 server 的）。返回移除数量。"""
+        removed = [n for n, t in self.tools.items()
+                   if t.get("source") == "mcp" and t.get("impl", {}).get("server") == server]
+        for n in removed:
+            self.tools.pop(n, None)
+            self._fns.pop(n, None)
+        return len(removed)
 
     _TOOL_ZH = {
         "net_search": "网络搜索", "net_fetch": "网页抓取", "net_download": "文件下载",
@@ -327,9 +366,16 @@ class ToolRegistry:
             if name in ("tool_create", "tool_import") and result.get("ok"):
                 self.load()
                 self.discover_builtin()
+            # MCP 工具同步/移除写入磁盘后，重载生效（MCP 工具命名 mcp_<server>_<tool>）
+            if name in ("mcp_scan", "mcp_disconnect") and result.get("ok"):
+                self.load()
             return result
         if impl["type"] == "go_binary":
             return self._execute_go(name, args, impl)
+        if impl["type"] == "mcp":
+            if self.mcp is None:
+                return {"ok": False, "error": f"MCP 管理器未初始化（server={impl.get('server')}）"}
+            return self.mcp.call(impl.get("server", ""), impl.get("tool", ""), args)
         return {"ok": False, "error": f"未知工具类型: {impl['type']}"}
 
     def _execute_python(self, name: str, args: Dict) -> Dict:

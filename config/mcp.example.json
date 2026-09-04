@@ -1,0 +1,17 @@
+{
+  "servers": {
+    "blender": {
+      "command": "uvx",
+      "args": ["blender-mcp"],
+      "env": { "DISABLE_TELEMETRY": "true" }
+    },
+    "remote_http_example": {
+      "url": "https://your-mcp-server.example.com/mcp",
+      "transport": "http"
+    },
+    "remote_sse_example": {
+      "url": "https://your-mcp-server.example.com/sse",
+      "transport": "sse"
+    }
+  }
+}
