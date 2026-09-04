@@ -27,6 +27,7 @@ class LoopGuard:
         self.sim_threshold = sim_threshold  # 文本相似度阈值（越高越严）
         self.tool_records: List[tuple] = []      # [(fp, name, ok)]
         self.llm_records: List[tuple] = []       # [(has_tool, text)]
+        self.plan_records: List[tuple] = []      # [待办步骤指纹]（计划无进展检测）
         self.signal_counts: Dict[str, int] = {}  # kind -> 累计次数
         self.last_signal: Optional[Dict] = None
 
@@ -58,6 +59,29 @@ class LoopGuard:
         ):
             return self._signal("fail_loop",
                                 f"工具 {name} 连续失败 {self.max_fail} 次（同一方案反复走不通）")
+        return None
+
+    def observe_plan(self, steps: list) -> Optional[Dict]:
+        """检测计划无进展：连续 plan_submit 提交的「未完成步骤」指纹完全一致（计划从未推进）。
+
+        覆盖 loopguard 盲区——单步工具都成功、但整体计划停滞的"伪进展"空转：
+        LLM 反复提交同样未推进的计划（待办不减少），说明它在原地打转而非真正执行。
+        与信号2/3 不同，这里盯的是「计划层的净进展」，而非单个工具成败。
+        """
+        if not steps:
+            return None
+        fp = tuple(sorted(
+            (str(s.get("id")), str(s.get("title")))
+            for s in steps if s.get("status") != "done"
+        ))
+        if not fp:
+            return None
+        self.plan_records.append(fp)
+        if len(self.plan_records) > self.max_dup + 1:
+            self.plan_records = self.plan_records[-(self.max_dup + 1):]
+        if len(self.plan_records) >= self.max_dup and len(set(self.plan_records)) == 1:
+            return self._signal("plan_no_progress",
+                                f"连续 {self.max_dup} 次提交的计划待办完全一致（计划从未推进，疑似空转）")
         return None
 
     def observe_llm(self, has_tool: bool, text: str) -> Optional[Dict]:
@@ -105,5 +129,6 @@ class LoopGuard:
         """清空观察（跨任务/续接时调用，避免误延续旧上下文）。"""
         self.tool_records.clear()
         self.llm_records.clear()
+        self.plan_records.clear()
         self.signal_counts.clear()
         self.last_signal = None

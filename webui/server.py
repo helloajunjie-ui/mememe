@@ -260,7 +260,23 @@ class Handler(BaseHTTPRequestHandler):
         if not t:
             self._send_json(404, {"ok": False, "error": "任务不存在或已过期"})
             return
-        self._send_json(200, {"ok": True, **t})
+        # 增量事件游标：?since=N 只返回第 N 条之后的新事件。
+        # 修：全量返回历史 events 会让轮询端反复累加旧事件（曾致测试端误报 615 次空转）
+        try:
+            qs = urlparse(self.path).query
+            since = int(dict(p.split("=", 1) for p in qs.split("&") if "=" in p).get("since", "0") or "0")
+        except (TypeError, ValueError):
+            since = 0
+        events = t.get("events", [])
+        self._send_json(200, {
+            "ok": True,
+            "status": t.get("status"),
+            "reply": t.get("reply"),
+            "error": t.get("error"),
+            "events": events[since:],
+            "next": len(events),
+            "done": t.get("status") in ("done", "error"),
+        })
 
     # ---------- AI 接入配置 API ----------
     def _handle_config_get(self) -> None:

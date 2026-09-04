@@ -7,7 +7,12 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Any, Dict, List, Optional
+
+# 瞬时错误提示词：命中才重试（网络/限流/服务端 5xx）；确定性错误（400 参数、401 密钥等）不重试
+_TRANSIENT_HINTS = ("timed out", "timeout", "rate limit", "rate_limit", "429",
+                    "502", "503", "504", "connection", "network", "unavailable")
 
 
 class LLMGateway:
@@ -51,6 +56,12 @@ class LLMGateway:
     def ready(self) -> bool:
         return self._ready
 
+    @staticmethod
+    def _is_transient(e: Exception) -> bool:
+        """瞬时错误判定：网络/限流/服务端临时故障 → 值得重试；参数/密钥等确定性错误不重试。"""
+        msg = f"{type(e).__name__}: {e}".lower()
+        return any(h in msg for h in _TRANSIENT_HINTS)
+
     def chat(self, messages: List[Dict], tools: Optional[List[Dict]] = None,
              tool_choice: str = "auto") -> Dict:
         """调用 chat/completions。
@@ -77,27 +88,35 @@ class LLMGateway:
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = tool_choice
-        try:
-            resp = self._client.chat.completions.create(**kwargs)
-            msg = resp.choices[0].message
-            tool_calls = []
-            if getattr(msg, "tool_calls", None):
-                for tc in msg.tool_calls:
-                    tool_calls.append({
-                        "id": tc.id,
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments,
-                    })
-            return {
-                "content": msg.content,
-                "reasoning_content": getattr(msg, "reasoning_content", None),
-                "tool_calls": tool_calls,
-                "finish_reason": resp.choices[0].finish_reason,
-            }
-        except Exception as e:  # noqa: BLE001
-            return {
-                "content": None,
-                "tool_calls": [],
-                "finish_reason": "error",
-                "error": f"LLM 调用失败: {type(e).__name__}: {e}",
-            }
+        # 有限重试：仅瞬时错误重试 1 次（退避 1.5s）；确定性错误直接失败（不无效投入）
+        last_err: Optional[Exception] = None
+        for attempt in range(2):
+            try:
+                resp = self._client.chat.completions.create(**kwargs)
+                msg = resp.choices[0].message
+                tool_calls = []
+                if getattr(msg, "tool_calls", None):
+                    for tc in msg.tool_calls:
+                        tool_calls.append({
+                            "id": tc.id,
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        })
+                return {
+                    "content": msg.content,
+                    "reasoning_content": getattr(msg, "reasoning_content", None),
+                    "tool_calls": tool_calls,
+                    "finish_reason": resp.choices[0].finish_reason,
+                }
+            except Exception as e:  # noqa: BLE001
+                last_err = e
+                if attempt == 0 and self._is_transient(e):
+                    time.sleep(1.5)
+                    continue
+                break
+        return {
+            "content": None,
+            "tool_calls": [],
+            "finish_reason": "error",
+            "error": f"LLM 调用失败: {type(last_err).__name__}: {last_err}",
+        }

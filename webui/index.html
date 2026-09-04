@@ -477,10 +477,10 @@ function renderTaskError(panel, error) {
 function pollTask(panel, tid) {
   var seen = 0;
   var timer = setInterval(function(){
-    fetch("/api/task/" + tid).then(function(r){ return r.json(); }).then(function(d){
+    fetch("/api/task/" + tid + "?since=" + seen).then(function(r){ return r.json(); }).then(function(d){
       if (!d.ok) { clearInterval(timer); renderTaskError(panel, d.error||"任务不存在"); return; }
-      for (var i = seen; i < (d.events||[]).length; i++) renderEvent(panel, d.events[i]);
-      seen = (d.events||[]).length;
+      for (var i = 0; i < (d.events||[]).length; i++) renderEvent(panel, d.events[i]);
+      seen = (typeof d.next === "number") ? d.next : seen + (d.events||[]).length;
       if (d.status === "done") { clearInterval(timer); renderTaskDone(panel, d.reply); }
       else if (d.status === "error") { clearInterval(timer); renderTaskError(panel, d.error); }
     }).catch(function(){});

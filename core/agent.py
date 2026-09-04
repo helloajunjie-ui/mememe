@@ -33,6 +33,10 @@ from tools.src.python import backup_private
 
 MAX_TOOL_STEPS = 16  # 单轮最多工具调用总数（含并行，成本精确控制；复杂任务可分多轮续接）
 
+# ---------- 上下文膨胀防线（防止 messages 无限累积触发 LLM 400/超限） ----------
+_MAX_TOOL_RESULT_CHARS = 3000   # 单条 tool 结果写入上下文的最大字符（超长截断，防单条爆炸）
+_MAX_MSGS_CHARS = 60000         # 任务内 messages 总字符阈值（超限折叠最老工具轮次，防总量爆炸）
+
 # ---------- 计划线内置工具（C2 规划任务 / C3 任务集合的执行骨架，不落入工具库） ----------
 _PLAN_SUBMIT_SCHEMA = {
     "type": "function",
@@ -495,9 +499,11 @@ class Agent:
 
         # 续接检测：用户表达"继续"且有未完成任务 → 恢复上下文（含计划线状态）
         resume_ctx = None
+        resume_goal = ""   # 续接原目标（在 ongoing_task 置 None 前保存，防目标名丢失）
         plan = None
         if self.ongoing_task and self._is_resume_request(user_input):
             plan = self.ongoing_task.get("plan")
+            resume_goal = self.ongoing_task.get("goal", "续接任务")
             resume_ctx = self._load_task_context(self.ongoing_task)
             self._log(f"[resume] 续接任务 {self.ongoing_task['task_id']}（恢复断点）"
                       + ("，含计划线" if plan else ""))
@@ -534,8 +540,13 @@ class Agent:
         rounds_left = 1     # 预算耗尽后的自动续接次数（0=回合用尽）
         is_plan_mode = False
         step_total = 0      # 跨回合累计步数（成本统计/止损依据）
+        llm_error = None    # LLM 调用失败标记（保存已执行阶段后统一收尾，不留裸返回）
+        self._fail_count = {}  # 工具失败计数仅限本任务（跨任务清零，防旧任务污染情绪判断）
 
         while step < round_budget:
+            # 上下文防线：每次 LLM 调用前压缩 messages（超长时折叠最老工具轮次）
+            # —— 防止任务内上下文无限膨胀（本次 LLM 400 的直接诱因）
+            messages = self._compress_messages(messages)
             # 计划线进度注入：每轮提醒当前进度（不持久化，随轮次动态更新）
             if plan and plan.get("steps"):
                 messages.append({
@@ -550,7 +561,9 @@ class Agent:
             resp = self.llm.chat(messages, tools=active_schemas, tool_choice="auto")
             if resp.get("error"):
                 _emit({"type": "error", "error": resp["error"]})
-                return resp["error"]
+                llm_error = resp["error"]
+                content = f"（LLM 调用失败，任务中断，已执行阶段已保存）{resp['error']}"
+                break
             # 类型判定：仅任务真正首轮执行（step_total==0，排除自动续接）——否则续接时
             # step 归 0 会重复判定并重置 rounds_left，导致预算无限重置、任务空转失控
             if step == 0 and step_total == 0:
@@ -597,7 +610,10 @@ class Agent:
                         messages, tools=active_schemas, tool_choice="required"
                     )
                     if resp.get("error"):
-                        return resp["error"]
+                        _emit({"type": "error", "error": resp["error"]})
+                        llm_error = resp["error"]
+                        content = f"（LLM 调用失败，任务中断，已执行阶段已保存）{resp['error']}"
+                        break
                     if not resp["tool_calls"]:
                         content = resp.get("content") or ""
                         break
@@ -607,7 +623,7 @@ class Agent:
             # 有工具调用 → 建阶段化任务记录
             if tracker is None:
                 tracker = TaskStageTracker()
-                tracker.begin_task(user_input if not resume_ctx else self._resume_goal())
+                tracker.begin_task(user_input if not resume_ctx else resume_goal)
                 # 节点化：进入任务上下文，记录任务起点（完成时摘除轮次，隔离闲聊）
                 self.ctx_mode = "task"
                 self.ctx_task_id = tracker.task_id
@@ -644,6 +660,13 @@ class Agent:
                     result, plan = self._handle_plan_submit(args, plan)
                     if plan:
                         _emit({"type": "plan", "plan": json.loads(json.dumps(plan))})
+                        # 计划无进展检测：连续提交未推进的计划 → 疑似空转（loopguard 盲区）
+                        plan_sig = guard.observe_plan(plan.get("steps", []))
+                        if plan_sig and plan_sig["level"] == "hard":
+                            loop_hit = True
+                            self._log(f"[loopguard] hard 熔断: {plan_sig['reason']}")
+                            content = f"（检测到计划无进展循环，已熔断止损：{plan_sig['reason']}）"
+                            break
                 elif name == "plan_update":
                     result, plan = self._handle_plan_update(args, plan)
                     if plan:
@@ -675,10 +698,14 @@ class Agent:
                     result=json.dumps(result, ensure_ascii=False),
                     status="ok" if ok else "error",
                 )
+                _tool_content = json.dumps(result, ensure_ascii=False)
+                if len(_tool_content) > _MAX_TOOL_RESULT_CHARS:
+                    _tool_content = (_tool_content[:_MAX_TOOL_RESULT_CHARS]
+                                     + f"...[已截断,原{len(_tool_content)}字符]")
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc["id"],
-                    "content": json.dumps(result, ensure_ascii=False),
+                    "content": _tool_content,
                 })
             # 预算耗尽且未熔断 → 自动续接（不用用户手动"继续"；C2/C3 续接次数更多）
             if step >= round_budget and not loop_hit:
@@ -700,11 +727,18 @@ class Agent:
 
         step_total += step  # 累计最后一回合步数（统计用）
 
-        if limit_hit or loop_hit:
-            # 步数超限（回合预算用尽）或死循环熔断：不丢弃，保存断点供续接（思维链继续思考）；但有续接次数上限（止损）
-            if not loop_hit:
+        if limit_hit or loop_hit or llm_error:
+            # 步数超限 / 死循环熔断 / LLM 失败：不丢弃已执行阶段，保存断点供续接；有续接上限（止损）
+            if llm_error:
+                note = f"LLM 调用失败（{llm_error[:100]}），任务未完成"
+                reason_label = "LLM 失败"
+            elif not loop_hit:
                 content = "（工具调用步数超限，已停止）"
-            note = "工具步数超限，任务未完成" if not loop_hit else f"死循环熔断（{content[2:-1]}），任务未完成"
+                note = "工具步数超限，任务未完成"
+                reason_label = "步数上限"
+            else:
+                note = f"死循环熔断（{content[2:-1]}），任务未完成"
+                reason_label = "死循环熔断"
             if tracker is not None:
                 prev_left = (self.ongoing_task or {}).get("resume_left", 2)
                 if prev_left > 0:
@@ -720,10 +754,10 @@ class Agent:
                     }
                     if plan:
                         self.ongoing_task["plan"] = plan
-                    self._log(f"[task] 未完成（{'超限' if not loop_hit else '熔断'}），断点已存：{archive}")
+                    self._log(f"[task] 未完成（{reason_label}），断点已存：{archive}")
                     content = (
                         f"[任务未完成] 已执行 {len(tracker.stages)} 步后"
-                        f"（{'步数上限' if not loop_hit else '死循环熔断'}）截断。"
+                        f"（{reason_label}）截断。"
                         f"断点已存档：{archive}。回复\"继续\"可续接（剩余 {prev_left - 1} 次），不丢失进度。"
                     )
                 else:
@@ -872,6 +906,43 @@ class Agent:
             return json.loads(arguments or "{}")
         except json.JSONDecodeError:
             return {}
+
+    def _compress_messages(self, messages: List[Dict]) -> List[Dict]:
+        """任务内上下文压缩：messages 总长超阈值时，从最老开始把
+        「assistant(带工具调用) + 其 tool 结果」轮次成对折叠为一条摘要。
+
+        防止上下文无限膨胀（本次 LLM 400 的直接诱因）：
+        - 折叠保持 assistant→tool 的成对性，保留的消息序列对 API 仍合法；
+        - 只折叠最老轮次，保留最近的完整上下文；
+        - system 消息不折叠（[0] 是主 system）。
+        """
+        def _total(ms: List[Dict]) -> int:
+            return sum(len(str(m.get("content") or "")) for m in ms)
+
+        if len(messages) < 6 or _total(messages) <= _MAX_MSGS_CHARS:
+            return messages
+        out = list(messages)
+        guard = 0
+        while _total(out) > _MAX_MSGS_CHARS and guard < 40:
+            guard += 1
+            folded = False
+            for i in range(1, len(out) - 1):
+                m = out[i]
+                if m.get("role") == "assistant" and m.get("tool_calls"):
+                    j = i + 1
+                    while j < len(out) and out[j].get("role") == "tool":
+                        j += 1
+                    names = sorted({tc.get("function", {}).get("name", "?")
+                                    for tc in m.get("tool_calls", [])})
+                    del out[i:j]
+                    out.insert(i, {"role": "system",
+                                   "content": f"（早期工具执行已折叠：{('、'.join(names) or '…')}）"})
+                    folded = True
+                    break
+            if not folded:
+                break
+        self._log(f"[ctx] messages 超长，压缩 {guard} 轮（原 {_total(list(messages))} 字符 → {_total(out)} 字符）")
+        return out
 
     def _suggests_tool_use(self, text: str) -> bool:
         """检测模型文本是否提到工具名（说明它想用工具但没真正触发 tool call）。"""
@@ -1118,8 +1189,11 @@ class Agent:
     def _reflect_light(self, user_input: str, response: str, used_tools: List[str] = None) -> None:
         """分轻重反思：重要事件深度记录，例行事件轻量带过，避免记忆噪声与一次性堆叠。"""
         used_tools = used_tools or []
-        unfinished = response.startswith("（") or response.startswith("[任务未完成]") \
-            or response.startswith("[任务成本")
+        # 失败判定：只认 agent 自身生成的控制失败前缀（熔断/超限/LLM失败/止损），
+        # 不误伤正常回复（LLM 常以"（备注）…"开头，旧逻辑会把它们判成失败触发负面情绪）
+        unfinished = response.startswith("[任务未完成]") or response.startswith("[任务成本") \
+            or response.startswith("（LLM 调用失败") or response.startswith("（检测到") \
+            or response.startswith("（工具调用步数超限")
         if unfinished:
             # 高优先级：任务受阻/失败 → 深度反思（写失败教训，重要性更高）
             self.emotion.on_event("task_failure")
