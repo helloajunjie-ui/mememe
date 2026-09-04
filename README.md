@@ -19,6 +19,21 @@
 
 ## 快速开始
 
+### Windows · 一键启动（推荐，小白开箱即用）
+
+1. 克隆或下载本项目
+2. 双击 **`启动.bat`** —— 自动完成：
+
+   - 检查 Python 环境：有 `.venv` 直接用；无则用系统 Python 创建；系统也没有则自动从**国内镜像**（华为云）下载安装 Python 3.11.9
+   - 用**清华镜像**安装依赖（只装一次，之后跳过）
+   - 启动白绫网页服务（后台运行，命令行窗口自动关闭）并打开浏览器 `http://127.0.0.1:8765`
+
+3. 首次打开在页面里配置 AI 接入（API Key / 模型，支持任意 OpenAI 兼容接口，如 DeepSeek），即可开始对话
+
+> 配置由用户自己完成，网页里填一次即保存（`config/llm.json`），之后无需再配。
+
+### 命令行（Linux / macOS / 进阶）
+
 ```bash
 # 1. 克隆
 git clone https://github.com/helloajunjie-ui/mememe.git
@@ -34,8 +49,9 @@ python -m venv .venv
 .venv/bin/pip install -r requirements.txt                     # Linux/macOS
 
 # 4. 启动
-.venv\Scripts\python.exe main.py            # 交互模式
-.venv\Scripts\python.exe main.py --check    # 环境/工具自检
+.venv\Scripts\python.exe webui\server.py     # 网页端（端口 8765）
+.venv\Scripts\python.exe main.py             # 交互模式
+.venv\Scripts\python.exe main.py --check     # 环境/工具自检
 .venv\Scripts\python.exe main.py --task "帮我看看当前目录"   # 单次任务
 ```
 
@@ -65,6 +81,7 @@ python -m venv .venv
 
 ```
 mememe/
+├── 启动.bat               # Windows 一键启动（自动部署环境，开箱即用）
 ├── main.py                # 入口（交互/单次任务/自检）
 ├── config.yaml            # 默认配置（LLM 端点、沙箱参数；面板覆盖见 config/llm.json）
 ├── config/llm.json        # AI 接入配置（WebUI 面板保存，优先于 config.yaml）
