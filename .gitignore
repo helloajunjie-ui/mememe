@@ -35,3 +35,7 @@ data/context_nodes/
 
 config/mcp.json
 config/study.yaml
+config/workflow_schedule.yaml
+data/operation.log
+workspace/workflows/
+workspace/*.txt

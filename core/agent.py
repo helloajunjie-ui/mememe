@@ -29,6 +29,7 @@ from core.self_model import SelfModel
 from core.stages import TaskStageTracker
 from core import platform as plat
 from core.integrity import ensure_and_check as integrity_check, check as integrity_verify
+from core import workflow as wfmod
 from tools.src.python import backup_private
 
 MAX_TOOL_STEPS = 16  # 单轮最多工具调用总数（含并行，成本精确控制；复杂任务可分多轮续接）
@@ -91,6 +92,92 @@ _PLAN_UPDATE_SCHEMA = {
     },
 }
 
+# ---------- 工作流内置工具（多节点流水线：节点间通过产物路径传递 · 设计文档 5.41） ----------
+_WF_ADD_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "workflow_add_node",
+        "description": "向当前工作流动态追加一个节点（工作流要完成的任务是未知的，节点数量不预设——拿到任务后先自主分析要拆成哪些节点，执行中发现需要更多环节就随时追加）。追加的节点自动排到末尾。",
+        "parameters": {"type": "object",
+                       "properties": {
+                           "title": {"type": "string", "description": "节点标题"},
+                           "desc": {"type": "string", "description": "本节点要完成什么、产出什么"},
+                           "input_from": {"type": "array", "items": {"type": "string"},
+                                          "description": "依赖的前节点 id 列表（可选，这些节点的产物路径会传给本节点）"}},
+                       "required": ["title"]},
+    },
+}
+
+_WF_CREATE_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "workflow_create",
+        "description": "创建并保存一个工作流（多节点流水线）：每个节点是一个有明确产物的小任务，节点间通过【存储路径】传递产物（前节点产物落盘到工作流目录，后节点按需读取）。适合需要多环节串联、产物需供后续节点/用户复用的任务。传入 name 和节点列表（id/title/desc/input_from），会创建可控产物目录（workspace/workflows/）并持久化，设为当前工作流。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "工作流名称（简短）"},
+                "nodes": {"type": "array",
+                          "items": {"type": "object",
+                                    "properties": {
+                                        "id": {"type": "string", "description": "节点 id，如 n1/n2/n3"},
+                                        "title": {"type": "string", "description": "节点标题"},
+                                        "desc": {"type": "string", "description": "本节点要完成什么、产出什么（明确到文件）"},
+                                        "input_from": {"type": "array", "items": {"type": "string"},
+                                                       "description": "依赖的前节点 id 列表（这些节点的产物路径会传给本节点）"}},
+                                    "required": ["title"]},
+                          "description": "节点清单，按执行顺序排列"},
+            },
+            "required": ["name", "nodes"],
+        },
+    },
+}
+
+_WF_STATUS_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "workflow_status",
+        "description": "查看当前工作流的进度：各节点状态（todo/doing/done/failed）、产物路径、当前应执行的节点及其依赖产物。",
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+}
+
+_WF_LIST_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "workflow_list",
+        "description": "列出已保存的全部工作流（id/名称/状态/节点数），用于挑选复用或恢复。",
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+}
+
+_WF_LOAD_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "workflow_load",
+        "description": "加载一个已保存的工作流为当前工作流（断点恢复/复用），返回其进度。",
+        "parameters": {"type": "object",
+                       "properties": {"workflow_id": {"type": "string", "description": "目标工作流 id"}},
+                       "required": ["workflow_id"]},
+    },
+}
+
+_WF_UPDATE_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "workflow_update_node",
+        "description": "更新当前工作流某节点的状态与产物：每完成一个节点标记 done 并记录其产物路径与完成摘要；失败标记 failed。后续节点通过记录的产品路径读取前序结果。",
+        "parameters": {"type": "object",
+                       "properties": {
+                           "node_id": {"type": "string", "description": "节点 id"},
+                           "status": {"type": "string", "enum": ["done", "failed", "doing"],
+                                      "description": "done=完成；failed=失败；doing=进行中"},
+                           "output": {"type": "string", "description": "本节点产物落盘路径（完成后必填）"},
+                           "result": {"type": "string", "description": "完成摘要/结果通知（简短）"}},
+                       "required": ["node_id", "status"]},
+    },
+}
+
 
 class Agent:
     def __init__(self, config_path: str = "config.yaml"):
@@ -136,6 +223,10 @@ class Agent:
         # 进行中任务（工具步数超限等被截断时保存，支持续接，避免记忆断裂）
         self.ongoing_task: Optional[Dict] = None
         self.boot_mode = None
+        # 工作流（多节点流水线：节点间通过产物路径传递，产物全部落可控目录 workspace/workflows/<id>/）
+        self.workspace_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "workspace")
+        self.workflow: Optional[wfmod.Workflow] = None
+        wfmod.set_root(os.path.join(self.workspace_dir, "workflows"))
 
     def _load_api_key(self, env_name: str) -> Optional[str]:
         """API key 读取优先级：环境变量 > .env 文件。不硬编码进配置。"""
@@ -564,8 +655,10 @@ class Agent:
         active_schemas = self.registry.to_openai_schemas()
         # 初始已加载集合 = 核心 schema 的工具名（含 method_learn），防动态加载重复导致 "Tool names must be unique"
         core_loaded = {s["function"]["name"] for s in active_schemas}
-        # 计划线内置工具（C2/C3 骨架）：始终可用
-        active_schemas = [_PLAN_SUBMIT_SCHEMA, _PLAN_UPDATE_SCHEMA] + active_schemas
+        # 计划线 + 工作流内置工具（C2/C3 骨架 + 多节点流水线）：始终可用
+        active_schemas = [_PLAN_SUBMIT_SCHEMA, _PLAN_UPDATE_SCHEMA,
+                          _WF_CREATE_SCHEMA, _WF_STATUS_SCHEMA, _WF_LIST_SCHEMA,
+                          _WF_LOAD_SCHEMA, _WF_UPDATE_SCHEMA, _WF_ADD_SCHEMA] + active_schemas
         loaded_ext: set = set(core_loaded)
         # 初始就按输入关键词预加载命中的长尾工具（世界书触发）
         for n in self.registry.suggest_ext(user_input, loaded_ext):
@@ -580,8 +673,8 @@ class Agent:
         # 回合参数（按任务类型分级运作·方法论：不同任务不同模式）
         # C1 即时任务：单回合 16 步、自动续接 1 次（总预算 32 步）
         # C2/C3 计划线任务：单回合 24 步、自动续接 4 次（总预算 120 步）
-        round_budget = 16   # 单回合工具步数预算
-        rounds_left = 1     # 预算耗尽后的自动续接次数（0=回合用尽）
+        round_budget = 64   # 单回合工具步数预算（任务需完整执行，不因预算不足被迫中断）
+        rounds_left = 4     # 预算耗尽后的自动续接次数
         is_plan_mode = False
         step_total = 0      # 跨回合累计步数（成本统计/止损依据）
         llm_error = None    # LLM 调用失败标记（保存已执行阶段后统一收尾，不留裸返回）
@@ -598,6 +691,15 @@ class Agent:
                     "role": "system",
                     "content": "【当前计划线】（按计划推进，每完成一步立即用 plan_update 标记 done；"
                                "计划已不合适应重新 plan_submit 覆盖）\n" + self._plan_to_text(plan),
+                })
+            # 工作流进度注入：当前工作流存在时，每轮提醒节点进度与产物路径（节点间靠路径传递）
+            if self.workflow is not None:
+                messages.append({
+                    "role": "system",
+                    "content": "【当前工作流】按节点逐个推进：workflow_status 看当前节点 → 执行节点任务"
+                               "（依赖产物按路径用 fs_read 读取，产物落盘到工作流目录）→ 完成后"
+                               " workflow_update_node 标记 done 并记录产物路径与摘要。\n"
+                               + self.workflow.summary(),
                 })
             # soft 死循环信号 → 注入提示引导换策略（不打断）
             if guard.soft_prompt:
@@ -618,9 +720,15 @@ class Agent:
                 elif "plan_submit" in names0:
                     _emit({"type": "type", "task_type": "C2"})
                     is_plan_mode = True
-                    round_budget = 24
-                    rounds_left = 4
-                    self._log("[task] 计划线模式：预算 24 步/回合，自动续接 4 次")
+                    round_budget = 64
+                    rounds_left = 8
+                    self._log("[task] 计划线模式：预算 64 步/回合，自动续接 8 次")
+                elif any(w in names0 for w in ("workflow_create", "workflow_load")):
+                    _emit({"type": "type", "task_type": "C3"})
+                    is_plan_mode = True
+                    round_budget = 64
+                    rounds_left = 8
+                    self._log("[task] 工作流模式：预算 64 步/回合，自动续接 8 次")
                 else:
                     _emit({"type": "type", "task_type": "C1"})
             _emit({"type": "think", "step": step})
@@ -719,12 +827,25 @@ class Agent:
                     result, plan = self._handle_plan_update(args, plan)
                     if plan:
                         _emit({"type": "plan", "plan": json.loads(json.dumps(plan))})
+                elif name == "workflow_create":
+                    result = self._handle_workflow_create(args)
+                elif name == "workflow_status":
+                    result = self._handle_workflow_status()
+                elif name == "workflow_list":
+                    result = self._handle_workflow_list()
+                elif name == "workflow_load":
+                    result = self._handle_workflow_load(args)
+                elif name == "workflow_update_node":
+                    result = self._handle_workflow_update(args)
+                elif name == "workflow_add_node":
+                    result = self._handle_workflow_add(args)
                 else:
                     result = self.registry.execute(name, args)
                 ok = result.get("ok")
                 # 阶段反馈：工具执行完（含成功/失败）
                 _emit({"type": "stage", "name": name, "ok": ok, "step": step})
                 self._log(f"[tool] {name} → {'ok' if ok else 'error'}")
+                self._log_op(name, args, result, ok)
                 # 死循环检测：同参数重复 / 同工具连续失败
                 tool_sig = guard.observe_tool(name, args, ok)
                 if tool_sig and tool_sig["level"] == "hard":
@@ -895,6 +1016,92 @@ class Agent:
         self._log(f"[plan] 步骤 {sid} → {status}")
         done = sum(1 for s in cur["steps"] if s["status"] == "done")
         return ({"ok": True, "result": f"步骤 {sid} 已标记 {status}（完成 {done}/{len(cur['steps'])}）"}, cur)
+
+
+
+# ---------- 工作流（多节点流水线 · 设计文档 5.41） ----------
+    def _handle_workflow_create(self, args: Dict) -> dict:
+        """创建并保存工作流：多节点流水线，节点间通过产物路径传递，产物落可控目录。"""
+        name = str(args.get("name") or "未命名工作流").strip()
+        nodes = args.get("nodes") or []
+        if not nodes:
+            return {"ok": False, "error": "工作流节点不能为空"}
+        try:
+            self.workflow = wfmod.Workflow(name, nodes)
+            path = self.workflow.save()
+            self._log(f"[workflow] 创建并保存：{name}（{len(nodes)} 节点）→ {path}")
+            return {"ok": True, "result": f"工作流已创建：{name}（{len(nodes)} 节点），产物目录 "
+                                          f"{self.workflow.data['dir']}\n{self.workflow.summary()}",
+                    "workflow_id": self.workflow.data["id"]}
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": f"创建工作流失败: {e}"}
+
+    def _handle_workflow_status(self) -> dict:
+        if self.workflow is None:
+            return {"ok": False, "error": "当前没有工作流，请先 workflow_create 或 workflow_load"}
+        nxt = self.workflow.next_todo()
+        text = self.workflow.summary()
+        if nxt:
+            deps = nxt["deps"]
+            dep_txt = ""
+            if deps:
+                dep_txt = "\n当前节点依赖的产物：\n" + "\n".join(
+                    f"  - {d['id']} {d['title']} → {d['output'] or '（未产出）'}"
+                    for d in deps)
+            text += f"\n【下一步】执行节点 {nxt['node']['id']} {nxt['node']['title']}：{nxt['node']['desc']}{dep_txt}"
+        return {"ok": True, "result": text}
+
+    def _handle_workflow_list(self) -> dict:
+        items = wfmod.Workflow.list_all()
+        if not items:
+            return {"ok": True, "result": "尚无已保存的工作流。可用 workflow_create 创建。"}
+        lines = ["已保存的工作流："]
+        for it in items:
+            lines.append(f"- {it['id']} {it['name']} [{it['status']}] {it['nodes']} 节点"
+                         f"（{it.get('created_at', '')}）")
+        return {"ok": True, "result": "\n".join(lines), "workflows": items}
+
+    def _handle_workflow_load(self, args: Dict) -> dict:
+        wf_id = str(args.get("workflow_id") or "").strip()
+        if not wf_id:
+            return {"ok": False, "error": "缺少 workflow_id"}
+        try:
+            self.workflow = wfmod.Workflow.load(wf_id)
+            self._log(f"[workflow] 加载：{self.workflow.data['name']}（{wf_id}）")
+            return {"ok": True, "result": "工作流已加载（可断点恢复/复用）：\n" + self.workflow.summary()}
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": f"加载工作流失败: {e}（可用 workflow_list 查看已有 id）"}
+
+    def _handle_workflow_update(self, args: Dict) -> dict:
+        if self.workflow is None:
+            return {"ok": False, "error": "当前没有工作流，请先 workflow_create 或 workflow_load"}
+        node_id = str(args.get("node_id") or "").strip()
+        status = str(args.get("status") or "").strip()
+        output = args.get("output")
+        result = args.get("result")
+        if not node_id or status not in ("done", "failed", "doing"):
+            return {"ok": False, "error": "node_id 必填且 status 须为 done/failed/doing"}
+        r = self.workflow.update_node(node_id, status=status, output=output, result=result)
+        if r.get("ok"):
+            self._log(f"[workflow] 节点 {node_id} → {status}（{r.get('progress', '')}）")
+            return {"ok": True, "result": f"节点 {node_id} 已标记 {status}，进度 {r.get('progress')}",
+                    "progress": r.get("progress")}
+        return r
+
+    def _handle_workflow_add(self, args: Dict) -> dict:
+        """向当前工作流动态追加节点（工作流任务未知，节点由自主分析决定，可随时追加）。"""
+        if self.workflow is None:
+            return {"ok": False, "error": "当前没有工作流，请先 workflow_create 或 workflow_load"}
+        title = str(args.get("title") or "").strip()
+        if not title:
+            return {"ok": False, "error": "节点标题不能为空"}
+        desc = str(args.get("desc") or "")
+        input_from = list(args.get("input_from") or [])
+        r = self.workflow.add_node(title, desc, input_from)
+        self._log(f"[workflow] 动态追加节点 {r['node']['id']}「{title}」（{r.get('progress')}）")
+        return {"ok": True, "result": f"已动态追加节点 {r['node']['id']}「{title}」（{r.get('progress')}）。"
+                                      f"追加后进度：\n" + self.workflow.summary(),
+                "node": r["node"]}
 
     # ---------- 续接 ----------
     _RESUME_KEYWORDS = ("继续", "接着", "续", "接着做", "继续做", "完成它", "接着干", "resume", "continue")
@@ -1394,6 +1601,31 @@ class Agent:
     def _append_log(self, filename: str, line: str) -> None:
         try:
             with open(os.path.join(self.logs_dir, filename), "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except OSError:
+            pass
+
+    def _log_op(self, name: str, args: dict, result: dict, ok: bool) -> None:
+        """逻辑层统一操作日志：记录每次工具调用的参数、结果与错误（带时间戳）。
+        由主循环自动调用，AI 无需自觉写日志。落在 data/operation.log。"""
+        import json as _json
+        try:
+            ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            a = {}
+            if isinstance(args, dict):
+                for k, v in args.items():
+                    s = str(v)
+                    a[k] = s[:400] + ("…" if len(s) > 400 else "")
+            err = ""
+            if isinstance(result, dict):
+                if not result.get("ok") and result.get("error"):
+                    err = str(result.get("error"))[:600]
+                elif result.get("result") is not None:
+                    err = str(result.get("result"))[:200]
+            rec = {"ts": ts, "tool": name, "ok": bool(ok), "args": a, "note": err}
+            line = _json.dumps(rec, ensure_ascii=False)
+            op_path = os.path.join(self.data_dir, "operation.log")
+            with open(op_path, "a", encoding="utf-8") as f:
                 f.write(line + "\n")
         except OSError:
             pass

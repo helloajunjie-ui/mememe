@@ -242,6 +242,72 @@ def _study_scheduler() -> None:
         time.sleep(60)  # 每分钟检查一次（窗口内按间隔触发；忙时下轮再试）
 
 
+# ---------- 工作流定时启动（设计文档 5.41 · 2026-09-04） ----------
+_WF_STATE = {"done": set()}  # 已触发标记 {"日期|time"}，同日同时间不重复
+
+
+def _load_workflow_cfg() -> dict:
+    """读取 config/workflow_schedule.yaml（使用者配置，每次触发时重读，无需重启）。"""
+    try:
+        with open(os.path.join(ROOT, "config", "workflow_schedule.yaml"), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return {"schedules": data.get("schedules", []) if isinstance(data, dict) else []}
+    except Exception:  # noqa: BLE001
+        return {"schedules": []}
+
+
+def _run_workflow_schedule(sch: dict) -> None:
+    """触发一次定时工作流：让白绫执行指定工作流（workflow_id）或按任务描述自主建工作流。"""
+    name = sch.get("name") or "定时工作流"
+    wf_id = (sch.get("workflow_id") or "").strip()
+    task = (sch.get("task") or "").strip()
+    try:
+        a = get_agent()
+        if wf_id:
+            msg = (f"（内部·定时工作流）现在是使用者安排的定时执行时间。请用 workflow_load 加载工作流"
+                   f" {wf_id} 并继续推进/执行它，完成后汇报结果。")
+        else:
+            if not task:
+                task = ("请完成一次『%s』工作流：先自主分析拆节点，用 workflow_create 创建，"
+                        "逐个节点执行（workflow_status→执行→workflow_update_node），产物落工作流目录，完成后汇报。" % name)
+            msg = f"（内部·定时工作流）现在是你被安排的定时执行时间：{task}"
+        reply = a.turn(msg)
+        try:
+            a.ongoing_task = None
+        except Exception:  # noqa: BLE001
+            pass
+        ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[workflow-schedule] {ts} 定时工作流「{name}」执行完成: {str(reply)}")
+    except Exception as e:  # noqa: BLE001
+        print(f"[workflow-schedule] 定时工作流「{name}」执行失败: {type(e).__name__}: {e}")
+
+
+def _workflow_scheduler() -> None:
+    """工作流定时启动调度：每分钟检查配置，命中时间且空闲则触发一次。"""
+    while True:
+        try:
+            now = datetime.datetime.now()
+            hm = now.strftime("%H:%M")
+            day = now.strftime("%Y-%m-%d")
+            for sch in _load_workflow_cfg().get("schedules", []):
+                if not sch.get("enabled", True):
+                    continue
+                if str(sch.get("time", "")).strip() != hm:
+                    continue
+                key = f"{day}|{hm}|{sch.get('name','')}"
+                if key in _WF_STATE["done"]:
+                    continue
+                if _ready and _turn_lock.acquire(blocking=False):  # 空闲判定
+                    try:
+                        _WF_STATE["done"].add(key)
+                        _run_workflow_schedule(sch)
+                    finally:
+                        _turn_lock.release()
+        except Exception:  # noqa: BLE001
+            pass
+        time.sleep(60)  # 每分钟检查一次
+
+
 def _init_agent_async() -> None:
     """后台线程：初始化 Agent 并 boot。失败记原因。"""
     global _agent, _ready, _init_error
@@ -652,6 +718,8 @@ def main() -> None:
     threading.Thread(target=_reflection_scheduler, daemon=True).start()
     # 自主时间调度：使用者配置窗口内，空闲时自主学习/自由探索（共建者要求·2026-09-04）
     threading.Thread(target=_study_scheduler, daemon=True).start()
+    # 工作流定时启动：使用者配置的时间点自动触发（共建者要求·2026-09-04）
+    threading.Thread(target=_workflow_scheduler, daemon=True).start()
 
     print("白绫 Web 界面（API 服务）启动中 ...")
     print(f"  地址: http://{HOST}:{PORT}")

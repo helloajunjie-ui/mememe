@@ -1,0 +1,7 @@
+# 工作流定时启动配置模板（公开示例；本地实例请复制为 workflow_schedule.yaml 使用）
+schedules:
+  - enabled: true
+    time: "08:00"
+    name: "每日晨报"
+    workflow_id: ""
+    task: "生成今日要闻工作流：采集新闻→整理摘要→保存 HTML 晨报"
