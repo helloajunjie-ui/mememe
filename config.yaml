@@ -1,0 +1,32 @@
+# 白绫（Bailing）主配置
+agent:
+  name: "白绫"
+  alias: "Bailing"
+  version: "0.1.0"
+  timezone: "Asia/Shanghai"
+  data_dir: "data"
+  logs_dir: "logs"
+  tools_dir: "tools"
+  workspace_dir: "workspace"
+
+llm:
+  base_url: "https://api.deepseek.com"
+  api_key_env: "BAILING_API_KEY"   # API key 从环境变量或 .env 文件读取，不硬编码
+  model: "deepseek-chat"
+  temperature: 0.7
+  max_tokens: 4096
+  timeout_seconds: 60
+  # 备用端点（可切任意 OpenAI 兼容服务）
+  # base_url: "http://localhost:11434/v1"   # 本地 Ollama 示例
+
+memory:
+  db_path: "data/memory.db"
+
+sandbox:
+  timeout_seconds: 30
+  max_output_bytes: 100000
+  max_tools_per_task: 5
+  max_tool_failures: 3        # 连续失败熔断阈值
+
+bootstrap:
+  enabled: true               # 启用首次觉醒流程

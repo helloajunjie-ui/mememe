@@ -1,0 +1,24 @@
+﻿# ===== mememe 公开仓库（程序本体）=====
+# 敏感：.env 含 API key
+.env
+# ===== 私有实例数据（个人状态，绝不放公开仓库；走私有备份）=====
+data/memory.db
+data/self.yaml
+data/methodology.json
+data/registry.json
+data/registry.json.bak_wordcount
+data/snapshots.json
+data/env_profile.json
+# 保留 data/persona.yaml（通用人格基座，属于程序框架）
+# ===== 本地运行产物（不入云）=====
+logs/
+sandbox/
+backups/
+.venv/
+workspace/tasks/
+workspace/tools_external/
+workspace/exam6_download/
+# 临时
+_exam6_chain.html
+__pycache__/
+*.pyc
