@@ -278,13 +278,26 @@ class Agent:
         return " / ".join(parts)
 
     # ================= 对话 =================
-    def turn(self, user_input: str) -> str:
+    def turn(self, user_input: str, stage_callback=None) -> str:
         """处理一轮用户输入，返回白绫回复。
 
         阶段化执行：有工具调用的任务按阶段记录；工具步数超限时保存断点，
         下一轮可续接（思维链多次思考，不丢弃、不记忆断裂）。
+
+        stage_callback：可选阶段回调（webui 异步任务用）。每次关键阶段
+        （开始/判型/思考/工具执行/完成）回调一个 dict，让前端实时展示进度，
+        避免用户干等。
         """
+
+        def _emit(ev: dict) -> None:
+            if stage_callback:
+                try:
+                    stage_callback(ev)
+                except Exception:  # noqa: BLE001
+                    pass
+
         self.history.append({"role": "user", "content": user_input})
+        _emit({"type": "start", "task_type": "C0", "message": user_input})
 
         # 续接检测：用户表达"继续"且有未完成任务 → 恢复上下文
         resume_ctx = None
@@ -308,7 +321,12 @@ class Agent:
                 self._log(f"[loopguard] soft 提示: {guard.last_signal['kind']}")
             resp = self.llm.chat(messages, tools=self.registry.to_openai_schemas(), tool_choice="auto")
             if resp.get("error"):
+                _emit({"type": "error", "error": resp["error"]})
                 return resp["error"]
+            # 类型判定：首个响应未触发工具 = C0 纯对话；触发工具 = C1/C2
+            if step == 0 and not resp.get("tool_calls"):
+                _emit({"type": "type", "task_type": "C0"})
+            _emit({"type": "think", "step": step})
             # 纯思考死循环检测（连续无工具 + 输出高度相似）
             llm_sig = guard.observe_llm(bool(resp.get("tool_calls")), resp.get("content") or "")
             if llm_sig and llm_sig["level"] == "hard":
@@ -357,8 +375,11 @@ class Agent:
                 name, args = tc["name"], self._safe_args(tc["arguments"])
                 used_tools.append(name)
                 self._log_decision(name, args)
+                _emit({"type": "tool", "name": name, "ok": True, "step": step})
                 result = self.registry.execute(name, args)
                 ok = result.get("ok")
+                # 阶段反馈：工具执行完（含成功/失败）
+                _emit({"type": "stage", "name": name, "ok": ok, "step": step})
                 self._log(f"[tool] {name} → {'ok' if ok else 'error'}")
                 # 死循环检测：同参数重复 / 同工具连续失败
                 tool_sig = guard.observe_tool(name, args, ok)
@@ -435,6 +456,7 @@ class Agent:
             self._log(f"[task] 任务结束，档案：{archive}")
             self._backup(force=True)  # 任务结束先备份（用户止损原则：状态变更立即保护）
         self.history.append({"role": "assistant", "content": content})
+        _emit({"type": "done", "reply": content})
         return content
 
     # ---------- 续接 ----------

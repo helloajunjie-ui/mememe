@@ -18,10 +18,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import socket
 import sqlite3
 import sys
 import threading
+import time
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -40,6 +43,64 @@ _turn_lock = threading.Lock()
 
 class AgentNotReady(Exception):
     pass
+
+
+class TaskManager:
+    """异步任务管理：提交即返回 task_id，后台线程执行，前端轮询进度（不干等）。"""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.tasks = {}
+
+    def create(self) -> str:
+        tid = uuid.uuid4().hex[:12]
+        with self.lock:
+            self.tasks[tid] = {"status": "running", "events": [], "reply": None,
+                               "error": None, "created_at": time.time()}
+        return tid
+
+    def append_event(self, tid: str, ev: dict) -> None:
+        with self.lock:
+            if tid in self.tasks:
+                self.tasks[tid]["events"].append(ev)
+
+    def finish(self, tid: str, reply: str) -> None:
+        with self.lock:
+            if tid in self.tasks:
+                self.tasks[tid].update(status="done", reply=reply)
+
+    def fail(self, tid: str, error: str) -> None:
+        with self.lock:
+            if tid in self.tasks:
+                self.tasks[tid].update(status="error", error=error)
+
+    def get(self, tid: str) -> dict:
+        with self.lock:
+            t = self.tasks.get(tid)
+            return dict(t) if t else {}
+
+    def cleanup_old(self, max_age: float = 3600.0) -> None:
+        """清理超时任务，防止内存膨胀。"""
+        now = time.time()
+        with self.lock:
+            stale = [k for k, v in self.tasks.items()
+                     if now - v.get("created_at", 0) > max_age and v.get("status") != "running"]
+            for k in stale:
+                self.tasks.pop(k, None)
+
+
+_tasks = TaskManager()
+
+
+def _run_task(tid: str, message: str) -> None:
+    """后台线程执行一轮 turn，阶段事件实时入列。"""
+    try:
+        a = get_agent()
+        with _turn_lock:  # 本地单用户，串行化 turn，避免历史交错
+            reply = a.turn(message, stage_callback=lambda ev: _tasks.append_event(tid, ev))
+        _tasks.finish(tid, reply)
+    except Exception as e:  # noqa: BLE001
+        _tasks.fail(tid, f"白绫处理失败: {e}")
 
 
 def _init_agent_async() -> None:
@@ -114,10 +175,13 @@ class Handler(BaseHTTPRequestHandler):
     # ---------- 路由 ----------
     def do_GET(self):
         path = urlparse(self.path).path
+        m = re.match(r"^/api/task/(\w+)$", path)
         if path in ("/", "/index.html"):
             self._serve_index()
         elif path == "/api/status":
             self._handle_status()
+        elif m:
+            self._handle_task(m.group(1))
         else:
             self._send_json(404, {"ok": False, "error": "not found"})
 
@@ -164,7 +228,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:  # noqa: BLE001
             self._send_json(500, {"ok": False, "error": f"状态读取失败: {e}"})
 
-    # ---------- 聊天 API ----------
+    # ---------- 聊天 API（异步：提交即返回 task_id，前端轮询 /api/task/<id>） ----------
     def _handle_chat(self) -> None:
         data = self._read_json()
         message = (data.get("message") or "").strip()
@@ -175,13 +239,17 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(503, {"ok": False, "ready": False,
                                   "error": _init_error or "白绫还在初始化中，请稍候再试"})
             return
-        try:
-            a = get_agent()
-            with _turn_lock:  # 本地单用户，串行化 turn，避免历史交错
-                reply = a.turn(message)
-            self._send_json(200, {"ok": True, "reply": reply})
-        except Exception as e:  # noqa: BLE001
-            self._send_json(500, {"ok": False, "error": f"白绫处理失败: {e}"})
+        tid = _tasks.create()
+        threading.Thread(target=_run_task, args=(tid, message), daemon=True).start()
+        _tasks.cleanup_old()
+        self._send_json(200, {"ok": True, "task_id": tid, "ready": True})
+
+    def _handle_task(self, tid: str) -> None:
+        t = _tasks.get(tid)
+        if not t:
+            self._send_json(404, {"ok": False, "error": "任务不存在或已过期"})
+            return
+        self._send_json(200, {"ok": True, **t})
 
 
 def _port_in_use(host: str, port: int) -> bool:

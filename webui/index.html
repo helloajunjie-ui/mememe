@@ -223,6 +223,101 @@ function showThinking() {
 }
 function hideThinking() { if (thinkingEl){ thinkingEl.closest(".msg-wrap").remove(); thinkingEl=null; } }
 
+/* ---------- 异步任务：提交 → 轮询 → 实时阶段流 ---------- */
+var taskSeq = 0;
+function addTaskPanel() {
+  var wrap = document.createElement("div");
+  wrap.className = "msg-wrap bailing";
+  var av = document.createElement("div");
+  av.className = "avatar"; av.textContent = "绫";
+  var b = document.createElement("div");
+  b.className = "bubble";
+  b.style.minWidth = "220px";
+  b.innerHTML = '<div style="font-size:12px;color:#6B7280;margin-bottom:6px;">任务进行中 <span class="task-type"></span></div><div class="task-flow"></div>';
+  wrap.appendChild(av); wrap.appendChild(b);
+  chat.appendChild(wrap);
+  chat.scrollTop = chat.scrollHeight;
+  return b;
+}
+
+function taskLine(panel, name, status) {
+  /* status: "run"(进行中) / "ok" / "err" / "text" */
+  var flow = panel.querySelector(".task-flow");
+  var line = document.createElement("div");
+  line.className = "task-line";
+  line.style.cssText = "font-size:12px;color:#4B5563;padding:1px 0;";
+  if (status === "run") {
+    line.innerHTML = '<span style="color:#0369A1;">▶</span> 正在 ' + escapeHtml(name) + ' ...';
+  } else if (status === "ok") {
+    line.innerHTML = '<span style="color:#059669;">✓</span> ' + escapeHtml(name);
+  } else if (status === "err") {
+    line.innerHTML = '<span style="color:#DC2626;">✗</span> ' + escapeHtml(name) + '（失败）';
+  } else {
+    line.innerHTML = escapeHtml(name);
+  }
+  flow.appendChild(line);
+  chat.scrollTop = chat.scrollHeight;
+  return line;
+}
+
+function renderEvent(panel, ev) {
+  if (!ev || !ev.type) return;
+  if (ev.type === "type") {
+    var map = {C0:"· 对话", C1:"· 即时任务", C2:"· 规划任务", C3:"· 任务集合"};
+    var t = panel.querySelector(".task-type");
+    if (t && map[ev.task_type]) t.textContent = map[ev.task_type];
+  } else if (ev.type === "think") {
+    // 合并连续的思考提示，不刷屏
+    var last = panel.querySelector(".task-flow").lastElementChild;
+    if (!last || last.dataset.k !== "think") {
+      last = taskLine(panel, "思考中...", "text");
+      last.dataset.k = "think";
+    }
+  } else if (ev.type === "tool") {
+    var line = taskLine(panel, ev.name, "run");
+    line.dataset.k = "tool"; line.dataset.idx = ev.step;
+  } else if (ev.type === "stage") {
+    var flow = panel.querySelector(".task-flow");
+    var nodes = flow.querySelectorAll('[data-k="tool"]');
+    var target = null;
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].dataset.idx === String(ev.step)) { target = nodes[i]; break; }
+    }
+    if (target) {
+      target.innerHTML = (ev.ok ? '<span style="color:#059669;">✓</span> ' : '<span style="color:#DC2626;">✗</span> ') + escapeHtml(ev.name);
+      target.dataset.k = "stage";
+    }
+  }
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function renderTaskDone(panel, reply) {
+  var wrap = panel.closest(".msg-wrap");
+  panel.remove();
+  wrap.remove();
+  addMsg("bailing", renderMd(reply || "（完成）"));
+}
+
+function renderTaskError(panel, error) {
+  var wrap = panel.closest(".msg-wrap");
+  panel.remove();
+  wrap.remove();
+  addMsg("bailing", '<span style="color:#DC2626;">出错了：'+escapeHtml(error||"未知错误")+"</span>");
+}
+
+function pollTask(panel, tid) {
+  var seen = 0;
+  var timer = setInterval(function(){
+    fetch("/api/task/" + tid).then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok) { clearInterval(timer); renderTaskError(panel, d.error||"任务不存在"); return; }
+      for (var i = seen; i < (d.events||[]).length; i++) renderEvent(panel, d.events[i]);
+      seen = (d.events||[]).length;
+      if (d.status === "done") { clearInterval(timer); renderTaskDone(panel, d.reply); }
+      else if (d.status === "error") { clearInterval(timer); renderTaskError(panel, d.error); }
+    }).catch(function(){});
+  }, 800);
+}
+
 function send() {
   var msg = input.value.trim();
   if (!msg || sendBtn.disabled) return;
@@ -230,26 +325,26 @@ function send() {
   input.value = "";
   input.style.height = "auto";
   sendBtn.disabled = true;
-  showThinking();
+  var panel = addTaskPanel();
   fetch("/api/chat", {
     method: "POST",
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({message: msg})
   }).then(function(r){ return r.json().then(function(d){ return {status:r.status, d:d}; }); }).then(function(o){
     var d = o.d;
-    hideThinking();
     if (d.ok) {
-      addMsg("bailing", renderMd(d.reply));
+      pollTask(panel, d.task_id);
     } else if (o.status === 503) {
-      addMsg("bailing", '<span style="color:#DC2626;">白绫还在初始化中，请稍候再试。</span>');
+      renderTaskError(panel, "白绫还在初始化中，请稍候再试。");
+      sendBtn.disabled = false;
+      input.focus();
     } else {
-      addMsg("bailing", '<span style="color:#DC2626;">出错了：'+escapeHtml(d.error||"未知错误")+"</span>");
+      renderTaskError(panel, d.error||"未知错误");
+      sendBtn.disabled = false;
+      input.focus();
     }
-    sendBtn.disabled = false;
-    input.focus();
   }).catch(function(e){
-    hideThinking();
-    addMsg("bailing", '<span style="color:#DC2626;">请求失败：'+escapeHtml(String(e))+"。请确认服务端在运行。</span>");
+    renderTaskError(panel, "请求失败：" + String(e) + "。请确认服务端在运行。");
     sendBtn.disabled = false;
     input.focus();
   });
