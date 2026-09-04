@@ -33,9 +33,17 @@ from tools.src.python import backup_private
 
 MAX_TOOL_STEPS = 16  # 单轮最多工具调用总数（含并行，成本精确控制；复杂任务可分多轮续接）
 
-# ---------- 上下文膨胀防线（防止 messages 无限累积触发 LLM 400/超限） ----------
+# ---------- 上下文防线（20 回合滚动 + 阶段性总结，非硬截断） ----------
+_ROLLING_ROUNDS = 20       # 任务内 messages 保持的完整回合数（1 回合 = 1 次 LLM 往返 + 其工具结果）
 _MAX_TOOL_RESULT_CHARS = 3000   # 单条 tool 结果写入上下文的最大字符（超长截断，防单条爆炸）
-_MAX_MSGS_CHARS = 60000         # 任务内 messages 总字符阈值（超限折叠最老工具轮次，防总量爆炸）
+_MAX_MSGS_CHARS = 60000         # messages 总字符阈值（超限提前滚动最老回合，作为总量防线）
+
+# ---------- 回想机制（用户引用早期内容 → 提示 AI 用 ctx_search 回想） ----------
+_RECALL_TRIGGERS = ("之前提到过", "之前提到", "之前说过", "之前说", "提到过", "提到",
+                    "你说过", "我说过", "聊过", "说过", "讲过", "提过",
+                    "刚才", "上次", "前面", "上面", "我记得", "那时", "早先",
+                    "去年", "上个月", "上周", "前两天", "前几天", "前段时间",
+                    "很久之前", "那天", "当时", "之前那", "翻出来", "调出", "拿来")
 
 # ---------- 计划线内置工具（C2 规划任务 / C3 任务集合的执行骨架，不落入工具库） ----------
 _PLAN_SUBMIT_SCHEMA = {
@@ -510,7 +518,12 @@ class Agent:
             self.ongoing_task = None
 
         messages = self._build_messages(resume_ctx=resume_ctx, match_text=user_input)
+        # 回想机制：用户引用早期内容（"之前提到过 X"）且当前 20 回合窗口无 X →
+        # 自动从全量存档按关键词抽取注入，让 AI 回想起来（用户导师：需要定位时抽取）
+        self._maybe_recall(user_input, messages)
         tracker = None      # 阶段化任务记录器（首个工具调用时懒创建）
+        self._ctx_archive_path = None   # 任务全量上下文存档（messages.jsonl，全量保存不丢信息）
+        self._archived = 0              # 已落盘游标（每轮只写新增，避免重复）
         used_tools = []     # 本轮使用过的工具（反思分级用）
         step = 0            # 工具调用总数（成本精确计数，含并行）
         limit_hit = False   # 是否触发步数上限
@@ -544,9 +557,10 @@ class Agent:
         self._fail_count = {}  # 工具失败计数仅限本任务（跨任务清零，防旧任务污染情绪判断）
 
         while step < round_budget:
-            # 上下文防线：每次 LLM 调用前压缩 messages（超长时折叠最老工具轮次）
-            # —— 防止任务内上下文无限膨胀（本次 LLM 400 的直接诱因）
+            # 输入窗口化：只提供最近 20 回合完整记录给 LLM（更早回合已全量存档，可检索）
             messages = self._compress_messages(messages)
+            # 全量存档：本轮新增对话消息落盘（user/assistant/tool，全量保存不丢信息）
+            self._archive_new_messages(messages)
             # 计划线进度注入：每轮提醒当前进度（不持久化，随轮次动态更新）
             if plan and plan.get("steps"):
                 messages.append({
@@ -624,6 +638,9 @@ class Agent:
             if tracker is None:
                 tracker = TaskStageTracker()
                 tracker.begin_task(user_input if not resume_ctx else resume_goal)
+                # 全量上下文存档：本任务所有对话消息落盘（供早期定位检索，LLM 输入只看最近 20 回合）
+                self._ctx_archive_path = tracker.dir / "messages.jsonl"
+                self._archived = 0
                 # 节点化：进入任务上下文，记录任务起点（完成时摘除轮次，隔离闲聊）
                 self.ctx_mode = "task"
                 self.ctx_task_id = tracker.task_id
@@ -907,42 +924,129 @@ class Agent:
         except json.JSONDecodeError:
             return {}
 
-    def _compress_messages(self, messages: List[Dict]) -> List[Dict]:
-        """任务内上下文压缩：messages 总长超阈值时，从最老开始把
-        「assistant(带工具调用) + 其 tool 结果」轮次成对折叠为一条摘要。
+    def _compress_messages(self, messages: List[Dict], max_rounds: int = _ROLLING_ROUNDS) -> List[Dict]:
+        """LLM 输入窗口化：只把最近 max_rounds 个完整回合（assistant→tool→…）喂给 LLM。
 
-        防止上下文无限膨胀（本次 LLM 400 的直接诱因）：
-        - 折叠保持 assistant→tool 的成对性，保留的消息序列对 API 仍合法；
-        - 只折叠最老轮次，保留最近的完整上下文；
-        - system 消息不折叠（[0] 是主 system）。
+        两层逻辑（用户导师：全量保存 + 输入窗口，2 个逻辑分离）：
+        1. 全量上下文已由 _archive_new_messages 落盘到任务 messages.jsonl（不丢任何信息）；
+        2. 这里只做【输入窗口】：超窗回合从喂给 LLM 的消息中剔除，头部留一条
+           "早期已存档、可用 ctx_search 检索"的提示，引导需要时按需抽取。
+        —— 不是硬性截断：剔除的消息在存档里完整保留，可检索定位。
         """
         def _total(ms: List[Dict]) -> int:
             return sum(len(str(m.get("content") or "")) for m in ms)
 
-        if len(messages) < 6 or _total(messages) <= _MAX_MSGS_CHARS:
+        if len(messages) < 4:
             return messages
         out = list(messages)
-        guard = 0
-        while _total(out) > _MAX_MSGS_CHARS and guard < 40:
-            guard += 1
-            folded = False
-            for i in range(1, len(out) - 1):
-                m = out[i]
-                if m.get("role") == "assistant" and m.get("tool_calls"):
-                    j = i + 1
-                    while j < len(out) and out[j].get("role") == "tool":
-                        j += 1
-                    names = sorted({tc.get("function", {}).get("name", "?")
-                                    for tc in m.get("tool_calls", [])})
-                    del out[i:j]
-                    out.insert(i, {"role": "system",
-                                   "content": f"（早期工具执行已折叠：{('、'.join(names) or '…')}）"})
-                    folded = True
-                    break
-            if not folded:
-                break
-        self._log(f"[ctx] messages 超长，压缩 {guard} 轮（原 {_total(list(messages))} 字符 → {_total(out)} 字符）")
-        return out
+        # 前置 system 区（主 system / 续接上下文）保留在头部，不参与窗口化
+        head: List[Dict] = []
+        while out and out[0].get("role") == "system":
+            head.append(out.pop(0))
+        # 识别回合边界：每条 assistant 为一回合起点，其后 tool 归该回合
+        rounds, cur = [], None
+        for i, m in enumerate(out):
+            if m.get("role") == "assistant":
+                cur = {"start": i, "assistant": m, "tools": []}
+                rounds.append(cur)
+            elif m.get("role") == "tool" and cur is not None:
+                cur["tools"].append((i, m))
+        if not rounds:
+            return head + out
+        overflow = len(rounds) - max_rounds
+        dropped = 0
+        if overflow > 0:
+            # 窗口优先：回合数超 20 → 剔除最老 overflow 回合（已存档可检索）
+            r = rounds[overflow - 1]
+            cut = r["tools"][-1][0] if r["tools"] else r["start"]
+            out = out[cut + 1:]
+            dropped = overflow
+        elif _total(out) > _MAX_MSGS_CHARS:
+            # 总量防线：回合未超但超长 → 剔除最老 1 回合
+            r = rounds[0]
+            cut = r["tools"][-1][0] if r["tools"] else r["start"]
+            out = out[cut + 1:]
+            dropped = 1
+        if dropped:
+            head.append({"role": "system",
+                         "content": (f"（早期 {dropped} 回合记录已全量存档，当前只提供最近 {max_rounds} 回合。"
+                                     "如需要早期定位信息，用 ctx_search 检索存档，不要凭空推断。）")})
+            self._log(f"[ctx] 输入窗口化：剔除早期 {dropped} 回合（已存档，可检索）")
+        return head + out
+
+    def _archive_new_messages(self, messages: List[Dict]) -> None:
+        """把本轮新增的对话消息（user/assistant/tool）全量追加到任务存档 messages.jsonl。
+
+        全量保存原则（用户导师：全量上下文保存，不丢信息；输入窗口只给最近 20 回合；
+        需要定位早期信息时用 ctx_search 从存档抽取）。system 注入（计划线提示等）不入存档。
+        """
+        if not self._ctx_archive_path:
+            return
+        new = messages[self._archived:]
+        if not new:
+            return
+        lines = []
+        for m in new:
+            if m.get("role") == "system":
+                continue
+            rec = {
+                "role": m.get("role"),
+                "content": str(m.get("content") or ""),
+                "tool_call_id": m.get("tool_call_id"),
+                "ts": datetime.datetime.now().isoformat(timespec="seconds"),
+            }
+            if m.get("tool_calls"):
+                rec["tool_calls"] = [
+                    {"id": tc.get("id"), "name": tc.get("function", {}).get("name"),
+                     "arguments": tc.get("function", {}).get("arguments", "")}
+                    for tc in m.get("tool_calls", [])
+                ]
+            lines.append(json.dumps(rec, ensure_ascii=False))
+        if not lines:
+            self._archived = len(messages)
+            return
+        try:
+            with open(self._ctx_archive_path, "a", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\n")
+        except OSError as e:
+            self._log(f"[ctx] 全量存档写入失败: {e}")
+        self._archived = len(messages)
+
+    # ---------- 回想机制（用户引用早期内容 → 提示 AI 用 ctx_search 回想） ----------
+    def _maybe_recall(self, user_input: str, messages: List[Dict]) -> None:
+        """检测到用户引用早期内容（"之前提到过 X""把 2 月前的报告拿来"）时，
+        注入一条轻量提示，引导 AI 用 ctx_search 检索存档回想。
+
+        - 关键词由 AI 自己理解提取（用户导师：关键词可以 AI 来说，如同老板说
+          "把 2 月前的报告拿来"，下属明白要回想什么、检索什么），不靠规则硬猜；
+        - 检索（找文件）与注入（给 AI 看）是机械动作，由工具/系统完成；
+        - 当前窗口已含该内容则不提示（省 token）。
+        """
+        if not self._is_recall_request(user_input):
+            return
+        hint = ("【回想提示】用户引用了更早的内容，当前窗口（最近 20 回合）可能没有完整记录。"
+                "若需要该早期信息，请调用 ctx_search 检索任务存档——检索关键词按你对用户意图的理解"
+                "提取（如人名/主题/文件/时间相关词），检索结果会带上下文窗口和回合号。"
+                "不要凭印象编造缺失内容。")
+        messages.insert(1, {"role": "system", "content": hint})
+        self._log("[recall] 检测到早期内容引用，已提示 AI 用 ctx_search 回想")
+
+    @staticmethod
+    def _is_recall_request(text: str) -> bool:
+        """回想意图检测：命中时间/引用表达（之前/刚才/上次/把X拿来/N月前/去年…）即视为引用早期内容。
+
+        覆盖用户导师示例"把 2 月前的报告拿来"——无"之前/刚才"字眼，但"N月前"+取回意图
+        表明要回想早期内容。关键词由 AI 提取，这里只判"要不要回想"。
+        """
+        if not text:
+            return False
+        if any(t in text for t in _RECALL_TRIGGERS):
+            return True
+        # 时间引用：N月前 / N天前 / N周前 / N年前 / 上个月 / 去年 / 前段时间…
+        import re
+        if re.search(r"\d+[月天周年前](?:前|的|那次|时)", text):
+            return True
+        return False
 
     def _suggests_tool_use(self, text: str) -> bool:
         """检测模型文本是否提到工具名（说明它想用工具但没真正触发 tool call）。"""
@@ -1062,6 +1166,13 @@ class Agent:
 
 【上下文节点隔离】（系统已按节点管理上下文，遵守即可）
 - 闲聊与任务不混流：每个任务独立上下文，任务完成即存档（带时间戳）；你在新任务里不携带上一个任务的对话，除非明确引用其产物。
+
+【上下文回想·早期内容检索】（全量存档 + 输入窗口，2 逻辑分离）
+- 系统把每个任务的完整对话记录全量存档（messages.jsonl，不丢信息）；你的输入窗口每回合只提供最近 20 回合。
+- 当用户引用更早的内容（"之前提到过 X""把 2 月前的报告拿来"）而当前窗口没有对应记录时，
+  调用 ctx_search，按你对用户意图的理解提取关键词检索存档——返回命中回合及前后各 5 回合的上下文（带回合号/时间戳），据此回想起来。
+- 检索是"找文件给 AI 看"：你只负责判断要回想什么、评估检索结果，具体检索由工具执行。
+- 不要凭印象编造缺失内容；检索不到就如实说明。
 
 【工具调用铁律】
 - 需要工具时，直接发起工具调用（tool call），不要在回复文本中写"我计划调用XX"或"先查看一下"。

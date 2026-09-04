@@ -62,6 +62,7 @@ class ToolRegistry:
     CORE_TOOLS = {
         "net_search", "net_fetch", "fs_list", "fs_read", "fs_search", "fs_stat",
         "memory_write", "memory_search", "cmd_run", "ws_mkdir", "ws_write", "sys_info",
+        "ctx_search",
     }
 
     def __init__(self, path: str = "data/registry.json", tools_dir: str = "tools"):
@@ -139,6 +140,7 @@ class ToolRegistry:
         "net_search": "网络搜索", "net_fetch": "网页抓取", "net_download": "文件下载",
         "cmd_run": "系统命令", "fs_list": "列目录", "fs_read": "读文件", "fs_search": "文件搜索",
         "fs_stat": "文件信息", "memory_write": "写记忆", "memory_search": "查记忆", "method_learn": "沉淀方法论",
+        "ctx_search": "上下文检索",
         "sys_info": "环境信息", "sys_tools": "系统工具发现", "tool_create": "自建工具",
         "tool_import": "导入工具", "tool_acquire": "获取工具", "tool_scan": "扫描工具",
         "ws_mkdir": "建工作目录", "ws_write": "写工作文件", "word_count": "文本统计",
