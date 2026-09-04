@@ -61,7 +61,7 @@ class ToolRegistry:
     # 核心工具：每轮常驻（schema 全量给 LLM）；其余为长尾工具（世界书：目录可见，按需加载 schema）
     CORE_TOOLS = {
         "net_search", "net_fetch", "fs_list", "fs_read", "fs_search", "fs_stat",
-        "memory_write", "cmd_run", "ws_mkdir", "ws_write", "sys_info",
+        "memory_write", "memory_search", "cmd_run", "ws_mkdir", "ws_write", "sys_info",
     }
 
     def __init__(self, path: str = "data/registry.json", tools_dir: str = "tools"):
@@ -138,7 +138,7 @@ class ToolRegistry:
     _TOOL_ZH = {
         "net_search": "网络搜索", "net_fetch": "网页抓取", "net_download": "文件下载",
         "cmd_run": "系统命令", "fs_list": "列目录", "fs_read": "读文件", "fs_search": "文件搜索",
-        "fs_stat": "文件信息", "memory_write": "写记忆", "method_learn": "沉淀方法论",
+        "fs_stat": "文件信息", "memory_write": "写记忆", "memory_search": "查记忆", "method_learn": "沉淀方法论",
         "sys_info": "环境信息", "sys_tools": "系统工具发现", "tool_create": "自建工具",
         "tool_import": "导入工具", "tool_acquire": "获取工具", "tool_scan": "扫描工具",
         "ws_mkdir": "建工作目录", "ws_write": "写工作文件", "word_count": "文本统计",
@@ -151,7 +151,7 @@ class ToolRegistry:
         "网络": ["net_search", "net_fetch", "net_download"],
         "文件系统": ["fs_list", "fs_read", "fs_search", "fs_stat"],
         "系统与执行": ["cmd_run", "sys_info", "cpu_usage", "sys_tools"],
-        "记忆与经验": ["memory_write", "method_learn"],
+        "记忆与经验": ["memory_write", "memory_search", "method_learn"],
         "工作区": ["ws_mkdir", "ws_write"],
         "自我维护": ["self_backup", "self_clone", "self_restore"],
         "工具工程": ["tool_create", "tool_import", "tool_acquire", "tool_scan"],
@@ -169,6 +169,7 @@ class ToolRegistry:
         "fs_search": ["搜索文件", "找文件", "文件名", "定位文件"],
         "fs_stat": ["文件信息", "文件大小", "文件详情", "元信息"],
         "memory_write": ["记住", "记忆", "记录", "学习", "长期记住", "存档"],
+        "memory_search": ["查记忆", "搜记忆", "记忆里", "之前查过", "以前", "我记得", "存档", "查过"],
         "method_learn": ["方法论", "沉淀", "经验教训", "总结方法", "教训"],
         "sys_info": ["环境", "系统信息", "配置", "cpu", "内存", "磁盘", "机器"],
         "sys_tools": ["已安装", "系统工具", "软件", "发现了什么", "有哪些软件"],
@@ -190,7 +191,7 @@ class ToolRegistry:
         "网络": ["net_search", "net_fetch", "net_download", "tool_acquire"],
         "文件": ["fs_list", "fs_read", "fs_search", "fs_stat", "ws_mkdir", "ws_write"],
         "系统": ["cmd_run", "sys_info", "sys_tools", "cpu_usage"],
-        "自我": ["memory_write", "method_learn", "self_backup", "self_clone", "self_restore"],
+        "自我": ["memory_write", "memory_search", "method_learn", "self_backup", "self_clone", "self_restore"],
         "工具自举": ["tool_create", "tool_import", "tool_scan"],
         "文本": ["word_count"],
     }
