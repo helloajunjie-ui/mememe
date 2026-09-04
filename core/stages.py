@@ -1,6 +1,6 @@
 """阶段化任务记录器（TaskStageTracker）。
 
-设计意图（见设计文档 5.8）：
+设计意图（见设计文档 5.35 阶段化执行模型）：
 - 白绫是"脑中心"：负责判断要做什么、如何做、评估结果、做决策；
   大多数机械执行交给工具/脚本完成，仅真正需要思考的内容才动用 LLM 推理。
 - 每个任务按阶段推进，阶段 = 一个有明确目标的执行单元（一次工具调用/一次命令执行）。
@@ -90,7 +90,8 @@ class TaskStageTracker:
             if s["note"]:
                 lines.append(f"   - 备注：{s['note']}")
         lines += ["", "## 总结", "", summary, ""]
-        (self.dir / "stages.md").write_text("\n".join(lines), encoding="utf-8")
+        # 写盘容错（问题5：双重存储不得留残废断点）：meta.json 是续接关键（ongoing_task
+        # 恢复依据），优先写；任一写失败仅记录，不抛出（避免任务主流程被文件 IO 打断）。
         meta = {
             "task_id": self.task_id, "goal": self.goal,
             "started": self.started, "finished": finished,
@@ -99,10 +100,15 @@ class TaskStageTracker:
         }
         if self.plan:
             meta["plan"] = self.plan  # 计划线随档案存档（断点续接恢复用）
-        (self.dir / "meta.json").write_text(
-            json.dumps(meta, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        try:
+            (self.dir / "meta.json").write_text(
+                json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError as e:
+            print(f"[stages] meta.json 写盘失败（续接可能退化）: {e}")
+        try:
+            (self.dir / "stages.md").write_text("\n".join(lines), encoding="utf-8")
+        except OSError as e:
+            print(f"[stages] stages.md 写盘失败: {e}")
         return str(self.dir / "stages.md")
 
     def archive_path(self) -> str:

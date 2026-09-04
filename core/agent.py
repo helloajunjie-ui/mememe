@@ -732,9 +732,13 @@ class Agent:
                     self._log(f"[task] 本回合 {step} 步未完成，自动续接（剩余 {rounds_left} 次）")
                     step = 0
                     limit_hit = False
+                    # 自动续接必须携带任务目标：同 turn 内 messages 超 20 回合时窗口化
+                    # 可能剔除早期回合，若不重申目标，LLM 会丢失任务目标盲目重做
+                    _goal = tracker.goal if tracker is not None else (user_input if not resume_ctx else resume_goal)
                     messages.append({"role": "system",
-                                     "content": "（本轮工具预算已用尽但任务未完成，系统已自动续接。"
-                                                "已完成的工作不要重做，只推进剩余部分，完成后总结收尾。）"})
+                                     "content": (f"（本轮工具预算已用尽但任务未完成，系统已自动续接。"
+                                                 f"任务目标：{_goal}。"
+                                                 "已完成的工作不要重做，只推进剩余部分，完成后总结收尾。）")})
                     continue
                 limit_hit = True  # 回合预算用尽 → 止损
             if limit_hit:
@@ -798,12 +802,15 @@ class Agent:
             archive = tracker.finish_task(content, success=success)
             self._log(f"[task] 任务结束，档案：{archive}")
             self._backup(force=True)  # 任务结束先备份（用户止损原则：状态变更立即保护）
-            self.ctx.save(ContextStore.make_task_node(
-                goal=tracker.goal, status="done" if success else "interrupted",
-                produced=[str(p) for p in tracker.dir.glob("**/*")] if tracker.dir else [],
-                task_id=tracker.task_id, archive=archive,
-                summary=content[:200],
-            ))
+            try:
+                self.ctx.save(ContextStore.make_task_node(
+                    goal=tracker.goal, status="done" if success else "interrupted",
+                    produced=[str(p) for p in tracker.dir.glob("**/*")] if tracker.dir else [],
+                    task_id=tracker.task_id, archive=archive,
+                    summary=content[:200],
+                ))
+            except Exception as _ce:  # noqa: BLE001  节点索引失败不阻断任务收尾（任务档案已落盘）
+                self._log(f"[ctx] 任务节点保存失败（不影响任务档案）: {_ce}")
             # 隔离：摘除本任务轮次（上下文不混流），留一条摘要供后续引用/联动
             self.history = self.history[: self.ctx_start_idx]
             self.history.append({"role": "system",
@@ -959,7 +966,12 @@ class Agent:
             # 窗口优先：回合数超 20 → 剔除最老 overflow 回合（已存档可检索）
             r = rounds[overflow - 1]
             cut = r["tools"][-1][0] if r["tools"] else r["start"]
+            # 保护游离的 user 消息（用户原始指令/最新用户输入，不属于任何回合）：
+            # 超窗剔除可能把首条 user（任务目标来源）连带删掉，续接/长任务时 LLM 会丢目标 → 必须保留
+            stray_users = [m for m in out[:cut] if m.get("role") == "user"]
             out = out[cut + 1:]
+            if stray_users:
+                out = stray_users + out
             dropped = overflow
         elif _total(out) > _MAX_MSGS_CHARS:
             # 总量防线：回合未超但超长 → 剔除最老 1 回合
