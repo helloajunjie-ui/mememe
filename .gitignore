@@ -34,3 +34,4 @@ config/llm.json
 data/context_nodes/
 
 config/mcp.json
+config/study.yaml

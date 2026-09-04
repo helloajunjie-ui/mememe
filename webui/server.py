@@ -16,6 +16,7 @@
 """
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import re
@@ -28,6 +29,8 @@ import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
+
+import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -155,6 +158,90 @@ def _reflection_scheduler() -> None:
         time.sleep(30)  # 每 30 秒检查一次整点边界
 
 
+# ---------- 自主时间调度（使用者配置·空闲时自主学习/自由探索） ----------
+# 共建者要求（2026-09-04）：学习方向与时间由"使用者"控制，白绫只负责执行。
+# 设计：config/study.yaml 定义 启用开关/时间窗口/间隔/主题（topic 留空=自由探索了解世界）。
+# 调度器在窗口内、距上次达间隔且空闲时触发一次自主学习，静默入后台，不打断用户。
+_STUDY_STATE = {"last": None}
+
+
+def _load_study_cfg() -> dict:
+    """读取 config/study.yaml 的 study 段（使用者配置，每次触发时重读，无需重启）。"""
+    try:
+        with open(os.path.join(ROOT, "config", "study.yaml"), "r", encoding="utf-8") as f:
+            return (yaml.safe_load(f) or {}).get("study", {}) or {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _in_window(now: datetime.datetime, start_s: str, end_s: str) -> bool:
+    """判断当前是否在 [start, end) 窗口内，支持跨天（end < start）。"""
+    try:
+        sh, sm = (int(x) for x in str(start_s).split(":"))
+        eh, em = (int(x) for x in str(end_s).split(":"))
+    except (ValueError, AttributeError):
+        return False
+    cur = now.hour * 60 + now.minute
+    s = sh * 60 + sm
+    e = eh * 60 + em
+    if s <= e:
+        return s <= cur < e
+    return cur >= s or cur < e  # 跨天窗口（如 22:00 → 次日 06:00）
+
+
+def _run_study(cfg: dict) -> None:
+    """执行一次自主时间：按使用者主题学习，或（topic 空）自由探索了解世界。"""
+    topic = (cfg.get("topic") or "").strip()
+    max_steps = int(cfg.get("max_steps") or 12)
+    try:
+        a = get_agent()
+        if topic:
+            msg = (f"（内部·自主时间）现在是你被安排的自主学习时间，请按使用者指定的主题学习：{topic}。"
+                   f"方式：用 net_search/net_fetch 获取资料 → 阅读消化 → 把学到的知识沉淀进记忆或方法论。"
+                   f"保持轻量专业，预算约 {max_steps} 步，不要创建长期任务。")
+        else:
+            msg = (f"（内部·自主时间）现在是你被安排的自主时间。请自由探索了解世界：可以了解任何你感兴趣"
+                   f"的方向（文化、科技、故事、艺术等），用 net_search/net_fetch 获取资料，把有意义的收获"
+                   f"沉淀进记忆或方法论。保持轻量，预算约 {max_steps} 步，不要创建长期任务。")
+        reply = a.turn(msg)
+        try:
+            a.ongoing_task = None
+        except Exception:  # noqa: BLE001
+            pass
+        ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            a.self_model.set_state("last_study", ts)
+        except Exception:  # noqa: BLE001
+            pass
+        print(f"[study] {ts} 自主时间完成（主题={'有' if topic else '自由探索'}）: {str(reply)[:120]}")
+    except Exception as e:  # noqa: BLE001
+        print(f"[study] 自主时间执行失败: {type(e).__name__}: {e}")
+
+
+def _study_scheduler() -> None:
+    """自主时间调度：配置窗口内、达到间隔且空闲时，触发一次自主学习/自由探索。"""
+    while True:
+        try:
+            now = datetime.datetime.now()
+            cfg = _load_study_cfg()
+            if cfg.get("enabled", False) and _in_window(
+                    now,
+                    cfg.get("window", {}).get("start", "22:00"),
+                    cfg.get("window", {}).get("end", "06:00")):
+                interval_h = float(cfg.get("interval_hours") or 2)
+                last = _STUDY_STATE["last"]
+                if last is None or (now - last).total_seconds() >= interval_h * 3600:
+                    if _ready and _turn_lock.acquire(blocking=False):  # 空闲判定
+                        try:
+                            _run_study(cfg)
+                            _STUDY_STATE["last"] = datetime.datetime.now()
+                        finally:
+                            _turn_lock.release()
+        except Exception:  # noqa: BLE001
+            pass
+        time.sleep(60)  # 每分钟检查一次（窗口内按间隔触发；忙时下轮再试）
+
+
 def _init_agent_async() -> None:
     """后台线程：初始化 Agent 并 boot。失败记原因。"""
     global _agent, _ready, _init_error
@@ -236,6 +323,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_config_get()
         elif path == "/api/models":
             self._handle_models_get()
+        elif path == "/api/study":
+            self._handle_study()
         elif m:
             self._handle_task(m.group(1))
         else:
@@ -251,6 +340,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_config_test()
         elif path == "/api/models/fetch":
             self._handle_models_fetch()
+        elif path == "/api/study":
+            self._handle_study()
         else:
             self._send_json(404, {"ok": False, "error": "not found"})
 
@@ -419,6 +510,40 @@ class Handler(BaseHTTPRequestHandler):
                               "models": r.get("models", []), "count": r.get("count", 0),
                               "source": r.get("source")})
 
+    # ---------- 自主时间配置 API（使用者控制学习方向与时间） ----------
+    def _handle_study(self) -> None:
+        """GET：读当前自主时间配置 + 上次学习时间；POST：保存配置。"""
+        if self.command == "GET":
+            cfg = _load_study_cfg()
+            last = None
+            try:
+                a = get_agent()
+                last = a.self_model.data.get("state", {}).get("last_study")
+            except Exception:  # noqa: BLE001
+                pass
+            self._send_json(200, {"ok": True, "study": cfg, "last_study": last})
+            return
+        data = self._read_json()
+        try:
+            cfg = dict(_load_study_cfg())
+            if "enabled" in data:
+                cfg["enabled"] = bool(data["enabled"])
+            if "window" in data and isinstance(data["window"], dict):
+                cfg["window"] = {"start": str(data["window"].get("start") or "22:00"),
+                                 "end": str(data["window"].get("end") or "06:00")}
+            if "interval_hours" in data:
+                cfg["interval_hours"] = data["interval_hours"]
+            if "topic" in data:
+                cfg["topic"] = str(data["topic"])
+            if "max_steps" in data:
+                cfg["max_steps"] = int(data["max_steps"])
+            path = os.path.join(ROOT, "config", "study.yaml")
+            with open(path, "w", encoding="utf-8") as f:
+                yaml.safe_dump({"study": cfg}, f, allow_unicode=True, sort_keys=False)
+            self._send_json(200, {"ok": True, "study": cfg})
+        except Exception as e:  # noqa: BLE001
+            self._send_json(400, {"ok": False, "error": f"保存自主时间配置失败: {e}"})
+
 
 def _port_in_use(host: str, port: int) -> bool:
     """端口占用检查：防重复启动导致的多进程互锁。"""
@@ -525,6 +650,8 @@ def main() -> None:
     threading.Thread(target=_init_agent_async, daemon=True).start()
     # 整点反思调度：空闲时自主自省（共建者要求·2026-09-04）
     threading.Thread(target=_reflection_scheduler, daemon=True).start()
+    # 自主时间调度：使用者配置窗口内，空闲时自主学习/自由探索（共建者要求·2026-09-04）
+    threading.Thread(target=_study_scheduler, daemon=True).start()
 
     print("白绫 Web 界面（API 服务）启动中 ...")
     print(f"  地址: http://{HOST}:{PORT}")

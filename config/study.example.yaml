@@ -1,0 +1,9 @@
+# 白绫"自主时间"配置模板（公开示例，复制为 config/study.yaml 后按需修改）
+study:
+  enabled: true          # 总开关
+  window:                # 自主时间窗口（用户可改，支持跨天）
+    start: "22:00"
+    end: "06:00"
+  interval_hours: 2      # 两次自主学习的最小间隔（小时）
+  topic: ""              # 学习主题（留空 = 自由探索了解世界）
+  max_steps: 12          # 单次自主时间预算上限（工具步数）
