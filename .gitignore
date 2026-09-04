@@ -29,3 +29,4 @@ data/integrity_status.json
 # webui 运行时日志（不入库）
 webui/server_out.log
 webui/server_err.log
+webui/_user_shot.png
