@@ -90,6 +90,7 @@ class LLMGateway:
                     })
             return {
                 "content": msg.content,
+                "reasoning_content": getattr(msg, "reasoning_content", None),
                 "tool_calls": tool_calls,
                 "finish_reason": resp.choices[0].finish_reason,
             }

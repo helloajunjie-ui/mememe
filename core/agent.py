@@ -551,8 +551,9 @@ class Agent:
             if resp.get("error"):
                 _emit({"type": "error", "error": resp["error"]})
                 return resp["error"]
-            # 类型判定：首轮响应未触发工具 = C0；触发工具 = C1；首轮含 plan_submit = C2/C3（放宽预算+多续接）
-            if step == 0:
+            # 类型判定：仅任务真正首轮执行（step_total==0，排除自动续接）——否则续接时
+            # step 归 0 会重复判定并重置 rounds_left，导致预算无限重置、任务空转失控
+            if step == 0 and step_total == 0:
                 names0 = [tc.get("name", "") for tc in (resp.get("tool_calls") or [])]
                 if not names0:
                     _emit({"type": "type", "task_type": "C0"})
@@ -588,6 +589,10 @@ class Agent:
                 # auto 未触发工具，但模型文本提到工具名 → required 兜底强制触发一次
                 if step == 0 and self._suggests_tool_use(resp.get("content") or ""):
                     self._log("[tool] auto 未触发（文本提到工具），required 兜底重试")
+                    # 上一轮若返回 reasoning_content，重试请求也必须带上（DeepSeek thinking mode）
+                    if resp.get("reasoning_content"):
+                        messages.append({"role": "assistant", "content": resp.get("content") or "",
+                                         "reasoning_content": resp["reasoning_content"]})
                     resp = self.llm.chat(
                         messages, tools=active_schemas, tool_choice="required"
                     )
@@ -615,7 +620,7 @@ class Agent:
                 calls = calls[:remain]
                 limit_hit = True
             # 工具调用：记录决策（高风险完整推演已由 prompt 约束，此处留痕）
-            messages.append({
+            asst_msg: Dict = {
                 "role": "assistant",
                 "content": resp["content"] or "",
                 "tool_calls": [
@@ -623,7 +628,11 @@ class Agent:
                      "function": {"name": tc["name"], "arguments": tc["arguments"]}}
                     for tc in calls
                 ],
-            })
+            }
+            # DeepSeek thinking mode：上一轮若返回 reasoning_content，本轮必须回传，否则 400
+            if resp.get("reasoning_content"):
+                asst_msg["reasoning_content"] = resp["reasoning_content"]
+            messages.append(asst_msg)
             for tc in calls:
                 step += 1
                 name, args = tc["name"], self._safe_args(tc["arguments"])
