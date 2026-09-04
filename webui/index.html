@@ -86,6 +86,19 @@
     background: #F1F1F1; padding: 1px 5px; border-radius: 4px; }
   .bubble pre code { background: none; padding: 0; }
   .bubble strong { font-weight: 600; }
+  .bubble h1, .bubble h2, .bubble h3, .bubble h4 { margin: 10px 0 6px; line-height: 1.35; }
+  .bubble h1 { font-size: 19px; } .bubble h2 { font-size: 17px; }
+  .bubble h3 { font-size: 15.5px; } .bubble h4 { font-size: 14.5px; }
+  .bubble a { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(59,130,246,.35); }
+  .bubble a:hover { text-decoration: underline; }
+  .bubble em { font-style: italic; }
+  .bubble blockquote { margin: 8px 0; padding: 6px 12px; border-left: 3px solid #D1D5DB; background: rgba(0,0,0,.02); color: var(--text-2); border-radius: 0 6px 6px 0; }
+  .bubble hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+  .bubble table { border-collapse: collapse; margin: 8px 0; font-size: 13px; width: 100%; }
+  .bubble th, .bubble td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+  .bubble th { background: rgba(0,0,0,.03); font-weight: 600; }
+  .bubble tr:nth-child(even) td { background: rgba(0,0,0,.015); }
+  .bubble li { margin: 2px 0; }
   /* 思考中 */
   .thinking { display: flex; align-items: center; gap: 8px; }
   .thinking .dot { width: 6px; height: 6px; border-radius: 50%;
@@ -295,26 +308,70 @@ function escapeHtml(s) {
 function renderMd(text) {
   text = escapeHtml(text);
   var blocks = [];
-  var t = text.replace(/```([\s\S]*?)```/g, function(m,c){
-    blocks.push("<pre><code>"+c.replace(/^\n|\n$/g,"")+"</code></pre>");
+  text = text.replace(/```([\s\S]*?)```/g, function(m,c){
+    blocks.push("<pre><code>"+c.replace(/^\n|\n$/g,"").replace(/^[a-zA-Z0-9_+\-.]+\n/,"")+"</code></pre>");
     return "\u0000B"+(blocks.length-1)+"\u0000";
   });
-  t = t.replace(/`([^`]+)`/g, "<code>$1</code>");
-  t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  var html = "", inUl = false, inOl = false;
-  var lines = t.split("\n");
-  for (var i=0;i<lines.length;i++){
-    var ln = lines[i];
-    var ul = ln.match(/^\s*[-*]\s+(.*)$/);
-    var ol = ln.match(/^\s*\d+[.、]\s+(.*)$/);
-    if (ul){ if(!inUl){html+="<ul>";inUl=true;} if(inOl){html+="</ol>";inOl=false;} html+="<li>"+ul[1]+"</li>"; continue; }
-    if (ol){ if(!inOl){html+="<ol>";inOl=true;} if(inUl){html+="</ul>";inUl=false;} html+="<li>"+ol[1]+"</li>"; continue; }
-    if(inUl){html+="</ul>";inUl=false;}
-    if(inOl){html+="</ol>";inOl=false;}
-    html += ln.replace(/\u0000B(\d+)\u0000/g,function(m,j){return blocks[+j];}) + "<br>";
+  function inline(t){
+    t = t.replace(/`([^`]+)`/g, "<code>$1</code>");
+    t = t.replace(/\[([^\]]+)\]\(((?:https?:|mailto:|\/|#)[^)\s]*)\)/g, function(m,txt,h){
+      return '<a href="'+h+'" target="_blank" rel="noopener noreferrer">'+txt+'</a>';
+    });
+    t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    t = t.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+    return t;
   }
-  if(inUl)html+="</ul>";
-  if(inOl)html+="</ol>";
+  var html = "", inUl = false, inOl = false, i;
+  function closeLists(){ if(inUl){html+="</ul>";inUl=false;} if(inOl){html+="</ol>";inOl=false;} }
+  var lines = text.split("\n");
+  for (i=0;i<lines.length;i++){
+    var raw = lines[i];
+    /* 表格：| a | b |  +  |---|---| 分隔行 */
+    if (/^\s*\|.*\|\s*$/.test(raw) && i+1<lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i+1])){
+      closeLists();
+      var rows=[raw, lines[i+1]]; i+=2;
+      while(i<lines.length && /^\s*\|.*\|\s*$/.test(lines[i])){ rows.push(lines[i]); i++; }
+      i--;
+      var thead=true, body=[];
+      for(var r=0;r<rows.length;r++){
+        if(r===1){ continue; }
+        var cells = rows[r].trim().replace(/^\||\|$/g,"").split("|");
+        var tag = thead?"th":"td", tr="<tr>";
+        for(var c2=0;c2<cells.length;c2++){ tr += "<"+tag+">"+inline(cells[c2].trim())+"</"+tag+">"; }
+        tr += "</tr>";
+        body.push(tr);
+        thead = false;
+      }
+      html += "<table><thead>"+body[0]+"</thead><tbody>"+body.slice(1).join("")+"</tbody></table>";
+      continue;
+    }
+    /* 分割线 */
+    if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(raw)){ closeLists(); html+="<hr>"; continue; }
+    /* 标题 */
+    var h = raw.match(/^\s*(#{1,6})\s+(.*)$/);
+    if(h){ closeLists(); var lv=h[1].length; html += "<h"+lv+">"+inline(h[2])+"</h"+lv+">"; continue; }
+    /* 引用（连续行合并） */
+    if (/^\s*(?:>|&gt;)\s?/.test(raw)){
+      closeLists();
+      var q=[], qi=i;
+      while(qi<lines.length && /^\s*(?:>|&gt;)\s?/.test(lines[qi])){ q.push(lines[qi].replace(/^\s*(?:>|&gt;)\s?/,"")); qi++; }
+      i=qi-1;
+      html += "<blockquote>"+inline(q.join("\n"))+"</blockquote>";
+      continue;
+    }
+    var ul = raw.match(/^\s*[-*]\s+(.*)$/);
+    var ol = raw.match(/^\s*\d+[.、]\s+(.*)$/);
+    if (ul){ if(!inUl){html+="<ul>";inUl=true;} if(inOl){html+="</ol>";inOl=false;} html+="<li>"+inline(ul[1])+"</li>"; continue; }
+    if (ol){ if(!inOl){html+="<ol>";inOl=true;} if(inUl){html+="</ul>";inUl=false;} html+="<li>"+inline(ol[1])+"</li>"; continue; }
+    closeLists();
+    if(raw.trim()==="") continue;
+    if(/^\u0000B\d+\u0000$/.test(raw.trim())){
+      html += raw.replace(/\u0000B(\d+)\u0000/g,function(m,j){return blocks[+j];});
+    } else {
+      html += inline(raw) + "<br>";
+    }
+  }
+  closeLists();
   return html;
 }
 
