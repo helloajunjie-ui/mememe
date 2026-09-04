@@ -510,7 +510,15 @@ class Agent:
         if loaded_ext:
             messages.append({"role": "system", "content": f"（已按当前任务预加载扩展工具：{', '.join(sorted(loaded_ext))}）"})
 
-        while step < MAX_TOOL_STEPS:
+        # 回合参数（按任务类型分级运作·方法论：不同任务不同模式）
+        # C1 即时任务：单回合 16 步、自动续接 1 次（总预算 32 步）
+        # C2/C3 计划线任务：单回合 24 步、自动续接 4 次（总预算 120 步）
+        round_budget = 16   # 单回合工具步数预算
+        rounds_left = 1     # 预算耗尽后的自动续接次数（0=回合用尽）
+        is_plan_mode = False
+        step_total = 0      # 跨回合累计步数（成本统计/止损依据）
+
+        while step < round_budget:
             # 计划线进度注入：每轮提醒当前进度（不持久化，随轮次动态更新）
             if plan and plan.get("steps"):
                 messages.append({
@@ -526,13 +534,17 @@ class Agent:
             if resp.get("error"):
                 _emit({"type": "error", "error": resp["error"]})
                 return resp["error"]
-            # 类型判定：首轮响应未触发工具 = C0；触发工具 = C1；首轮含 plan_submit = C2/C3
+            # 类型判定：首轮响应未触发工具 = C0；触发工具 = C1；首轮含 plan_submit = C2/C3（放宽预算+多续接）
             if step == 0:
                 names0 = [tc.get("name", "") for tc in (resp.get("tool_calls") or [])]
                 if not names0:
                     _emit({"type": "type", "task_type": "C0"})
                 elif "plan_submit" in names0:
                     _emit({"type": "type", "task_type": "C2"})
+                    is_plan_mode = True
+                    round_budget = 24
+                    rounds_left = 4
+                    self._log("[task] 计划线模式：预算 24 步/回合，自动续接 4 次")
                 else:
                     _emit({"type": "type", "task_type": "C1"})
             _emit({"type": "think", "step": step})
@@ -577,7 +589,7 @@ class Agent:
                 self._log(f"[task] 任务开始：{tracker.task_id}（{tracker.dir}）")
             # 截断超出总额度的并行调用（成本精确控制）
             calls = resp["tool_calls"]
-            remain = MAX_TOOL_STEPS - step
+            remain = round_budget - step
             if len(calls) > remain:
                 calls = calls[:remain]
                 limit_hit = True
@@ -638,13 +650,28 @@ class Agent:
                     "tool_call_id": tc["id"],
                     "content": json.dumps(result, ensure_ascii=False),
                 })
+            # 预算耗尽且未熔断 → 自动续接（不用用户手动"继续"；C2/C3 续接次数更多）
+            if step >= round_budget and not loop_hit:
+                if rounds_left > 0:
+                    rounds_left -= 1
+                    step_total += step
+                    self._log(f"[task] 本回合 {step} 步未完成，自动续接（剩余 {rounds_left} 次）")
+                    step = 0
+                    limit_hit = False
+                    messages.append({"role": "system",
+                                     "content": "（本轮工具预算已用尽但任务未完成，系统已自动续接。"
+                                                "已完成的工作不要重做，只推进剩余部分，完成后总结收尾。）"})
+                    continue
+                limit_hit = True  # 回合预算用尽 → 止损
             if limit_hit:
                 break
             if loop_hit:
                 break
 
-        if limit_hit or step >= MAX_TOOL_STEPS or loop_hit:
-            # 步数超限或死循环熔断：不丢弃，保存断点供续接（思维链继续思考）；但有续接次数上限（止损）
+        step_total += step  # 累计最后一回合步数（统计用）
+
+        if limit_hit or loop_hit:
+            # 步数超限（回合预算用尽）或死循环熔断：不丢弃，保存断点供续接（思维链继续思考）；但有续接次数上限（止损）
             if not loop_hit:
                 content = "（工具调用步数超限，已停止）"
             note = "工具步数超限，任务未完成" if not loop_hit else f"死循环熔断（{content[2:-1]}），任务未完成"

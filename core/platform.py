@@ -58,6 +58,18 @@ def native_commands(family: str) -> Dict[str, str]:
     }
 
 
+def _decode_output(b: bytes) -> str:
+    """子进程输出字节 → 文本：多编码回退（中文 Windows 常见 GBK/CP936，也兼容 UTF-8）。"""
+    if not b:
+        return ""
+    for enc in ("utf-8", "gbk", "latin-1"):
+        try:
+            return b.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return b.decode("utf-8", errors="replace")
+
+
 def run_shell(command: str, timeout: int = 30, cwd: Optional[str] = None) -> Dict:
     """在当前平台执行 shell 命令。
 
@@ -73,14 +85,14 @@ def run_shell(command: str, timeout: int = 30, cwd: Optional[str] = None) -> Dic
         proc = subprocess.run(
             cmd_list,
             capture_output=True,
-            text=True,
+            text=False,  # 读 bytes，多编码回退解码，避免中文 Windows GBK 输出导致 UnicodeDecodeError
             timeout=timeout,
             cwd=cwd,
         )
         return {
             "ok": proc.returncode == 0,
-            "stdout": proc.stdout,
-            "stderr": proc.stderr,
+            "stdout": _decode_output(proc.stdout),
+            "stderr": _decode_output(proc.stderr),
             "exit_code": proc.returncode,
         }
     except subprocess.TimeoutExpired:

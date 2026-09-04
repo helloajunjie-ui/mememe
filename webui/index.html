@@ -461,6 +461,8 @@ function renderTaskDone(panel, reply) {
   panel.remove();
   wrap.remove();
   addMsg("bailing", renderMd(reply || "（完成）"));
+  sendBtn.disabled = false;  // 任务完成 → 恢复发送
+  input.focus();
 }
 
 function renderTaskError(panel, error) {
@@ -468,6 +470,8 @@ function renderTaskError(panel, error) {
   panel.remove();
   wrap.remove();
   addMsg("bailing", '<span style="color:#DC2626;">出错了：'+escapeHtml(error||"未知错误")+"</span>");
+  sendBtn.disabled = false;  // 任务出错 → 恢复发送
+  input.focus();
 }
 
 function pollTask(panel, tid) {
