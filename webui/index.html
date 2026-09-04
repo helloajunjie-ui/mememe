@@ -378,7 +378,7 @@ function renderMd(text) {
 
 function fmtTime(d) {
   function p(n){ return (n<10?"0":"")+n; }
-  return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds());
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds());
 }
 function addMsg(role, html) {
   var wrap = document.createElement("div");
