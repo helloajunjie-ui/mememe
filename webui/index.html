@@ -236,7 +236,7 @@
         <div class="cfg-model-row">
           <div class="cfg-combo">
             <input id="cfgModel" type="text" placeholder="deepseek-chat"
-                   oninput="filterModels()" onfocus="showModels()" />
+                   oninput="filterModels()" onfocus="showModels(true)" />
             <div class="cfg-mlist" id="cfgMList"></div>
           </div>
           <button class="preset" id="cfgFetchModels" onclick="fetchModels()" title="从当前 API 地址自动获取模型列表">获取模型</button>
@@ -604,9 +604,18 @@ document.addEventListener("click", function(e){
 });
 function loadModelCache() {
   fetch("/api/models").then(function(r){return r.json();}).then(function(d){
-    if (d.ok) fillModelList(d.models, d.models && d.models.length
-        ? "已缓存 " + d.models.length + " 个模型（可点\"获取模型\"刷新）"
-        : "尚未获取过模型列表，可点\"获取模型\"自动获取");
+    if (!d.ok) return;
+    var curBase = (document.getElementById("cfgBase").value || "").trim().replace(/\/+$/, "");
+    var srcBase = (d.models_base_url || "").replace(/\/+$/, "");
+    var hint;
+    if (!d.models || !d.models.length) {
+      hint = "尚未获取过模型列表，可点\"获取模型\"自动获取";
+    } else if (curBase && srcBase && curBase !== srcBase) {
+      hint = "列表属于 " + srcBase + "（与当前 API 地址不同），建议点\"获取模型\"刷新";
+    } else {
+      hint = "已缓存 " + d.models.length + " 个模型（可点\"获取模型\"刷新）";
+    }
+    fillModelList(d.models, hint);
   }).catch(function(){});
 }
 function fetchModels() {
@@ -620,7 +629,7 @@ function fetchModels() {
   }).then(function(r){return r.json();}).then(function(d){
     btn.disabled = false;
     if (d.ok && d.models && d.models.length) {
-      fillModelList(d.models, "已获取 " + d.models.length + " 个模型并保存，点击下拉查看");
+      fillModelList(d.models, "已获取 " + d.models.length + " 个模型并保存（来自当前 API 地址），点击下拉查看");
       var cur = document.getElementById("cfgModel").value.trim();
       if (!cur) {
         document.getElementById("cfgModel").value =

@@ -252,6 +252,7 @@ class Agent:
                     if ids:
                         over = self._read_user_llm_cfg()
                         over["models"] = ids
+                        over["models_base_url"] = base  # 绑定来源端点：切端点后不误用旧列表
                         over["models_updated_at"] = datetime.datetime.now().isoformat(timespec="seconds")
                         self._save_user_llm_cfg(over)
                         self._log(f"[llm] 获取模型列表 {len(ids)} 个（{url}）")
@@ -268,7 +269,8 @@ class Agent:
     def models_view(self) -> Dict:
         """返回缓存的模型列表（配置面板下拉用）。"""
         over = self._read_user_llm_cfg()
-        return {"models": over.get("models", []), "updated_at": over.get("models_updated_at")}
+        return {"models": over.get("models", []), "updated_at": over.get("models_updated_at"),
+                "models_base_url": over.get("models_base_url", "")}
 
     def llm_config_view(self) -> Dict:
         """当前生效的 AI 接入配置（api_key 打码回显，不泄漏明文）。"""
