@@ -23,6 +23,7 @@ class TaskStageTracker:
         self.goal: str = ""
         self.started: str = ""
         self.stages: List[Dict] = []
+        self.plan: Optional[Dict] = None
 
     def begin_task(self, goal: str, task_id: str = "") -> str:
         """开始一个任务：创建任务目录与档案。"""
@@ -90,13 +91,16 @@ class TaskStageTracker:
                 lines.append(f"   - 备注：{s['note']}")
         lines += ["", "## 总结", "", summary, ""]
         (self.dir / "stages.md").write_text("\n".join(lines), encoding="utf-8")
+        meta = {
+            "task_id": self.task_id, "goal": self.goal,
+            "started": self.started, "finished": finished,
+            "success": success, "complete": complete,
+            "stage_count": len(self.stages),
+        }
+        if self.plan:
+            meta["plan"] = self.plan  # 计划线随档案存档（断点续接恢复用）
         (self.dir / "meta.json").write_text(
-            json.dumps({
-                "task_id": self.task_id, "goal": self.goal,
-                "started": self.started, "finished": finished,
-                "success": success, "complete": complete,
-                "stage_count": len(self.stages),
-            }, ensure_ascii=False, indent=2),
+            json.dumps(meta, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
         return str(self.dir / "stages.md")

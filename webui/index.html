@@ -359,7 +359,7 @@ function addTaskPanel() {
   var b = document.createElement("div");
   b.className = "bubble";
   b.style.minWidth = "220px";
-  b.innerHTML = '<div style="font-size:12px;color:#6B7280;margin-bottom:6px;">任务进行中 <span class="task-type"></span></div><div class="task-flow"></div>';
+  b.innerHTML = '<div style="font-size:12px;color:#6B7280;margin-bottom:6px;">任务进行中 <span class="task-type"></span></div><div class="task-plan"></div><div class="task-flow"></div>';
   wrap.appendChild(av); wrap.appendChild(b);
   chat.appendChild(wrap);
   chat.scrollTop = chat.scrollHeight;
@@ -386,12 +386,51 @@ function taskLine(panel, name, status) {
   return line;
 }
 
+function renderPlan(panel, plan) {
+  var box = panel.querySelector(".task-plan");
+  if (!box || !plan || !plan.steps) return;
+  box.innerHTML = "";
+  box.style.cssText = "border:1px solid #E4E3DD;border-radius:8px;padding:6px 10px;margin:4px 0 8px;background:#FAFAF8;";
+  var t = panel.querySelector(".task-type");
+  if (t && plan.type) t.textContent = (plan.type === "C3" ? "· 任务集合" : "· 规划任务");
+  var gmap = {};
+  (plan.groups || []).forEach(function(g){ gmap[g.id] = g.title; });
+  var shown = {};
+  var firstTodo = null;
+  (plan.steps || []).forEach(function(s){
+    if (s.status === "todo" && !firstTodo) firstTodo = s;
+  });
+  var isRun = function(s){ return s === firstTodo && firstTodo.status === "todo"; };
+  (plan.steps || []).forEach(function(s){
+    var g = s.group;
+    if (g && !shown[g]) {
+      shown[g] = true;
+      var gt = document.createElement("div");
+      gt.style.cssText = "font-size:11px;color:#8A8F98;font-weight:600;margin:3px 0 1px;";
+      gt.textContent = "▸ " + (gmap[g] || g);
+      box.appendChild(gt);
+    }
+    var line = document.createElement("div");
+    line.style.cssText = "font-size:12px;color:#6B7280;padding:1px 0;";
+    var icon, color, deco;
+    if (s.status === "done") { icon = '<span style="color:#059669;">✓</span>'; color = "#059669"; deco = "line-through"; }
+    else if (s.status === "fail") { icon = '<span style="color:#DC2626;">✗</span>'; color = "#DC2626"; deco = "none"; }
+    else if (isRun(s)) { icon = '<span style="color:#0369A1;">▶</span>'; color = "#0369A1"; deco = "none"; }
+    else { icon = '<span style="color:#9CA3AF;">○</span>'; color = "#9CA3AF"; deco = "none"; }
+    line.innerHTML = icon + ' <span style="color:' + color + ';text-decoration:' + deco + ';">' + escapeHtml(s.title) + '</span>';
+    box.appendChild(line);
+  });
+  chat.scrollTop = chat.scrollHeight;
+}
+
 function renderEvent(panel, ev) {
   if (!ev || !ev.type) return;
   if (ev.type === "type") {
     var map = {C0:"· 对话", C1:"· 即时任务", C2:"· 规划任务", C3:"· 任务集合"};
     var t = panel.querySelector(".task-type");
     if (t && map[ev.task_type]) t.textContent = map[ev.task_type];
+  } else if (ev.type === "plan") {
+    renderPlan(panel, ev.plan);
   } else if (ev.type === "think") {
     // 合并连续的思考提示，不刷屏
     var last = panel.querySelector(".task-flow").lastElementChild;

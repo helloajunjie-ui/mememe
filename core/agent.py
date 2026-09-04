@@ -32,6 +32,52 @@ from tools.src.python import backup_private
 
 MAX_TOOL_STEPS = 16  # 单轮最多工具调用总数（含并行，成本精确控制；复杂任务可分多轮续接）
 
+# ---------- 计划线内置工具（C2 规划任务 / C3 任务集合的执行骨架，不落入工具库） ----------
+_PLAN_SUBMIT_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "plan_submit",
+        "description": "提交任务计划线：复杂任务（多步规划/需探索/多任务集合，预计超过 8 步）在首轮调用本工具，建立步骤清单后按计划逐步执行。可重复调用以覆盖调整计划。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "type": {"type": "string", "enum": ["C2", "C3"],
+                         "description": "C2=规划任务（线性步骤）；C3=任务集合（多任务，用 group 分组表达子任务）"},
+                "groups": {"type": "array",
+                           "items": {"type": "object",
+                                     "properties": {"id": {"type": "string"}, "title": {"type": "string"}},
+                                     "required": ["id", "title"]},
+                           "description": "C3 分组清单（可选，步骤用 group 字段引用）"},
+                "steps": {"type": "array",
+                          "items": {"type": "object",
+                                    "properties": {"id": {"type": "string"},
+                                                  "title": {"type": "string"},
+                                                  "group": {"type": "string"}},
+                                    "required": ["id", "title"]},
+                          "description": "步骤清单，按执行顺序排列；每步一个明确可验证的目标"},
+            },
+            "required": ["type", "steps"],
+        },
+    },
+}
+
+_PLAN_UPDATE_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "plan_update",
+        "description": "更新计划线步骤状态：每完成一步调用标记 done；某步失败/放弃标记 fail。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "step_id": {"type": "string", "description": "计划线步骤 id"},
+                "status": {"type": "string", "enum": ["done", "fail"],
+                           "description": "done=完成；fail=失败/放弃"},
+            },
+            "required": ["step_id", "status"],
+        },
+    },
+}
+
 
 class Agent:
     def __init__(self, config_path: str = "config.yaml"):
@@ -430,11 +476,14 @@ class Agent:
         self.history.append({"role": "user", "content": user_input})
         _emit({"type": "start", "task_type": "C0", "message": user_input})
 
-        # 续接检测：用户表达"继续"且有未完成任务 → 恢复上下文
+        # 续接检测：用户表达"继续"且有未完成任务 → 恢复上下文（含计划线状态）
         resume_ctx = None
+        plan = None
         if self.ongoing_task and self._is_resume_request(user_input):
+            plan = self.ongoing_task.get("plan")
             resume_ctx = self._load_task_context(self.ongoing_task)
-            self._log(f"[resume] 续接任务 {self.ongoing_task['task_id']}（恢复断点）")
+            self._log(f"[resume] 续接任务 {self.ongoing_task['task_id']}（恢复断点）"
+                      + ("，含计划线" if plan else ""))
             self.ongoing_task = None
 
         messages = self._build_messages(resume_ctx=resume_ctx, match_text=user_input)
@@ -446,7 +495,11 @@ class Agent:
         guard = LoopGuard()  # 思考/执行死循环检测器
         # 世界书工具：核心常驻 + 动态加载的长尾
         active_schemas = self.registry.to_openai_schemas()
-        loaded_ext: set = set()
+        # 初始已加载集合 = 核心 schema 的工具名（含 method_learn），防动态加载重复导致 "Tool names must be unique"
+        core_loaded = {s["function"]["name"] for s in active_schemas}
+        # 计划线内置工具（C2/C3 骨架）：始终可用
+        active_schemas = [_PLAN_SUBMIT_SCHEMA, _PLAN_UPDATE_SCHEMA] + active_schemas
+        loaded_ext: set = set(core_loaded)
         # 初始就按输入关键词预加载命中的长尾工具（世界书触发）
         for n in self.registry.suggest_ext(user_input, loaded_ext):
             sch = self.registry.get_schema(n)
@@ -458,6 +511,13 @@ class Agent:
             messages.append({"role": "system", "content": f"（已按当前任务预加载扩展工具：{', '.join(sorted(loaded_ext))}）"})
 
         while step < MAX_TOOL_STEPS:
+            # 计划线进度注入：每轮提醒当前进度（不持久化，随轮次动态更新）
+            if plan and plan.get("steps"):
+                messages.append({
+                    "role": "system",
+                    "content": "【当前计划线】（按计划推进，每完成一步立即用 plan_update 标记 done；"
+                               "计划已不合适应重新 plan_submit 覆盖）\n" + self._plan_to_text(plan),
+                })
             # soft 死循环信号 → 注入提示引导换策略（不打断）
             if guard.soft_prompt:
                 messages.append({"role": "system", "content": guard.soft_prompt})
@@ -466,9 +526,15 @@ class Agent:
             if resp.get("error"):
                 _emit({"type": "error", "error": resp["error"]})
                 return resp["error"]
-            # 类型判定：首个响应未触发工具 = C0 纯对话；触发工具 = C1/C2
-            if step == 0 and not resp.get("tool_calls"):
-                _emit({"type": "type", "task_type": "C0"})
+            # 类型判定：首轮响应未触发工具 = C0；触发工具 = C1；首轮含 plan_submit = C2/C3
+            if step == 0:
+                names0 = [tc.get("name", "") for tc in (resp.get("tool_calls") or [])]
+                if not names0:
+                    _emit({"type": "type", "task_type": "C0"})
+                elif "plan_submit" in names0:
+                    _emit({"type": "type", "task_type": "C2"})
+                else:
+                    _emit({"type": "type", "task_type": "C1"})
             _emit({"type": "think", "step": step})
             # 纯思考死循环检测（连续无工具 + 输出高度相似）
             llm_sig = guard.observe_llm(bool(resp.get("tool_calls")), resp.get("content") or "")
@@ -531,7 +597,17 @@ class Agent:
                 used_tools.append(name)
                 self._log_decision(name, args)
                 _emit({"type": "tool", "name": name, "ok": True, "step": step})
-                result = self.registry.execute(name, args)
+                # 计划线内置工具：本地处理（不落 registry，更新计划状态并广播）
+                if name == "plan_submit":
+                    result, plan = self._handle_plan_submit(args, plan)
+                    if plan:
+                        _emit({"type": "plan", "plan": json.loads(json.dumps(plan))})
+                elif name == "plan_update":
+                    result, plan = self._handle_plan_update(args, plan)
+                    if plan:
+                        _emit({"type": "plan", "plan": json.loads(json.dumps(plan))})
+                else:
+                    result = self.registry.execute(name, args)
                 ok = result.get("ok")
                 # 阶段反馈：工具执行完（含成功/失败）
                 _emit({"type": "stage", "name": name, "ok": ok, "step": step})
@@ -575,7 +651,8 @@ class Agent:
             if tracker is not None:
                 prev_left = (self.ongoing_task or {}).get("resume_left", 2)
                 if prev_left > 0:
-                    # 允许续接：存断点，剩余续接次数 -1
+                    # 允许续接：存断点（含计划线），剩余续接次数 -1
+                    tracker.plan = plan
                     archive = tracker.finish_task(content, success=False, complete=False, note=note)
                     self.ongoing_task = {
                         "task_id": tracker.task_id,
@@ -584,6 +661,8 @@ class Agent:
                         "stage_count": len(tracker.stages),
                         "resume_left": prev_left - 1,
                     }
+                    if plan:
+                        self.ongoing_task["plan"] = plan
                     self._log(f"[task] 未完成（{'超限' if not loop_hit else '熔断'}），断点已存：{archive}")
                     content = (
                         f"[任务未完成] 已执行 {len(tracker.stages)} 步后"
@@ -607,12 +686,56 @@ class Agent:
         # 任务结束：生成阶段总结并存档
         if tracker is not None and self.ongoing_task is None:
             success = not content.startswith("（") and not content.startswith("[任务未完成]")
+            tracker.plan = plan
             archive = tracker.finish_task(content, success=success)
             self._log(f"[task] 任务结束，档案：{archive}")
             self._backup(force=True)  # 任务结束先备份（用户止损原则：状态变更立即保护）
         self.history.append({"role": "assistant", "content": content})
         _emit({"type": "done", "reply": content})
         return content
+
+    # ---------- 计划线（C2/C3） ----------
+    def _plan_to_text(self, plan: Dict) -> str:
+        """计划线渲染成文本（注入 LLM 上下文用）。"""
+        icon = {"todo": "○", "done": "✓", "fail": "✗"}
+        lines = []
+        for s in plan.get("steps", []):
+            g = s.get("group", "")
+            lines.append(f"{icon.get(s.get('status', 'todo'), '○')} [{s.get('id')}]"
+                         f"{'（' + g + '）' if g else ''} {s.get('title', '')}")
+        return "\n".join(lines) or "（空计划）"
+
+    def _handle_plan_submit(self, args: Dict, cur: Optional[Dict]) -> tuple:
+        """接收/覆盖计划线。返回 (工具结果, 新计划)。"""
+        steps = args.get("steps") or []
+        if not steps:
+            return ({"ok": False, "error": "计划线为空：steps 不能为空"}, cur)
+        plan = {
+            "type": "C3" if args.get("type") == "C3" else "C2",
+            "groups": [{"id": g.get("id"), "title": g.get("title")} for g in (args.get("groups") or [])],
+            "steps": [{"id": s.get("id"), "title": s.get("title"),
+                       "group": s.get("group", ""), "status": "todo"} for s in steps],
+        }
+        self._log(f"[plan] 计划线建立（{plan['type']}，{len(plan['steps'])} 步）")
+        return ({"ok": True, "result": f"计划线已建立：{plan['type']}，{len(plan['steps'])} 步"}, plan)
+
+    def _handle_plan_update(self, args: Dict, cur: Optional[Dict]) -> tuple:
+        """更新步骤状态。返回 (工具结果, 新计划)。"""
+        if not cur:
+            return ({"ok": False, "error": "尚无计划线，请先 plan_submit"}, cur)
+        sid = args.get("step_id")
+        status = "done" if args.get("status") == "done" else "fail"
+        found = False
+        for s in cur["steps"]:
+            if s["id"] == sid:
+                s["status"] = status
+                found = True
+                break
+        if not found:
+            return ({"ok": False, "error": f"步骤不存在: {sid}"}, cur)
+        self._log(f"[plan] 步骤 {sid} → {status}")
+        done = sum(1 for s in cur["steps"] if s["status"] == "done")
+        return ({"ok": True, "result": f"步骤 {sid} 已标记 {status}（完成 {done}/{len(cur['steps'])}）"}, cur)
 
     # ---------- 续接 ----------
     _RESUME_KEYWORDS = ("继续", "接着", "续", "接着做", "继续做", "完成它", "接着干", "resume", "continue")
@@ -641,10 +764,14 @@ class Agent:
                 import re
                 for m in re.finditer(r"(\d+)\. \*\*([^*]+)\*\*", text):
                     stages_summary += f"- 阶段{m.group(1)}: {m.group(2).strip()}\n"
+            plan_text = ""
+            if ongoing.get("plan"):
+                plan_text = "\n未完成计划线（恢复后按此继续推进）：\n" + self._plan_to_text(ongoing["plan"])
             return (
                 "【续接任务上下文】你在继续一个未完成的任务，以下是断点信息，请据此继续，不要重头再来：\n"
                 f"任务目标：{ongoing['goal']}\n"
-                f"已执行 {ongoing['stage_count']} 步：\n{stages_summary or '（无阶段记录）'}\n"
+                f"已执行 {ongoing['stage_count']} 步：\n{stages_summary or '（无阶段记录）'}"
+                f"{plan_text}\n"
                 "继续推进剩余部分，或判断任务目标已达成则总结收尾。"
             )
         except Exception as e:  # noqa: BLE001
@@ -801,6 +928,12 @@ class Agent:
 【分批思考·轻重缓急】复杂任务拆成子步骤，按轻重缓急推进：先处理重要/阻塞/影响判断的，再处理例行/琐碎的。
 一次做不完没关系——阶段记录会保存断点，被截断可回复"继续"续接（思维链多次思考，不记忆断裂）。
 反思也分轻重：重要事件深度反思，例行事件轻量带过，不一次性堆叠。
+
+【计划线·复杂任务先规划】任务需要多步规划时（需探索/多阶段/多任务集合，预计超过 8 步），先规划再执行：
+- 首轮先调 plan_submit 提交步骤清单（每步一个 id 和一个 title，按执行顺序排列；多任务集合用 type=C3 + group 分组表达子任务），随后逐步执行。
+- 每完成一步立即用 plan_update 标记 done（或 fail）；前端会实时展示待办/进行中/完成。
+- 简单任务（≤8 步、流程明确的即时任务）无需计划线，直接执行工具即可（避免过度规划）。
+- 计划可随时调整：重新 plan_submit 即覆盖；计划完成后输出最终总结收尾。
 
 【成本意识·止损原则】任何行动都有成本（工具步数/token/时间），执行前想清楚：这件事值得投入多少？
 - 不执着：一条路走不通就换路；承认"此路不通"是正常判断，不是失败。
