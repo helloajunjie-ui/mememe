@@ -8,11 +8,15 @@
 - 与 gdrive_tools（Google Drive）同属"海外官方网盘联通"工具组，接口设计对称
   （list/read/write/mkdir/delete/whoami），便于上层统一调度。
 
+凭据双通道（v0.2 多账户化）：
+- 通道1 环境变量（默认）：DROPBOX_ACCESS_TOKEN（短令牌）或
+  DROPBOX_REFRESH_TOKEN + DROPBOX_APP_KEY（+可选 DROPBOX_APP_SECRET，长令牌推荐）。
+- 通道2 加密凭据库（core.cred_vault，data/credentials/ 加密落盘，多账户并存）：
+  工具参数传 account='某账户别名' 即用该账户凭据；缺字段回落环境变量。
+  账户管理见 account 工具组（account_add/account_list/account_test）。
+
 安全边界（如实）：
-- 凭据：从环境变量读取（不硬编码、不进日志、不进 registry、不落盘）。支持两种：
-  * 短令牌：DROPBOX_ACCESS_TOKEN（OAuth2 access token，会过期）
-  * 长令牌（推荐）：DROPBOX_REFRESH_TOKEN + DROPBOX_APP_KEY（+ 可选 DROPBOX_APP_SECRET），
-    SDK 内部自动用 refresh token 换新 access token。
+- 凭据不硬编码、不进日志、不进 registry；vault 通道密文与密钥在 data/credentials/。
 - 传输：SDK 强制 HTTPS（官方 api.dropboxapi.com），无明文降级路径。
 - 操作面：read/write/mkdir 无 confirm（外部云盘、非本地破坏性文件，且 write 默认
   strict_conflict 不覆盖既有冲突文件）；delete 需 confirm 口令（防误删远端文件）。
@@ -26,44 +30,63 @@ from typing import Any, Dict
 from tools.base import tool
 
 # ---- 共享层：凭据与 client ----
-_client_singleton = None  # 技术债：模块级懒加载单例，避免每次调用重建 client
+_clients: Dict[str, Any] = {}  # key=f"dropbox:{account}"（account="" 为环境变量默认）→ 懒加载 client
 
 _MAX_READ_BYTES = 2 * 1024 * 1024  # 单文件读上限 2MB（防拉爆内存）
 _MAX_WRITE_BYTES = 10 * 1024 * 1024  # 单文件写上限 10MB
 
+_SERVICE = "dropbox"
 
-def _creds() -> Dict[str, str]:
-    """从环境变量读取 Dropbox 凭据。"""
-    return {
+
+def _resolve_creds(account: str, env_map: Dict[str, str]) -> Dict[str, str]:
+    """凭据解析：环境变量为基座；account 非空时用凭据库覆盖（缺字段回落环境变量）。"""
+    creds = dict(env_map)
+    if account:
+        try:
+            from core.cred_vault import resolve
+        except ImportError:
+            raise ValueError(f"凭据库不可用（无法导入 core.cred_vault），不能使用 account='{account}'。请用环境变量（去掉 account 参数）。")
+        merged, _src = resolve(_SERVICE, account, env_map)  # 返回 (dict, source)；账户不存在抛 VaultError
+        for k, v in merged.items():
+            if v:
+                creds[k] = v
+    return creds
+
+
+def _creds(account: str = "") -> Dict[str, str]:
+    """读取 Dropbox 凭据：account='' 走环境变量；否则以环境变量为基座、凭据库覆盖。"""
+    return _resolve_creds(account, {
         "access_token": os.environ.get("DROPBOX_ACCESS_TOKEN", "").strip(),
         "refresh_token": os.environ.get("DROPBOX_REFRESH_TOKEN", "").strip(),
         "app_key": os.environ.get("DROPBOX_APP_KEY", "").strip(),
         "app_secret": os.environ.get("DROPBOX_APP_SECRET", "").strip(),
-    }
+    })
 
 
-def _client():
-    """懒加载官方 dropbox client（单例）。凭据缺失时抛 ValueError。"""
-    global _client_singleton
-    if _client_singleton is not None:
-        return _client_singleton
-    creds = _creds()
+def _client(account: str = ""):
+    """懒加载官方 dropbox client（按 account 缓存，多账户并存）。凭据缺失时抛 ValueError。"""
+    key = f"{_SERVICE}:{account}"
+    if key in _clients:
+        return _clients[key]
+    creds = _creds(account)
     if not (creds["access_token"] or creds["refresh_token"]):
         raise ValueError(
-            "缺少 Dropbox 凭据：请先设置环境变量 DROPBOX_ACCESS_TOKEN（短令牌）"
-            "或 DROPBOX_REFRESH_TOKEN + DROPBOX_APP_KEY（长令牌，推荐）"
+            "缺少 Dropbox 凭据：请设置环境变量 DROPBOX_ACCESS_TOKEN（短令牌）或 "
+            "DROPBOX_REFRESH_TOKEN + DROPBOX_APP_KEY（长令牌，推荐）；"
+            "或用 account_add 添加账户后传 account 参数"
         )
     if creds["refresh_token"] and not creds["app_key"]:
-        raise ValueError("使用 refresh token 时必须同时设置 DROPBOX_APP_KEY")
+        raise ValueError("使用 refresh token 时必须同时设置 DROPBOX_APP_KEY（环境变量或凭据库中）")
     import dropbox as dbx
 
-    _client_singleton = dbx.Dropbox(
+    client = dbx.Dropbox(
         oauth2_access_token=creds["access_token"] or None,
         oauth2_refresh_token=creds["refresh_token"] or None,
         app_key=creds["app_key"] or None,
         app_secret=creds["app_secret"] or None,
     )
-    return _client_singleton
+    _clients[key] = client
+    return client
 
 
 def _ok(**kw: Any) -> dict:
@@ -81,7 +104,7 @@ def _norm_path(path: str) -> str:
         return ""
     if not path.startswith("/"):
         path = "/" + path
-    if path != "/" and path.endswith("/"):
+    if path != "/":
         path = path.rstrip("/")
     return path
 
@@ -107,11 +130,25 @@ def _entry_to_dict(e) -> Dict[str, Any]:
     }
 
 
+_ACC = {
+    "type": "string",
+    "description": "可选：加密凭据库中的账户别名（account_add 添加）。缺省/留空走环境变量（DROPBOX_ACCESS_TOKEN 或 DROPBOX_REFRESH_TOKEN+APP_KEY）。",
+    "default": "",
+}
+
+
+_ACC = {
+    "type": "string",
+    "description": "可选：凭据库账户别名（account_add(service='dropbox', account=...) 添加）。留空走环境变量默认账户（DROPBOX_ACCESS_TOKEN 或 DROPBOX_REFRESH_TOKEN+APP_KEY）。",
+    "default": "",
+}
+
+
 @tool(
     name="dropbox_list",
     description=(
         "列 Dropbox 指定目录下的条目（文件/文件夹）。返回 name/path/is_dir/size。"
-        "凭据走环境变量 DROPBOX_ACCESS_TOKEN 或 DROPBOX_REFRESH_TOKEN+APP_KEY。"
+        "凭据：account 为空走环境变量，否则用凭据库中该账户。"
     ),
     parameters={
         "type": "object",
@@ -131,13 +168,14 @@ def _entry_to_dict(e) -> Dict[str, Any]:
                 "description": "单次返回条目上限（分页）。默认 100。",
                 "default": 100,
             },
+            "account": _ACC,
         },
         "required": [],
     },
 )
-def dropbox_list(path: str = "", recursive: bool = False, limit: int = 100) -> dict:
+def dropbox_list(path: str = "", recursive: bool = False, limit: int = 100, account: str = "") -> dict:
     try:
-        c = _client()
+        c = _client(account)
         p = _norm_path(path) or ""
         res = c.files_list_folder(p, recursive=bool(recursive), limit=int(limit or 100))
         entries = [_entry_to_dict(e) for e in (res.entries or [])]
@@ -156,7 +194,7 @@ def dropbox_list(path: str = "", recursive: bool = False, limit: int = 100) -> d
     name="dropbox_read",
     description=(
         "读取 Dropbox 指定文本文件的内容（UTF-8，上限 2MB）。返回 content 与元信息。"
-        "凭据走环境变量 DROPBOX_ACCESS_TOKEN 或 DROPBOX_REFRESH_TOKEN+APP_KEY。"
+        "凭据：account 为空走环境变量，否则用凭据库中该账户。"
     ),
     parameters={
         "type": "object",
@@ -170,13 +208,14 @@ def dropbox_list(path: str = "", recursive: bool = False, limit: int = 100) -> d
                 "description": "返回内容最大字符数（防超长截断）。默认 20000。",
                 "default": 20000,
             },
+            "account": _ACC,
         },
         "required": ["path"],
     },
 )
-def dropbox_read(path: str, max_chars: int = 20000) -> dict:
+def dropbox_read(path: str, max_chars: int = 20000, account: str = "") -> dict:
     try:
-        c = _client()
+        c = _client(account)
         p = _norm_path(path)
         if not p or p == "/":
             raise ValueError("path 不能为空或根目录（需指定具体文件）")
@@ -204,7 +243,7 @@ def dropbox_read(path: str, max_chars: int = 20000) -> dict:
     name="dropbox_write",
     description=(
         "向 Dropbox 写入一个文本文件（UTF-8，上限 10MB）。默认不覆盖既有文件"
-        "（strict_conflict 语义，冲突时报错）。凭据走环境变量。"
+        "（strict_conflict 语义，冲突时报错）。凭据：account 为空走环境变量，否则用凭据库中该账户。"
     ),
     parameters={
         "type": "object",
@@ -222,13 +261,14 @@ def dropbox_read(path: str, max_chars: int = 20000) -> dict:
                 "description": "若文件已存在是否覆盖。默认 false（不覆盖，冲突报错）。",
                 "default": False,
             },
+            "account": _ACC,
         },
         "required": ["path", "content"],
     },
 )
-def dropbox_write(path: str, content: str, overwrite: bool = False) -> dict:
+def dropbox_write(path: str, content: str, overwrite: bool = False, account: str = "") -> dict:
     try:
-        c = _client()
+        c = _client(account)
         p = _norm_path(path)
         if not p or p == "/":
             raise ValueError("path 不能为空或根目录（需指定具体文件）")
@@ -253,7 +293,7 @@ def dropbox_write(path: str, content: str, overwrite: bool = False) -> dict:
 @tool(
     name="dropbox_mkdir",
     description=(
-        "在 Dropbox 创建目录。若目录已存在则报错。凭据走环境变量。"
+        "在 Dropbox 创建目录。若目录已存在则报错。凭据：account 为空走环境变量，否则用凭据库中该账户。"
     ),
     parameters={
         "type": "object",
@@ -262,13 +302,14 @@ def dropbox_write(path: str, content: str, overwrite: bool = False) -> dict:
                 "type": "string",
                 "description": "要创建的目录路径，如 '/docs/newfolder'。",
             },
+            "account": _ACC,
         },
         "required": ["path"],
     },
 )
-def dropbox_mkdir(path: str) -> dict:
+def dropbox_mkdir(path: str, account: str = "") -> dict:
     try:
-        c = _client()
+        c = _client(account)
         p = _norm_path(path)
         if not p or p == "/":
             raise ValueError("path 不能为空或根目录（需指定具体目录名）")
@@ -287,7 +328,7 @@ def dropbox_mkdir(path: str) -> dict:
     name="dropbox_delete",
     description=(
         "删除 Dropbox 中的文件或目录（含其内容）。破坏性操作，需传 confirm='DELETE'"
-        "二次确认。凭据走环境变量。"
+        "二次确认。凭据：account 为空走环境变量，否则用凭据库中该账户。"
     ),
     parameters={
         "type": "object",
@@ -300,15 +341,16 @@ def dropbox_mkdir(path: str) -> dict:
                 "type": "string",
                 "description": "二次确认口令，必须为 'DELETE' 才会执行。",
             },
+            "account": _ACC,
         },
         "required": ["path", "confirm"],
     },
 )
-def dropbox_delete(path: str, confirm: str = "") -> dict:
+def dropbox_delete(path: str, confirm: str = "", account: str = "") -> dict:
     try:
         if confirm != "DELETE":
             raise ValueError("需二次确认：请传 confirm='DELETE' 才会真正删除远端文件")
-        c = _client()
+        c = _client(account)
         p = _norm_path(path)
         if not p or p == "/":
             raise ValueError("path 不能为空或根目录（禁止删除根目录）")
@@ -327,13 +369,18 @@ def dropbox_delete(path: str, confirm: str = "") -> dict:
     name="dropbox_whoami",
     description=(
         "Dropbox 凭据连通性校验（读取当前账号信息作为探针）。返回账号名/邮箱/类型。"
-        "凭据走环境变量。"
+        "凭据：account 为空走环境变量，否则用凭据库中该账户。"
     ),
-    parameters={"type": "object", "properties": {}, "required": []},
+    parameters={
+        "type": "object",
+        "properties": {"account": _ACC},
+            "account": _ACC,
+        "required": [],
+    },
 )
-def dropbox_whoami() -> dict:
+def dropbox_whoami(account: str = "") -> dict:
     try:
-        c = _client()
+        c = _client(account)
         acct = c.users_get_current_account()
         nm = getattr(acct, "name", None)
         return _ok(

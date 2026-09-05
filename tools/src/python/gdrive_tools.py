@@ -8,11 +8,15 @@
   fileId 驱动（无真实路径层级），故本工具组接口以 fileId/parentId 为主，与 Dropbox
   的路径语义不同（如实标注差异）。
 
+凭据双通道（v0.2 多账户化）：
+- 通道1 环境变量（默认）：GOOGLE_DRIVE_TOKEN_JSON（OAuth2 用户凭据 JSON 字符串）
+  或 GOOGLE_DRIVE_SA_JSON（服务账号 JSON 字符串）。
+- 通道2 加密凭据库（core.cred_vault，data/credentials/ 加密落盘，多账户并存）：
+  工具参数传 account='某账户别名' 即用该账户凭据；缺字段回落环境变量。
+  账户管理见 account 工具组（account_add/account_list/account_test）。
+
 安全边界（如实）：
-- 凭据：从环境变量读取（不硬编码、不进日志、不进 registry、不落盘）。支持两种：
-  * OAuth2 用户凭据：GOOGLE_DRIVE_TOKEN_JSON（含 token/refresh_token/token_uri/
-    client_id/client_secret/scopes 的 JSON 字符串），SDK 自动刷新 access token。
-  * 服务账号：GOOGLE_DRIVE_SA_JSON（服务账号 JSON 字符串），适合无人值守。
+- 凭据不硬编码、不进日志、不进 registry；vault 通道密文与密钥在 data/credentials/。
 - 传输：SDK 强制 HTTPS（官方 www.googleapis.com），无明文降级路径。
 - 操作面：read/write/mkdir 无 confirm（外部云盘、非本地破坏性文件）；delete 需
   confirm 口令（防误删远端文件）。
@@ -27,28 +31,45 @@ from typing import Any, Dict
 from tools.base import tool
 
 # ---- 共享层：凭据与 client ----
-_client_singleton = None  # 技术债：模块级懒加载单例，避免每次调用重建 client
+_clients: Dict[str, Any] = {}  # key=f"gdrive:{account}"（account="" 为环境变量默认）→ 懒加载 service
 
 _MAX_READ_BYTES = 2 * 1024 * 1024  # 单文件读上限 2MB（防拉爆内存）
 _MAX_WRITE_BYTES = 10 * 1024 * 1024  # 单文件写上限 10MB
 _SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+_SERVICE = "gdrive"
 
 
-def _creds() -> Dict[str, str]:
-    """从环境变量读取 Google Drive 凭据。"""
-    return {
+def _resolve_creds(account: str, env_map: Dict[str, str]) -> Dict[str, str]:
+    """凭据解析：环境变量为基座；account 非空时用凭据库覆盖（缺字段回落环境变量）。"""
+    creds = dict(env_map)
+    if account:
+        try:
+            from core.cred_vault import resolve
+        except ImportError:
+            raise ValueError(f"凭据库不可用（无法导入 core.cred_vault），不能使用 account='{account}'。请用环境变量（去掉 account 参数）。")
+        merged, _src = resolve(_SERVICE, account, env_map)  # 返回 (dict, source)；账户不存在抛 VaultError
+        for k, v in merged.items():
+            if v:
+                creds[k] = v
+    return creds
+
+
+def _creds(account: str = "") -> Dict[str, str]:
+    """读取 Google Drive 凭据：account='' 走环境变量；否则以环境变量为基座、凭据库覆盖。"""
+    return _resolve_creds(account, {
         "token_json": os.environ.get("GOOGLE_DRIVE_TOKEN_JSON", "").strip(),
         "sa_json": os.environ.get("GOOGLE_DRIVE_SA_JSON", "").strip(),
-    }
+    })
 
 
-def _build_credentials():
-    """根据环境变量构造 google-auth 凭据。"""
-    creds = _creds()
+def _build_credentials(account: str = ""):
+    """根据凭据构造 google-auth 凭据（服务账号优先，同原逻辑）。"""
+    creds = _creds(account)
     if not (creds["token_json"] or creds["sa_json"]):
         raise ValueError(
             "缺少 Google Drive 凭据：请设置环境变量 GOOGLE_DRIVE_TOKEN_JSON"
-            "（OAuth2 用户凭据）或 GOOGLE_DRIVE_SA_JSON（服务账号）"
+            "（OAuth2 用户凭据）或 GOOGLE_DRIVE_SA_JSON（服务账号）；"
+            "或用 account_add 添加账户后传 account 参数"
         )
     if creds["sa_json"]:
         from google.oauth2 import service_account
@@ -69,17 +90,17 @@ def _build_credentials():
     )
 
 
-def _client():
-    """懒加载 Google Drive service（单例）。凭据缺失时抛 ValueError。"""
-    global _client_singleton
-    if _client_singleton is not None:
-        return _client_singleton
+def _client(account: str = ""):
+    """懒加载 Google Drive service（按 account 缓存，多账户并存）。凭据缺失时抛 ValueError。"""
+    key = f"{_SERVICE}:{account}"
+    if key in _clients:
+        return _clients[key]
     from googleapiclient.discovery import build
 
-    _client_singleton = build(
-        "drive", "v3", credentials=_build_credentials(), cache_discovery=False
+    _clients[key] = build(
+        "drive", "v3", credentials=_build_credentials(account), cache_discovery=False
     )
-    return _client_singleton
+    return _clients[key]
 
 
 def _ok(**kw: Any) -> dict:
@@ -103,11 +124,25 @@ def _file_to_dict(f) -> Dict[str, Any]:
     }
 
 
+_ACC = {
+    "type": "string",
+    "description": "可选：加密凭据库中的账户别名（account_add 添加）。缺省/留空走环境变量（GOOGLE_DRIVE_TOKEN_JSON 或 GOOGLE_DRIVE_SA_JSON）。",
+    "default": "",
+}
+
+
+_ACC = {
+    "type": "string",
+    "description": "可选：凭据库账户别名（account_add(service='gdrive', account=...) 添加）。留空走环境变量默认账户（GOOGLE_DRIVE_TOKEN_JSON 或 GOOGLE_DRIVE_SA_JSON）。",
+    "default": "",
+}
+
+
 @tool(
     name="gdrive_list",
     description=(
         "列 Google Drive 指定文件夹下的条目（文件/文件夹）。返回 id/name/is_dir/size。"
-        "凭据走环境变量 GOOGLE_DRIVE_TOKEN_JSON 或 GOOGLE_DRIVE_SA_JSON。"
+        "凭据：account 为空走环境变量，否则用凭据库中该账户。"
     ),
     parameters={
         "type": "object",
@@ -127,13 +162,14 @@ def _file_to_dict(f) -> Dict[str, Any]:
                 "description": "单次返回条目上限（分页）。默认 100。",
                 "default": 100,
             },
+            "account": _ACC,
         },
         "required": [],
     },
 )
-def gdrive_list(parent_id: str = "root", query: str = "", limit: int = 100) -> dict:
+def gdrive_list(parent_id: str = "root", query: str = "", limit: int = 100, account: str = "") -> dict:
     try:
-        svc = _client()
+        svc = _client(account)
         parent = (parent_id or "root").strip()
         q = f"'{parent}' in parents and trashed=false"
         if query and str(query).strip():
@@ -163,7 +199,7 @@ def gdrive_list(parent_id: str = "root", query: str = "", limit: int = 100) -> d
     name="gdrive_read",
     description=(
         "读取 Google Drive 指定文本文件的内容（UTF-8，上限 2MB）。返回 content 与元信息。"
-        "凭据走环境变量 GOOGLE_DRIVE_TOKEN_JSON 或 GOOGLE_DRIVE_SA_JSON。"
+        "凭据：account 为空走环境变量，否则用凭据库中该账户。"
     ),
     parameters={
         "type": "object",
@@ -177,13 +213,14 @@ def gdrive_list(parent_id: str = "root", query: str = "", limit: int = 100) -> d
                 "description": "返回内容最大字符数（防超长截断）。默认 20000。",
                 "default": 20000,
             },
+            "account": _ACC,
         },
         "required": ["file_id"],
     },
 )
-def gdrive_read(file_id: str, max_chars: int = 20000) -> dict:
+def gdrive_read(file_id: str, max_chars: int = 20000, account: str = "") -> dict:
     try:
-        svc = _client()
+        svc = _client(account)
         fid = (file_id or "").strip()
         if not fid:
             raise ValueError("file_id 不能为空")
@@ -212,15 +249,15 @@ def gdrive_read(file_id: str, max_chars: int = 20000) -> dict:
 @tool(
     name="gdrive_write",
     description=(
-        "向 Google Drive 写入一个文本文件（UTF-8，上限 10MB）。默认不覆盖既有文件"
-        "（同名冲突时报错）。凭据走环境变量。"
+        "把文本内容写入 Google Drive（UTF-8，上限 10MB）。默认不覆盖同名文件"
+        "（冲突报错，需传 overwrite=true 才覆盖）。凭据：account 为空走环境变量，否则用凭据库中该账户。"
     ),
     parameters={
         "type": "object",
         "properties": {
             "name": {
                 "type": "string",
-                "description": "文件名（含扩展名），如 'note.txt'。",
+                "description": "要创建的文件名。",
             },
             "content": {
                 "type": "string",
@@ -236,13 +273,14 @@ def gdrive_read(file_id: str, max_chars: int = 20000) -> dict:
                 "description": "若同名文件已存在是否覆盖。默认 false（不覆盖，冲突报错）。",
                 "default": False,
             },
+            "account": _ACC,
         },
         "required": ["name", "content"],
     },
 )
-def gdrive_write(name: str, content: str, parent_id: str = "root", overwrite: bool = False) -> dict:
+def gdrive_write(name: str, content: str, parent_id: str = "root", overwrite: bool = False, account: str = "") -> dict:
     try:
-        svc = _client()
+        svc = _client(account)
         fname = (name or "").strip()
         if not fname:
             raise ValueError("name 不能为空")
@@ -285,7 +323,7 @@ def gdrive_write(name: str, content: str, parent_id: str = "root", overwrite: bo
 @tool(
     name="gdrive_mkdir",
     description=(
-        "在 Google Drive 创建文件夹。若同名文件夹已存在则报错。凭据走环境变量。"
+        "在 Google Drive 创建文件夹。若同名文件夹已存在则报错。凭据：account 为空走环境变量，否则用凭据库中该账户。"
     ),
     parameters={
         "type": "object",
@@ -299,13 +337,14 @@ def gdrive_write(name: str, content: str, parent_id: str = "root", overwrite: bo
                 "description": "父文件夹 id。默认 'root'。",
                 "default": "root",
             },
+            "account": _ACC,
         },
         "required": ["name"],
     },
 )
-def gdrive_mkdir(name: str, parent_id: str = "root") -> dict:
+def gdrive_mkdir(name: str, parent_id: str = "root", account: str = "") -> dict:
     try:
-        svc = _client()
+        svc = _client(account)
         fname = (name or "").strip()
         if not fname:
             raise ValueError("name 不能为空")
@@ -333,7 +372,7 @@ def gdrive_mkdir(name: str, parent_id: str = "root") -> dict:
     name="gdrive_delete",
     description=(
         "删除 Google Drive 中的文件或文件夹（含其内容）。破坏性操作，需传 "
-        "confirm='DELETE' 二次确认。凭据走环境变量。"
+        "confirm='DELETE' 二次确认。凭据：account 为空走环境变量，否则用凭据库中该账户。"
     ),
     parameters={
         "type": "object",
@@ -346,15 +385,16 @@ def gdrive_mkdir(name: str, parent_id: str = "root") -> dict:
                 "type": "string",
                 "description": "二次确认口令，必须为 'DELETE' 才会执行。",
             },
+            "account": _ACC,
         },
         "required": ["file_id", "confirm"],
     },
 )
-def gdrive_delete(file_id: str, confirm: str = "") -> dict:
+def gdrive_delete(file_id: str, confirm: str = "", account: str = "") -> dict:
     try:
         if confirm != "DELETE":
             raise ValueError("需二次确认：请传 confirm='DELETE' 才会真正删除远端文件")
-        svc = _client()
+        svc = _client(account)
         fid = (file_id or "").strip()
         if not fid:
             raise ValueError("file_id 不能为空")
@@ -368,13 +408,18 @@ def gdrive_delete(file_id: str, confirm: str = "") -> dict:
     name="gdrive_whoami",
     description=(
         "Google Drive 凭据连通性校验（读取账号信息作为探针）。返回账号显示名/邮箱。"
-        "凭据走环境变量 GOOGLE_DRIVE_TOKEN_JSON 或 GOOGLE_DRIVE_SA_JSON。"
+        "凭据：account 为空走环境变量，否则用凭据库中该账户。"
     ),
-    parameters={"type": "object", "properties": {}, "required": []},
+    parameters={
+        "type": "object",
+        "properties": {"account": _ACC},
+            "account": _ACC,
+        "required": [],
+    },
 )
-def gdrive_whoami() -> dict:
+def gdrive_whoami(account: str = "") -> dict:
     try:
-        svc = _client()
+        svc = _client(account)
         about = svc.about().get(fields="user(displayName,emailAddress)").execute()
         user = about.get("user") or {}
         return _ok(

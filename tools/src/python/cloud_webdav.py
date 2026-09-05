@@ -40,6 +40,14 @@ def _password() -> str:
     return os.environ.get("WEBDAV_PASSWORD", "").strip()
 
 
+
+_ACC = {
+    "type": "string",
+    "description": "可选：凭据库中的账户别名（account_add 添加，可存 base_url/username/password）。"
+                   "缺省/留空：base_url/username 走显式传参，密码走环境变量 WEBDAV_PASSWORD。",
+    "default": "",
+}
+
 def _is_private_host(host: str) -> bool:
     """判断主机是否为私有网段/回环（用于 HTTP 明文传输的许可判定）。"""
     import ipaddress
@@ -68,6 +76,30 @@ def _normalize_base(base_url: str) -> str:
         raise ValueError("HTTP 明文仅允许局域网私有网段主机；公网 WebDAV 请用 HTTPS")
     base_path = parsed.path.rstrip("/")
     return scheme, parsed.netloc, base_path
+
+
+def _resolve(account: str, base_url: str, username: str):
+    """解析 WebDAV 凭据：account='' 走显式参数+环境变量；否则 vault 提供基座，显式参数非空则覆盖。
+    返回 (base_url, username, password)。"""
+    password = os.environ.get("WEBDAV_PASSWORD", "").strip()
+    if not account:
+        return base_url, username, password
+    try:
+        from core.cred_vault import resolve as _vres
+    except ImportError:
+        raise ValueError(
+            f"凭据库不可用（无法导入 core.cred_vault），不能使用 account='{account}'。"
+            "请去掉 account 参数改用环境变量 + 显式传参。"
+        )
+    env = {"base_url": (base_url or "").strip(),
+           "username": (username or "").strip(),
+           "password": password}
+    merged, _src = _vres("webdav", account, env)
+    return (
+        (merged.get("base_url") or "").strip(),
+        (merged.get("username") or "").strip(),
+        (merged.get("password") or "").strip(),
+    )
 
 
 def _client(base_url: str, username: str, password: str) -> httpx.Client:
@@ -119,19 +151,21 @@ def _http_err(r: httpx.Response) -> str:
     "cloud_webdav_list",
     "列出局域网/个人云 WebDAV 目录内容（PROPFIND）。支持飞牛云/群晖/威联通/Nextcloud/坚果云等。"
     "base_url 传 WebDAV 根地址（如 http://192.168.1.100:5005 或 https://dav.jianguoyun.com/dav/），"
-    "username 传账号，密码从环境变量 WEBDAV_PASSWORD 读取。",
+    "username 传账号，凭据：account 为空时密码走环境变量 WEBDAV_PASSWORD；传 account 则用凭据库中该账户（显式参数非空覆盖）。",
     {
         "type": "object",
         "properties": {
-            "base_url": {"type": "string", "description": "WebDAV 根地址，如 http://192.168.1.100:5005 或 https://dav.jianguoyun.com/dav/"},
+            "base_url": {"type": "string", "description": "WebDAV 根地址（传 account 时可留空，由凭据库补），如 http://192.168.1.100:5005 或 https://dav.jianguoyun.com/dav/"},
             "path": {"type": "string", "description": "WebDAV 内相对目录路径，默认根目录 /"},
-            "username": {"type": "string", "description": "WebDAV 账号（密码从环境变量 WEBDAV_PASSWORD 读取）"},
+            "username": {"type": "string", "description": "WebDAV 账号（传 account 时可留空，由凭据库补；缺省密码走环境变量 WEBDAV_PASSWORD）"},
+            "account": _ACC,
         },
-        "required": ["base_url", "username"],
+        "required": [],
     },
 )
-def cloud_webdav_list(base_url: str, username: str, path: str = "/") -> dict:
+def cloud_webdav_list(base_url: str = "", username: str = "", path: str = "/", account: str = "") -> dict:
     try:
+        base_url, username, password = _resolve(account, base_url, username)
         scheme, netloc, base_path = _normalize_base(base_url)
         url = _join(base_path, path)
         body = (
@@ -140,7 +174,7 @@ def cloud_webdav_list(base_url: str, username: str, path: str = "/") -> dict:
             '<d:prop><d:resourcetype/><d:getcontentlength/><d:getlastmodified/></d:prop>'
             '</d:propfind>'
         )
-        with _client(base_url, username, _password()) as c:
+        with _client(base_url, username, password) as c:
             r = c.request("PROPFIND", url, content=body, headers={"Depth": "1"})
             if r.status_code not in (200, 207):
                 return {"ok": False, "error": f"列目录失败: {_http_err(r)}"}
@@ -199,7 +233,7 @@ def _unquote(s: str) -> str:
 @tool(
     "cloud_webdav_read",
     "读取局域网/个人云 WebDAV 上的文件内容（GET，文本，默认上限 2MB）。"
-    "base_url/username 同 cloud_webdav_list，密码从环境变量 WEBDAV_PASSWORD 读取。",
+    "base_url/username 同 cloud_webdav_list，凭据：account 为空时密码走环境变量 WEBDAV_PASSWORD；传 account 则用凭据库中该账户（显式参数非空覆盖）。",
     {
         "type": "object",
         "properties": {
@@ -207,15 +241,17 @@ def _unquote(s: str) -> str:
             "path": {"type": "string", "description": "WebDAV 内文件路径，如 /文档/笔记.md"},
             "username": {"type": "string", "description": "WebDAV 账号"},
             "max_chars": {"type": "number", "description": "最多返回字符数，默认 20000"},
+            "account": _ACC,
         },
-        "required": ["base_url", "path", "username"],
+        "required": ["path"],
     },
 )
-def cloud_webdav_read(base_url: str, path: str, username: str, max_chars: int = 20000) -> dict:
+def cloud_webdav_read(path: str, base_url: str = "", username: str = "", max_chars: int = 20000, account: str = "") -> dict:
     try:
+        base_url, username, password = _resolve(account, base_url, username)
         scheme, netloc, base_path = _normalize_base(base_url)
         url = _join(base_path, path)
-        with _client(base_url, username, _password()) as c:
+        with _client(base_url, username, password) as c:
             r = c.get(url)
             if r.status_code != 200:
                 return {"ok": False, "error": f"读文件失败: {_http_err(r)}"}
@@ -233,7 +269,7 @@ def cloud_webdav_read(base_url: str, path: str, username: str, max_chars: int = 
 @tool(
     "cloud_webdav_write",
     "把文本内容写入局域网/个人云 WebDAV 文件（PUT，默认上限 10MB，自动建父目录）。"
-    "base_url/username 同 cloud_webdav_list，密码从环境变量 WEBDAV_PASSWORD 读取。",
+    "base_url/username 同 cloud_webdav_list，凭据：account 为空时密码走环境变量 WEBDAV_PASSWORD；传 account 则用凭据库中该账户（显式参数非空覆盖）。",
     {
         "type": "object",
         "properties": {
@@ -241,18 +277,20 @@ def cloud_webdav_read(base_url: str, path: str, username: str, max_chars: int = 
             "path": {"type": "string", "description": "WebDAV 内文件路径，如 /文档/笔记.md"},
             "content": {"type": "string", "description": "要写入的文本内容"},
             "username": {"type": "string", "description": "WebDAV 账号"},
+            "account": _ACC,
         },
-        "required": ["base_url", "path", "content", "username"],
+        "required": ["path", "content"],
     },
 )
-def cloud_webdav_write(base_url: str, path: str, content: str, username: str) -> dict:
+def cloud_webdav_write(path: str, content: str, base_url: str = "", username: str = "", account: str = "") -> dict:
     try:
+        base_url, username, password = _resolve(account, base_url, username)
         data = (content or "").encode("utf-8")
         if len(data) > _MAX_WRITE_BYTES:
             return {"ok": False, "error": f"内容超过写上限 {_MAX_WRITE_BYTES // 1024 // 1024}MB"}
         scheme, netloc, base_path = _normalize_base(base_url)
         url = _join(base_path, path)
-        with _client(base_url, username, _password()) as c:
+        with _client(base_url, username, password) as c:
             # 先尝试建父目录（MKCOL 对已存在目录返回 405/301 可忽略）
             parent = posixpath.dirname(url)
             if parent and parent != "/":
@@ -269,7 +307,7 @@ def cloud_webdav_write(base_url: str, path: str, content: str, username: str) ->
 @tool(
     "cloud_webdav_delete",
     "删除局域网/个人云 WebDAV 上的文件或空目录（需 confirm=\"DELETE\" 二次确认）。"
-    "base_url/username 同 cloud_webdav_list，密码从环境变量 WEBDAV_PASSWORD 读取。",
+    "base_url/username 同 cloud_webdav_list，凭据：account 为空时密码走环境变量 WEBDAV_PASSWORD；传 account 则用凭据库中该账户（显式参数非空覆盖）。",
     {
         "type": "object",
         "properties": {
@@ -277,17 +315,19 @@ def cloud_webdav_write(base_url: str, path: str, content: str, username: str) ->
             "path": {"type": "string", "description": "WebDAV 内文件或空目录路径"},
             "username": {"type": "string", "description": "WebDAV 账号"},
             "confirm": {"type": "string", "description": "二次确认口令，必须为 DELETE 才会执行"},
+            "account": _ACC,
         },
-        "required": ["base_url", "path", "username", "confirm"],
+        "required": ["path", "confirm"],
     },
 )
-def cloud_webdav_delete(base_url: str, path: str, username: str, confirm: str = "") -> dict:
+def cloud_webdav_delete(path: str, base_url: str = "", username: str = "", confirm: str = "", account: str = "") -> dict:
     try:
+        base_url, username, password = _resolve(account, base_url, username)
         if confirm != "DELETE":
             return {"ok": False, "error": "未确认删除：请传入 confirm=\"DELETE\" 以二次确认"}
         scheme, netloc, base_path = _normalize_base(base_url)
         url = _join(base_path, path)
-        with _client(base_url, username, _password()) as c:
+        with _client(base_url, username, password) as c:
             r = c.request("DELETE", url)
             if r.status_code not in (200, 204):
                 return {"ok": False, "error": f"删除失败: {_http_err(r)}"}
@@ -300,23 +340,25 @@ def cloud_webdav_delete(base_url: str, path: str, username: str, confirm: str = 
 @tool(
     "cloud_webdav_mkdir",
     "在局域网/个人云 WebDAV 上创建目录（MKCOL，可多级自动建父目录）。"
-    "base_url/username 同 cloud_webdav_list，密码从环境变量 WEBDAV_PASSWORD 读取。",
+    "base_url/username 同 cloud_webdav_list，凭据：account 为空时密码走环境变量 WEBDAV_PASSWORD；传 account 则用凭据库中该账户（显式参数非空覆盖）。",
     {
         "type": "object",
         "properties": {
             "base_url": {"type": "string", "description": "WebDAV 根地址"},
             "path": {"type": "string", "description": "WebDAV 内要创建的目录路径，如 /文档/新目录"},
             "username": {"type": "string", "description": "WebDAV 账号"},
+            "account": _ACC,
         },
-        "required": ["base_url", "path", "username"],
+        "required": ["path"],
     },
 )
-def cloud_webdav_mkdir(base_url: str, path: str, username: str) -> dict:
+def cloud_webdav_mkdir(path: str, base_url: str = "", username: str = "", account: str = "") -> dict:
     try:
+        base_url, username, password = _resolve(account, base_url, username)
         scheme, netloc, base_path = _normalize_base(base_url)
         url = _join(base_path, path)
         created = []
-        with _client(base_url, username, _password()) as c:
+        with _client(base_url, username, password) as c:
             # 逐级 MKCOL，已存在(405/301)则跳过，保证多级目录可建
             segs = url.split("/")
             cur = ""

@@ -41,3 +41,6 @@ data/operation.log
 workspace/workflows/
 workspace/*.txt
 data/ws_write_trace.jsonl
+
+# 凭据库（多账户加密存储，密钥+密文均只留本机）
+data/credentials/

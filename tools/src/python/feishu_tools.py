@@ -23,37 +23,55 @@ from typing import Any, Dict, List, Optional
 from tools.base import tool
 
 # ---- 共享层：凭据与 client ----
-_client_singleton = None  # 技术债：模块级懒加载单例，避免每次调用重建 client
+_clients: Dict[str, Any] = {}  # key=f"feishu:{account}" → 懒加载 client（多账户并存）
+_SERVICE = "feishu"
+_ACC = {
+    "type": "string",
+    "description": "可选：加密凭据库中的账户别名（account_add 添加）。缺省/留空走环境变量（FEISHU_APP_ID/FEISHU_APP_SECRET）。",
+    "default": "",
+}
 
 
-def _creds() -> Dict[str, str]:
-    """从环境变量读取飞书应用凭据。"""
-    app_id = os.environ.get("FEISHU_APP_ID", "").strip()
-    app_secret = os.environ.get("FEISHU_APP_SECRET", "").strip()
-    return {"app_id": app_id, "app_secret": app_secret}
+def _creds(account: str = "") -> Dict[str, str]:
+    """读取飞书应用凭据：account='' 走环境变量；否则以环境变量为基座、凭据库覆盖。"""
+    env_map = {
+        "app_id": os.environ.get("FEISHU_APP_ID", "").strip(),
+        "app_secret": os.environ.get("FEISHU_APP_SECRET", "").strip(),
+    }
+    if not account:
+        return env_map
+    try:
+        from core.cred_vault import resolve
+    except ImportError:
+        raise ValueError(
+            f"凭据库不可用（无法导入 core.cred_vault），不能使用 account='{account}'。"
+            "请去掉 account 参数改用环境变量。"
+        )
+    merged, _src = resolve(_SERVICE, account, env_map)  # 返回 (dict, source)；账户不存在抛 VaultError
+    return {k: (merged.get(k) or "").strip() for k in ("app_id", "app_secret")}
 
 
-def _client():
-    """懒加载官方 lark-oapi client（单例）。凭据缺失时抛 ValueError。"""
-    global _client_singleton
-    if _client_singleton is not None:
-        return _client_singleton
-    creds = _creds()
+def _client(account: str = ""):
+    """懒加载官方 lark-oapi client（按 account 缓存，多账户并存）。凭据缺失时抛 ValueError。"""
+    key = f"{_SERVICE}:{account}"
+    if key in _clients:
+        return _clients[key]
+    creds = _creds(account)
     if not creds["app_id"] or not creds["app_secret"]:
         raise ValueError(
             "缺少飞书凭据：请先设置环境变量 FEISHU_APP_ID 与 FEISHU_APP_SECRET"
-            "（在飞书开放平台创建企业自建应用后获取）"
+            "（在飞书开放平台创建企业自建应用后获取），或用 account_add 添加账户后传 account 参数"
         )
     import lark_oapi as lark
 
-    _client_singleton = (
+    _clients[key] = (
         lark.Client.builder()
         .app_id(creds["app_id"])
         .app_secret(creds["app_secret"])
         .log_level(lark.LogLevel.ERROR)
         .build()
     )
-    return _client_singleton
+    return _clients[key]
 
 
 def _ok(**kw: Any) -> dict:
@@ -99,26 +117,34 @@ def _obj_fields(obj, keys: List[str]) -> Dict[str, Any]:
 
 
 # ---- 工具 1：发文本消息 ----
+_ACC = {
+    "type": "string",
+    "description": "可选：凭据库账户别名（account_add(service='feishu', account=...) 添加，存 app_id/app_secret）。留空走环境变量默认账户（FEISHU_APP_ID/FEISHU_APP_SECRET）。",
+    "default": "",
+}
+
+
 @tool(
     "feishu_send_text",
     "向飞书用户/群聊发送纯文本消息。receive_id 传接收方 ID（open_id/user_id/chat_id，"
     "由 receive_id_type 指定，默认 open_id），文本内容走 text 消息。"
-    "凭据从环境变量 FEISHU_APP_ID/FEISHU_APP_SECRET 读取。",
+    "凭据：account 为空走环境变量（FEISHU_APP_ID/FEISHU_APP_SECRET），否则用凭据库中该账户。",
     {
         "type": "object",
         "properties": {
             "receive_id": {"type": "string", "description": "接收方 ID（open_id/user_id/chat_id）"},
             "text": {"type": "string", "description": "要发送的文本内容"},
             "receive_id_type": {"type": "string", "description": "receive_id 类型：open_id/user_id/chat_id/email，默认 open_id"},
+            "account": _ACC,
         },
         "required": ["receive_id", "text"],
     },
 )
-def feishu_send_text(receive_id: str, text: str, receive_id_type: str = "open_id") -> dict:
+def feishu_send_text(receive_id: str, text: str, receive_id_type: str = "open_id", account: str = "") -> dict:
     try:
         from lark_oapi.api.im.v1 import CreateMessageRequest, CreateMessageRequestBody
 
-        client = _client()
+        client = _client(account)
         req = (
             CreateMessageRequest.builder()
             .receive_id_type(receive_id_type)
@@ -149,7 +175,7 @@ def feishu_send_text(receive_id: str, text: str, receive_id_type: str = "open_id
 @tool(
     "feishu_send_post",
     "向飞书用户/群聊发送带标题的富文本消息（post 消息）。receive_id 传接收方 ID，"
-    "title 为消息标题，text 为正文。凭据从环境变量读取。",
+    "title 为消息标题，text 为正文。凭据：account 为空走环境变量，否则用凭据库中该账户。",
     {
         "type": "object",
         "properties": {
@@ -157,16 +183,17 @@ def feishu_send_text(receive_id: str, text: str, receive_id_type: str = "open_id
             "text": {"type": "string", "description": "消息正文内容"},
             "title": {"type": "string", "description": "消息标题，默认'白绫通知'"},
             "receive_id_type": {"type": "string", "description": "receive_id 类型，默认 open_id"},
+            "account": _ACC,
         },
         "required": ["receive_id", "text"],
     },
 )
 def feishu_send_post(receive_id: str, text: str, title: str = "白绫通知",
-                     receive_id_type: str = "open_id") -> dict:
+                     receive_id_type: str = "open_id", account: str = "") -> dict:
     try:
         from lark_oapi.api.im.v1 import CreateMessageRequest, CreateMessageRequestBody
 
-        client = _client()
+        client = _client(account)
         req = (
             CreateMessageRequest.builder()
             .receive_id_type(receive_id_type)
@@ -196,21 +223,22 @@ def feishu_send_post(receive_id: str, text: str, title: str = "白绫通知",
 @tool(
     "feishu_list_chat",
     "列出当前应用可访问的群聊（分页）。返回 chat_id/name/description/type 等。"
-    "凭据从环境变量读取。",
+    "凭据：account 为空走环境变量，否则用凭据库中该账户。",
     {
         "type": "object",
         "properties": {
             "page_size": {"type": "integer", "description": "每页数量，默认 20，最大 100"},
             "page_token": {"type": "string", "description": "分页游标，首次调用留空"},
+            "account": _ACC,
         },
         "required": [],
     },
 )
-def feishu_list_chat(page_size: int = 20, page_token: str = "") -> dict:
+def feishu_list_chat(page_size: int = 20, page_token: str = "", account: str = "") -> dict:
     try:
         from lark_oapi.api.im.v1 import ListChatRequest
 
-        client = _client()
+        client = _client(account)
         builder = ListChatRequest.builder().page_size(int(page_size or 20))
         if page_token:
             builder.page_token(page_token)
@@ -232,7 +260,7 @@ def feishu_list_chat(page_size: int = 20, page_token: str = "") -> dict:
 @tool(
     "feishu_bitable_list",
     "列出飞书多维表格(bitable)某数据表的记录。app_token 传多维表格 token，"
-    "table_id 传数据表 ID。返回每条记录的 record_id 与 fields。凭据从环境变量读取。",
+    "table_id 传数据表 ID。返回每条记录的 record_id 与 fields。凭据：account 为空走环境变量，否则用凭据库中该账户。",
     {
         "type": "object",
         "properties": {
@@ -241,16 +269,17 @@ def feishu_list_chat(page_size: int = 20, page_token: str = "") -> dict:
             "page_size": {"type": "integer", "description": "每页数量，默认 20，最大 100"},
             "page_token": {"type": "string", "description": "分页游标，首次调用留空"},
             "view_id": {"type": "string", "description": "视图 ID（可选，按视图过滤）"},
+            "account": _ACC,
         },
         "required": ["app_token", "table_id"],
     },
 )
 def feishu_bitable_list(app_token: str, table_id: str, page_size: int = 20,
-                        page_token: str = "", view_id: str = "") -> dict:
+                        page_token: str = "", view_id: str = "", account: str = "") -> dict:
     try:
         from lark_oapi.api.bitable.v1 import ListAppTableRecordRequest
 
-        client = _client()
+        client = _client(account)
         builder = (
             ListAppTableRecordRequest.builder()
             .app_token(app_token)
@@ -280,25 +309,26 @@ def feishu_bitable_list(app_token: str, table_id: str, page_size: int = 20,
     "feishu_bitable_create",
     "向飞书多维表格(bitable)某数据表新增一条记录。app_token/table_id 定位数据表，"
     "fields 传字段名->值的字典（如 {\"姓名\":\"张三\",\"年龄\":30}）。"
-    "凭据从环境变量读取。",
+    "凭据：account 为空走环境变量，否则用凭据库中该账户。",
     {
         "type": "object",
         "properties": {
             "app_token": {"type": "string", "description": "多维表格 app_token"},
             "table_id": {"type": "string", "description": "数据表 table_id"},
             "fields": {"type": "object", "description": "字段名->值的字典，如 {\"姓名\":\"张三\"}"},
+            "account": _ACC,
         },
         "required": ["app_token", "table_id", "fields"],
     },
 )
-def feishu_bitable_create(app_token: str, table_id: str, fields: dict) -> dict:
+def feishu_bitable_create(app_token: str, table_id: str, fields: dict, account: str = "") -> dict:
     try:
         from lark_oapi.api.bitable.v1 import (
             AppTableRecord,
             CreateAppTableRecordRequest,
         )
 
-        client = _client()
+        client = _client(account)
         record = AppTableRecord.builder().fields(dict(fields or {})).build()
         req = (
             CreateAppTableRecordRequest.builder()
@@ -321,20 +351,21 @@ def feishu_bitable_create(app_token: str, table_id: str, fields: dict) -> dict:
 @tool(
     "feishu_docx_read",
     "读取飞书云文档(docx)的纯文本内容。document_id 传文档 ID（形如 dox...）。"
-    "返回文档纯文本正文。凭据从环境变量读取。",
+    "返回文档纯文本正文。凭据：account 为空走环境变量，否则用凭据库中该账户。",
     {
         "type": "object",
         "properties": {
             "document_id": {"type": "string", "description": "云文档 document_id（形如 dox...）"},
+            "account": _ACC,
         },
         "required": ["document_id"],
     },
 )
-def feishu_docx_read(document_id: str) -> dict:
+def feishu_docx_read(document_id: str, account: str = "") -> dict:
     try:
         from lark_oapi.api.docx.v1 import RawContentDocumentRequest
 
-        client = _client()
+        client = _client(account)
         req = RawContentDocumentRequest.builder().document_id(document_id).build()
         resp = client.docx.v1.document.raw_content(req)
         if not resp.success():
@@ -349,21 +380,22 @@ def feishu_docx_read(document_id: str) -> dict:
 @tool(
     "feishu_docx_create",
     "新建飞书云文档(docx)。title 传文档标题，folder_token 可选（父文件夹 token，"
-    "留空则建在根目录）。返回新建文档的 document_id 与标题。凭据从环境变量读取。",
+    "留空则建在根目录）。返回新建文档的 document_id 与标题。凭据：account 为空走环境变量，否则用凭据库中该账户。",
     {
         "type": "object",
         "properties": {
             "title": {"type": "string", "description": "文档标题"},
             "folder_token": {"type": "string", "description": "父文件夹 token（可选，留空建在根目录）"},
+            "account": _ACC,
         },
         "required": ["title"],
     },
 )
-def feishu_docx_create(title: str, folder_token: str = "") -> dict:
+def feishu_docx_create(title: str, folder_token: str = "", account: str = "") -> dict:
     try:
         from lark_oapi.api.docx.v1 import CreateDocumentRequest, CreateDocumentRequestBody
 
-        client = _client()
+        client = _client(account)
         body_builder = CreateDocumentRequestBody.builder().title(title)
         if folder_token:
             body_builder.folder_token(folder_token)
@@ -386,13 +418,14 @@ def feishu_docx_create(title: str, folder_token: str = "") -> dict:
     "验证 app_id/app_secret 能否换取访问令牌。返回凭据配置状态与连通性结论。",
     {
         "type": "object",
-        "properties": {},
+        "properties": {"account": _ACC},
+            "account": _ACC,
         "required": [],
     },
 )
-def feishu_whoami() -> dict:
+def feishu_whoami(account: str = "") -> dict:
     try:
-        creds = _creds()
+        creds = _creds(account)
         if not creds["app_id"] or not creds["app_secret"]:
             return {
                 "ok": False,
@@ -401,7 +434,7 @@ def feishu_whoami() -> dict:
             }
         from lark_oapi.api.im.v1 import ListChatRequest
 
-        client = _client()
+        client = _client(account)
         req = ListChatRequest.builder().page_size(1).build()
         resp = client.im.v1.chat.list(req)
         if not resp.success():
