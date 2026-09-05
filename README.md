@@ -61,7 +61,8 @@ python -m venv .venv
 
 | 能力 | 说明 |
 |------|------|
-| 25 核心内置工具 | 文件/网络/命令/记忆/方法论/工具管理/环境探查/上下文回想（MCP 工具按需注入，不占此数） |
+| 59 核心内置工具 | 文件/网络/局域网/命令/记忆/方法论/工具管理/环境探查/上下文回想/外部联通（MCP 工具按需注入，不占此数；`data/registry.json` 实际扫描注册数） |
+| 外部联通 | 局域网发现 `lan_scan`/`lan_portscan`；个人云 WebDAV `cloud_webdav_*`；飞书 `feishu_*`（官方 lark-oapi）；海外网盘 Dropbox `dropbox_*` + Google Drive `gdrive_*`（官方 SDK，凭据走环境变量，delete 需二次确认） |
 | MCP 万能接口 | `mcp_connect` 连接 MCP server（Blender 等）→ `mcp_scan` 同步工具进名单 → 像普通工具一样调用；`config/mcp.json` 保存配置（模板见 `config/mcp.example.json`） |
 | 工具自举 | `tool_create` 自写工具 → 校验 → 注册复用 |
 | 工具获取 | `tool_acquire` 国内节点优先（gitee/gitcode/github 镜像） |

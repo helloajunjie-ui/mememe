@@ -9,6 +9,7 @@ data/registry.json
 data/registry.json.bak_wordcount
 data/snapshots.json
 data/env_profile.json
+data/sys_profile.json
 # 保留 data/persona.yaml（通用人格基座，属于程序框架）
 # ===== 本地运行产物（不入云）=====
 logs/

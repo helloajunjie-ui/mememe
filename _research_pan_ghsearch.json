@@ -1,0 +1,986 @@
+{
+  "baidu pan python": [
+    {
+      "full_name": "horovod/horovod",
+      "description": "Distributed training framework for TensorFlow, Keras, PyTorch, and Apache MXNet.",
+      "stars": 14685,
+      "language": "Python",
+      "license": "NOASSERTION",
+      "pushed_at": "2026-07-29T17:27:00Z",
+      "archived": true,
+      "html_url": "https://github.com/horovod/horovod"
+    },
+    {
+      "full_name": "Sitoi/dailycheckin",
+      "description": "基于「Docker」/「青龙面板」/「群晖」的每日签到脚本（支持多账号）签到列表: ｜爱奇艺｜全民K歌｜有道云笔记｜百度贴吧｜Bilibili｜V2EX｜AcFun｜什么值得买｜阿里云盘｜i茅台申购｜小米运动｜百度搜索资源平台｜恩山论坛｜奥拉星｜",
+      "stars": 8696,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-07-09T08:56:15Z",
+      "archived": false,
+      "html_url": "https://github.com/Sitoi/dailycheckin"
+    },
+    {
+      "full_name": "houtianze/bypy",
+      "description": "Python client for Baidu Yun (Personal Cloud Storage) 百度云/百度网盘Python客户端",
+      "stars": 8582,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2025-04-02T01:11:10Z",
+      "archived": false,
+      "html_url": "https://github.com/houtianze/bypy"
+    },
+    {
+      "full_name": "DropsDevopsOrg/ECommerceCrawlers",
+      "description": "实战🐍多种网站、电商数据爬虫🕷。包含🕸：淘宝商品、微信公众号、大众点评、企查查、招聘网站、闲鱼、阿里任务、博客园、微博、百度贴吧、豆瓣电影、包图网、全景网、豆瓣音乐、某省药监局、搜狐新闻、机器学习文本采集、fofa资产采集、汽车之家、国家统计局、百度关键词收录数、蜘蛛泛目录、今日头条、豆瓣影评、携程、小米应用商店、安居客、途家民宿❤️❤️❤️。微信爬虫展示项目:",
+      "stars": 5673,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2024-05-22T15:19:02Z",
+      "archived": false,
+      "html_url": "https://github.com/DropsDevopsOrg/ECommerceCrawlers"
+    },
+    {
+      "full_name": "PeterDing/iScript",
+      "description": "各种脚本 -- 关于 虾米 xiami.com, 百度网盘 pan.baidu.com, 115网盘 115.com, 网易音乐 music.163.com, 百度音乐 music.baidu.com, 360网盘/云盘 yunpan.cn, 视频解析 flvxz.com, bt torrent ↔ magnet, ed2k 搜索, tumblr 图片下载, unzip",
+      "stars": 5118,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2022-10-25T18:53:06Z",
+      "archived": false,
+      "html_url": "https://github.com/PeterDing/iScript"
+    },
+    {
+      "full_name": "CharlesPikachu/DecryptLogin",
+      "description": "DecryptLogin: APIs for loginning some websites by using requests.",
+      "stars": 2853,
+      "language": "Python",
+      "license": "Apache-2.0",
+      "pushed_at": "2024-08-09T13:41:26Z",
+      "archived": false,
+      "html_url": "https://github.com/CharlesPikachu/DecryptLogin"
+    },
+    {
+      "full_name": "CharlesPikachu/videodl",
+      "description": "Videodl: A lightweight video downloader written in pure python. (轻量级视频下载器，优先高清无水印，支持抖音，快手，小红书，B站，TikTok，YouTube，FIFA+，优酷，腾讯，爱奇艺，1905电影网，乐视，芒果，咪咕，PPTV，搜狐，Facebook，Twitter，新浪微博，今日头条，网易公开课，全民K歌，CCTV央视频，酷",
+      "stars": 2732,
+      "language": "Python",
+      "license": "NOASSERTION",
+      "pushed_at": "2026-09-04T23:10:31Z",
+      "archived": false,
+      "html_url": "https://github.com/CharlesPikachu/videodl"
+    },
+    {
+      "full_name": "UlionTse/translators",
+      "description": "Translators is a library that aims to bring free, multiple, enjoyable translations to individuals and students in Python.  「翻译官」是一个旨在用Python为个人和学生带来免费、多样、愉快翻译的库。",
+      "stars": 2698,
+      "language": "Python",
+      "license": "GPL-3.0",
+      "pushed_at": "2026-01-26T19:15:38Z",
+      "archived": false,
+      "html_url": "https://github.com/UlionTse/translators"
+    }
+  ],
+  "baidu netdisk sdk": [
+    {
+      "full_name": "PeterDing/BaiduPCS-Py",
+      "description": "BaiduPCS API & App 百度网盘客户端 和 API",
+      "stars": 873,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2024-06-18T06:29:44Z",
+      "archived": false,
+      "html_url": "https://github.com/PeterDing/BaiduPCS-Py"
+    },
+    {
+      "full_name": "mozillazg/baidu-pcs-python-sdk",
+      "description": "百度个人云存储（PCS）Python SDK. （因为 PCS 服务已关闭，推荐改用百度网盘 API： https://github.com/ly0/baidupcsapi ）",
+      "stars": 186,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2021-09-15T22:25:55Z",
+      "archived": false,
+      "html_url": "https://github.com/mozillazg/baidu-pcs-python-sdk"
+    },
+    {
+      "full_name": "mecforlove/baiduyun",
+      "description": "一款基于python的仿shell风格的百度网盘在线管理工具，提供文件管理、文件/文件夹下载、关键字批量离线下载等功能。",
+      "stars": 50,
+      "language": "Python",
+      "license": "NOASSERTION",
+      "pushed_at": "2017-07-28T01:37:46Z",
+      "archived": false,
+      "html_url": "https://github.com/mecforlove/baiduyun"
+    },
+    {
+      "full_name": "zacksleo/pcs-alfred-workflow",
+      "description": "百度网盘 Alfred workflow",
+      "stars": 11,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2021-04-23T10:03:02Z",
+      "archived": false,
+      "html_url": "https://github.com/zacksleo/pcs-alfred-workflow"
+    },
+    {
+      "full_name": "yr-github/BaiduPcs_autoupdate",
+      "description": "利用BaiduPCS-Go实现自动备份文件功能，主要配合私人云使用",
+      "stars": 7,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2019-09-18T06:43:02Z",
+      "archived": false,
+      "html_url": "https://github.com/yr-github/BaiduPcs_autoupdate"
+    },
+    {
+      "full_name": "SYSUCSA/BaiduPan",
+      "description": "A baidu pcs client using python",
+      "stars": 5,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2019-03-13T16:20:13Z",
+      "archived": false,
+      "html_url": "https://github.com/SYSUCSA/BaiduPan"
+    },
+    {
+      "full_name": "Jack-261108/BaiduPCS-Py",
+      "description": "BaiduPCS API & App 百度网盘客户端 和 API",
+      "stars": 4,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-07-27T10:03:37Z",
+      "archived": false,
+      "html_url": "https://github.com/Jack-261108/BaiduPCS-Py"
+    },
+    {
+      "full_name": "kenchikuliu/baidu-netdisk-pcs-skill",
+      "description": "Open-source Codex skill for searching, uploading, and sharing files in Baidu Netdisk",
+      "stars": 2,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-07-31T02:36:40Z",
+      "archived": false,
+      "html_url": "https://github.com/kenchikuliu/baidu-netdisk-pcs-skill"
+    }
+  ],
+  "aliyun drive python": [
+    {
+      "full_name": "mrknow001/aliyun-accesskey-Tools",
+      "description": "阿里云accesskey利用工具",
+      "stars": 1232,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2022-04-08T08:17:32Z",
+      "archived": false,
+      "html_url": "https://github.com/mrknow001/aliyun-accesskey-Tools"
+    },
+    {
+      "full_name": "ywdblog/certbot-letencrypt-wildcardcertificates-alydns-au",
+      "description": "certbot'renewing letencrypt certificate plugin - automatic verification aliyun/tencentyun/godaddy dns",
+      "stars": 1177,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2023-10-30T07:20:05Z",
+      "archived": false,
+      "html_url": "https://github.com/ywdblog/certbot-letencrypt-wildcardcertificates-alydns-au"
+    },
+    {
+      "full_name": "shimmeris/SCFProxy",
+      "description": "A proxy tool based on cloud function.",
+      "stars": 1047,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2024-03-25T09:47:03Z",
+      "archived": false,
+      "html_url": "https://github.com/shimmeris/SCFProxy"
+    },
+    {
+      "full_name": "aliyun/aliyun-openapi-python-sdk",
+      "description": "The Alibaba Cloud V1.0 SDK will soon enter the Basic Security Maintenance phase and is no longer recommended for use. V2.0 SDK is available here: https://github.com/aliyun/alibabacloud-python-sdk",
+      "stars": 1044,
+      "language": "Python",
+      "license": "NOASSERTION",
+      "pushed_at": "2026-08-18T07:56:13Z",
+      "archived": false,
+      "html_url": "https://github.com/aliyun/aliyun-openapi-python-sdk"
+    },
+    {
+      "full_name": "aliyun/aliyun-oss-python-sdk",
+      "description": "Aliyun OSS SDK for Python",
+      "stars": 996,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2025-01-03T13:03:17Z",
+      "archived": false,
+      "html_url": "https://github.com/aliyun/aliyun-oss-python-sdk"
+    },
+    {
+      "full_name": "yaronzz/BaiduYunToAliYun",
+      "description": "同步百度云网盘到阿里云",
+      "stars": 760,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2023-08-15T02:40:48Z",
+      "archived": false,
+      "html_url": "https://github.com/yaronzz/BaiduYunToAliYun"
+    },
+    {
+      "full_name": "cdxiaodong/cain-agent",
+      "description": "Real-world AI penetration testing engineer for authorized assessments — built-in cloud module covering AWS/Azure/GCP + Aliyun/Tencent/Huawei clouds. Built on Claude Agent SDK",
+      "stars": 674,
+      "language": "Python",
+      "license": "Apache-2.0",
+      "pushed_at": "2026-09-05T09:16:31Z",
+      "archived": false,
+      "html_url": "https://github.com/cdxiaodong/cain-agent"
+    },
+    {
+      "full_name": "wxy1343/aliyunpan",
+      "description": "阿里云盘cli",
+      "stars": 475,
+      "language": "Python",
+      "license": "GPL-3.0",
+      "pushed_at": "2023-02-17T15:11:28Z",
+      "archived": false,
+      "html_url": "https://github.com/wxy1343/aliyunpan"
+    }
+  ],
+  "aliyun openapi drive": [
+    {
+      "full_name": "open-webui/open-webui",
+      "description": "User-friendly AI Interface (Supports Ollama, OpenAI API, ...)",
+      "stars": 151001,
+      "language": "Python",
+      "license": "NOASSERTION",
+      "pushed_at": "2026-09-05T03:34:34Z",
+      "archived": false,
+      "html_url": "https://github.com/open-webui/open-webui"
+    },
+    {
+      "full_name": "fastapi/fastapi",
+      "description": "FastAPI framework, high performance, easy to learn, fast to code, ready for production",
+      "stars": 102089,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-09-01T20:59:55Z",
+      "archived": false,
+      "html_url": "https://github.com/fastapi/fastapi"
+    },
+    {
+      "full_name": "tadata-org/fastapi_mcp",
+      "description": "Expose your FastAPI endpoints as Model Context Protocol (MCP) tools, with Auth!",
+      "stars": 12000,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2025-11-24T14:51:54Z",
+      "archived": false,
+      "html_url": "https://github.com/tadata-org/fastapi_mcp"
+    },
+    {
+      "full_name": "vitalik/django-ninja",
+      "description": "💨  Fast, Async-ready, Openapi, type hints based framework for building APIs",
+      "stars": 9181,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-09-03T16:41:54Z",
+      "archived": false,
+      "html_url": "https://github.com/vitalik/django-ninja"
+    },
+    {
+      "full_name": "litestar-org/litestar",
+      "description": "Light, flexible and extensible ASGI framework | Built to scale",
+      "stars": 8444,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-09-04T18:14:06Z",
+      "archived": false,
+      "html_url": "https://github.com/litestar-org/litestar"
+    },
+    {
+      "full_name": "Integuru-AI/Integuru",
+      "description": "The first AI agent that builds permissionless integrations through reverse engineering platforms' internal APIs.",
+      "stars": 4764,
+      "language": "Python",
+      "license": "AGPL-3.0",
+      "pushed_at": "2026-06-24T19:23:18Z",
+      "archived": false,
+      "html_url": "https://github.com/Integuru-AI/Integuru"
+    },
+    {
+      "full_name": "spec-first/connexion",
+      "description": "Connexion is a modern Python web framework that makes spec-first and api-first development easy.",
+      "stars": 4612,
+      "language": "Python",
+      "license": "Apache-2.0",
+      "pushed_at": "2026-08-03T17:05:24Z",
+      "archived": false,
+      "html_url": "https://github.com/spec-first/connexion"
+    },
+    {
+      "full_name": "open-webui/mcpo",
+      "description": "A simple, secure MCP-to-OpenAPI proxy server",
+      "stars": 4364,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-05-17T20:40:30Z",
+      "archived": false,
+      "html_url": "https://github.com/open-webui/mcpo"
+    }
+  ],
+  "quark netdisk python": [
+    {
+      "full_name": "Cp0204/quark-auto-save",
+      "description": "夸克网盘签到、自动转存、命名整理、发推送提醒和刷新媒体库一条龙",
+      "stars": 3023,
+      "language": "Python",
+      "license": "AGPL-3.0",
+      "pushed_at": "2026-07-09T11:44:49Z",
+      "archived": false,
+      "html_url": "https://github.com/Cp0204/quark-auto-save"
+    },
+    {
+      "full_name": "ev-flow/quark-engine",
+      "description": "",
+      "stars": 1713,
+      "language": "Python",
+      "license": "GPL-3.0",
+      "pushed_at": "2026-09-04T14:08:16Z",
+      "archived": false,
+      "html_url": "https://github.com/ev-flow/quark-engine"
+    },
+    {
+      "full_name": "ihmily/QuarkPanTool",
+      "description": "一个批量转存、分享和下载夸克网盘文件的工具，可以快速地将大量分享文件转存到到自己的网盘内，或者将网盘文件批量生成分享链接",
+      "stars": 1406,
+      "language": "Python",
+      "license": "Apache-2.0",
+      "pushed_at": "2025-12-18T10:05:07Z",
+      "archived": false,
+      "html_url": "https://github.com/ihmily/QuarkPanTool"
+    },
+    {
+      "full_name": "Liu8Can/Quark_Auto_Check_In",
+      "description": "纯粹的夸克网盘自动签到领空间，托管到GitHub自动执行，一劳永逸。",
+      "stars": 283,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-09-01T14:02:49Z",
+      "archived": false,
+      "html_url": "https://github.com/Liu8Can/Quark_Auto_Check_In"
+    },
+    {
+      "full_name": "DavidBB-L/cinema-manager",
+      "description": "Hermes Agent skill - Movie/TV resource search + Quark cloud drive auto-save",
+      "stars": 275,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2026-06-10T15:46:59Z",
+      "archived": false,
+      "html_url": "https://github.com/DavidBB-L/cinema-manager"
+    },
+    {
+      "full_name": "amd/Quark",
+      "description": "",
+      "stars": 164,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-08-29T03:30:30Z",
+      "archived": false,
+      "html_url": "https://github.com/amd/Quark"
+    },
+    {
+      "full_name": "coyer1986/silent-quark-930",
+      "description": "",
+      "stars": 159,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2025-10-24T17:42:46Z",
+      "archived": false,
+      "html_url": "https://github.com/coyer1986/silent-quark-930"
+    },
+    {
+      "full_name": "lich0821/QuarkPan",
+      "description": "夸克网盘 Python 客户端",
+      "stars": 147,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2025-11-29T13:16:17Z",
+      "archived": false,
+      "html_url": "https://github.com/lich0821/QuarkPan"
+    }
+  ],
+  "115 driver python": [
+    {
+      "full_name": "ansible/ansible",
+      "description": "Ansible is a radically simple IT automation platform that makes your applications and systems easier to deploy and maintain. Automate everything from code deployment to network configuration to cloud ",
+      "stars": 70590,
+      "language": "Python",
+      "license": "GPL-3.0",
+      "pushed_at": "2026-09-04T06:38:21Z",
+      "archived": false,
+      "html_url": "https://github.com/ansible/ansible"
+    },
+    {
+      "full_name": "localstack/localstack",
+      "description": "💻 A fully functional local AWS cloud stack. Develop and test your cloud & Serverless apps offline",
+      "stars": 65131,
+      "language": "Python",
+      "license": "NOASSERTION",
+      "pushed_at": "2026-03-23T08:52:01Z",
+      "archived": true,
+      "html_url": "https://github.com/localstack/localstack"
+    },
+    {
+      "full_name": "mingrammer/diagrams",
+      "description": ":art: Diagram as Code for prototyping cloud system architectures",
+      "stars": 42585,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-08-16T12:09:29Z",
+      "archived": false,
+      "html_url": "https://github.com/mingrammer/diagrams"
+    },
+    {
+      "full_name": "agentscope-ai/QwenPaw",
+      "description": "Your Personal AI Assistant; easy to install, deploy on your own machine or on the cloud; supports multiple chat apps with easily extensible capabilities.",
+      "stars": 34918,
+      "language": "Python",
+      "license": "Apache-2.0",
+      "pushed_at": "2026-09-04T09:26:44Z",
+      "archived": false,
+      "html_url": "https://github.com/agentscope-ai/QwenPaw"
+    },
+    {
+      "full_name": "trailofbits/algo",
+      "description": "Set up a personal VPN in the cloud",
+      "stars": 30364,
+      "language": "Python",
+      "license": "AGPL-3.0",
+      "pushed_at": "2026-09-02T08:46:56Z",
+      "archived": false,
+      "html_url": "https://github.com/trailofbits/algo"
+    },
+    {
+      "full_name": "QwenLM/Qwen3",
+      "description": "Qwen3 is the large language model series developed by Qwen team, Alibaba Cloud.",
+      "stars": 27592,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2026-01-09T03:05:47Z",
+      "archived": false,
+      "html_url": "https://github.com/QwenLM/Qwen3"
+    },
+    {
+      "full_name": "airbytehq/airbyte",
+      "description": "Open-source data movement for ELT pipelines and AI agents — from APIs, databases & files to warehouses, lakes, and AI applications. Both self-hosted and Cloud.",
+      "stars": 21995,
+      "language": "Python",
+      "license": "NOASSERTION",
+      "pushed_at": "2026-09-05T11:42:48Z",
+      "archived": false,
+      "html_url": "https://github.com/airbytehq/airbyte"
+    },
+    {
+      "full_name": "jina-ai/serve",
+      "description": "☁️ Build multimodal AI applications with cloud-native stack",
+      "stars": 21862,
+      "language": "Python",
+      "license": "Apache-2.0",
+      "pushed_at": "2025-03-24T13:59:54Z",
+      "archived": false,
+      "html_url": "https://github.com/jina-ai/serve"
+    }
+  ],
+  "tianyi ecloud python": [
+    {
+      "full_name": "wd210010/only_for_happly",
+      "description": "manus自动写脚本 注册链接 https://manus.im/invitation/V9OIRPDYST3RAF8  KIMI 注册链接http://s.b6v.cn/iUIez 百度贴吧签到★小米运动刷步数★恩山签到★雨云签到白嫖服务器★小茅预约★天翼云盘签到★阿里云盘签到★富贵论坛签到★一点万向签到打卡★品赞代理签到★星空代理签到★什么值得买签到★值得买每日抽奖★小米社区签到★ddnsto",
+      "stars": 1431,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2026-08-18T00:24:06Z",
+      "archived": false,
+      "html_url": "https://github.com/wd210010/only_for_happly"
+    },
+    {
+      "full_name": "agluo/ql-script-hub",
+      "description": "🎯 青龙面板自动化签到脚本集合 - 支持多平台签到、监控，含随机化功能     |顺丰速运|什么值得买|阿里云盘|恩山论坛|nodeseek|夸克网盘|贴吧|ikuuu|百度网盘|NGA论坛|天翼云盘|deepflood|成都地铁|塔斯汀汉堡|PassNAT",
+      "stars": 591,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-06-11T06:06:58Z",
+      "archived": false,
+      "html_url": "https://github.com/agluo/ql-script-hub"
+    },
+    {
+      "full_name": "Aruelius/cloud189",
+      "description": "天翼云盘 CLI Python",
+      "stars": 574,
+      "language": "Python",
+      "license": "GPL-3.0",
+      "pushed_at": "2022-02-23T14:53:15Z",
+      "archived": false,
+      "html_url": "https://github.com/Aruelius/cloud189"
+    },
+    {
+      "full_name": "txperl/JustList",
+      "description": "天翼云盘、阿里云盘、OneDrive 文件列表工具",
+      "stars": 412,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2025-07-24T09:42:09Z",
+      "archived": false,
+      "html_url": "https://github.com/txperl/JustList"
+    },
+    {
+      "full_name": "aefa6/QinglongScript",
+      "description": "一些自用的青龙（Qinglong）定时脚本合集，主要用于信息获取与签到自动化，包括天气预报、每日 60 秒读懂世界、阿里云盘 / 天翼云盘签到、重要日期倒计时、科技玩家签到等。",
+      "stars": 282,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2026-04-25T06:19:27Z",
+      "archived": false,
+      "html_url": "https://github.com/aefa6/QinglongScript"
+    },
+    {
+      "full_name": "OzoO0/cloud-auto-save-x",
+      "description": "夸克网盘、115网盘、迅雷云盘、UC网盘、123网盘、阿里网盘、百度网盘、天翼云盘、光鸭云盘、移动云盘 追剧、网盘签到、自动转存、搜刮、整理、302、STRM、CAS、反代、通知、刷新媒体库一条龙",
+      "stars": 166,
+      "language": "Python",
+      "license": "AGPL-3.0",
+      "pushed_at": "2026-09-04T05:49:14Z",
+      "archived": false,
+      "html_url": "https://github.com/OzoO0/cloud-auto-save-x"
+    },
+    {
+      "full_name": "JunLeB/tianyiyun",
+      "description": "青龙天翼云盘签到",
+      "stars": 99,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2026-05-29T02:50:22Z",
+      "archived": false,
+      "html_url": "https://github.com/JunLeB/tianyiyun"
+    },
+    {
+      "full_name": "clover1420/AutoSign",
+      "description": "小黑盒，好游快爆，miui历史版本,天翼云盘自动签到脚本",
+      "stars": 96,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2024-02-27T10:34:00Z",
+      "archived": false,
+      "html_url": "https://github.com/clover1420/AutoSign"
+    }
+  ],
+  "onedrive python sdk": [
+    {
+      "full_name": "OneDrive/onedrive-sdk-python",
+      "description": "OneDrive SDK for Python! https://dev.onedrive.com ",
+      "stars": 1089,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2023-11-05T07:23:09Z",
+      "archived": true,
+      "html_url": "https://github.com/OneDrive/onedrive-sdk-python"
+    },
+    {
+      "full_name": "farfarfun/fundrive",
+      "description": "统一的网盘/云存储操作接口框架 - 一套 API 打通 20+ 服务，涵盖 Google Drive、OneDrive、S3、百度网盘、阿里云盘、蓝奏云、WebDAV 等",
+      "stars": 72,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-09-03T10:54:56Z",
+      "archived": false,
+      "html_url": "https://github.com/farfarfun/fundrive"
+    },
+    {
+      "full_name": "fire015/onedrive-sharepoint-python-sdk",
+      "description": "A Python SDK for accessing files in OneDrive & SharePoint",
+      "stars": 25,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2023-07-09T09:13:37Z",
+      "archived": false,
+      "html_url": "https://github.com/fire015/onedrive-sharepoint-python-sdk"
+    },
+    {
+      "full_name": "zweckj/onedrive-personal-sdk",
+      "description": "OneDrive Personal SDK",
+      "stars": 4,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-03-12T19:24:55Z",
+      "archived": false,
+      "html_url": "https://github.com/zweckj/onedrive-personal-sdk"
+    },
+    {
+      "full_name": "hugomcruz/onedrive-simple-sdk-python",
+      "description": "OneDrive simple SDK for Python",
+      "stars": 1,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2025-04-26T12:42:10Z",
+      "archived": false,
+      "html_url": "https://github.com/hugomcruz/onedrive-simple-sdk-python"
+    },
+    {
+      "full_name": "YuShaoSu/one-drive-python-sdk-example",
+      "description": "Just an simple example of OneDrive python sdk",
+      "stars": 1,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2020-06-30T23:17:45Z",
+      "archived": false,
+      "html_url": "https://github.com/YuShaoSu/one-drive-python-sdk-example"
+    },
+    {
+      "full_name": "suman724/msgraph-mcp",
+      "description": "MCP Server for Email, Calendar, OneDrive using Microsoft Graph SDK. The project has been vibe coded with Codex (GPT-5.2-Codex)",
+      "stars": 1,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2026-01-06T02:08:56Z",
+      "archived": false,
+      "html_url": "https://github.com/suman724/msgraph-mcp"
+    },
+    {
+      "full_name": "Innoactive/onedrive-sdk-python",
+      "description": "OneDrive SDK for Python! https://dev.onedrive.com",
+      "stars": 0,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2017-03-08T16:48:16Z",
+      "archived": true,
+      "html_url": "https://github.com/Innoactive/onedrive-sdk-python"
+    }
+  ],
+  "google drive python": [
+    {
+      "full_name": "google-research/bert",
+      "description": "TensorFlow code and pre-trained models for BERT",
+      "stars": 40044,
+      "language": "Python",
+      "license": "Apache-2.0",
+      "pushed_at": "2024-07-23T23:39:41Z",
+      "archived": true,
+      "html_url": "https://github.com/google-research/bert"
+    },
+    {
+      "full_name": "wshobson/agents",
+      "description": "Multi-harness agentic plugin marketplace for Claude Code, Codex, Cursor, OpenCode, GitHub Copilot, and Google Antigravity",
+      "stars": 39433,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-09-01T22:36:25Z",
+      "archived": false,
+      "html_url": "https://github.com/wshobson/agents"
+    },
+    {
+      "full_name": "PDFMathTranslate/PDFMathTranslate",
+      "description": "[EMNLP 2025 Demo] PDF scientific paper translation with preserved formats - 基于 AI 完整保留排版的 PDF 文档全文双语翻译，支持 Google/DeepL/Ollama/OpenAI 等服务，提供 CLI/GUI/MCP/Docker/Zotero",
+      "stars": 36716,
+      "language": "Python",
+      "license": "AGPL-3.0",
+      "pushed_at": "2026-09-05T11:55:02Z",
+      "archived": false,
+      "html_url": "https://github.com/PDFMathTranslate/PDFMathTranslate"
+    },
+    {
+      "full_name": "searxng/searxng",
+      "description": "SearXNG is a free internet metasearch engine which aggregates results from various search services and databases. Users are neither tracked nor profiled.",
+      "stars": 36545,
+      "language": "Python",
+      "license": "AGPL-3.0",
+      "pushed_at": "2026-09-05T04:40:19Z",
+      "archived": false,
+      "html_url": "https://github.com/searxng/searxng"
+    },
+    {
+      "full_name": "google-research/timesfm",
+      "description": "TimesFM (Time Series Foundation Model) is a pretrained time-series foundation model developed by Google Research for time-series forecasting.",
+      "stars": 31205,
+      "language": "Python",
+      "license": "Apache-2.0",
+      "pushed_at": "2026-09-04T23:47:31Z",
+      "archived": false,
+      "html_url": "https://github.com/google-research/timesfm"
+    },
+    {
+      "full_name": "ungoogled-software/ungoogled-chromium",
+      "description": "Google Chromium, sans integration with Google",
+      "stars": 27611,
+      "language": "Python",
+      "license": "BSD-3-Clause",
+      "pushed_at": "2026-09-04T11:09:59Z",
+      "archived": false,
+      "html_url": "https://github.com/ungoogled-software/ungoogled-chromium"
+    },
+    {
+      "full_name": "google/skills",
+      "description": "Agent Skills for Google products and technologies",
+      "stars": 19546,
+      "language": "Python",
+      "license": "Apache-2.0",
+      "pushed_at": "2026-09-04T17:58:48Z",
+      "archived": false,
+      "html_url": "https://github.com/google/skills"
+    },
+    {
+      "full_name": "mxrch/GHunt",
+      "description": "🕵️‍♂️ Offensive Google framework.",
+      "stars": 19502,
+      "language": "Python",
+      "license": "NOASSERTION",
+      "pushed_at": "2026-04-10T02:29:16Z",
+      "archived": false,
+      "html_url": "https://github.com/mxrch/GHunt"
+    }
+  ],
+  "dropbox python sdk": [
+    {
+      "full_name": "dropbox/dropbox-sdk-python",
+      "description": "The Official Dropbox API V2 SDK for Python",
+      "stars": 983,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-09-03T06:05:46Z",
+      "archived": false,
+      "html_url": "https://github.com/dropbox/dropbox-sdk-python"
+    },
+    {
+      "full_name": "playpauseandstop/Flask-Dropbox",
+      "description": "Dropbox Python SDK support for Flask applications",
+      "stars": 66,
+      "language": "Python",
+      "license": "BSD-3-Clause",
+      "pushed_at": "2021-08-02T03:40:09Z",
+      "archived": false,
+      "html_url": "https://github.com/playpauseandstop/Flask-Dropbox"
+    },
+    {
+      "full_name": "dropbox/dropbox-api-spec",
+      "description": "The Official API Spec for Dropbox API V2 SDKs.",
+      "stars": 45,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-09-03T06:02:33Z",
+      "archived": false,
+      "html_url": "https://github.com/dropbox/dropbox-api-spec"
+    },
+    {
+      "full_name": "hellosign/dropbox-sign-python",
+      "description": "Official Python SDK for the Dropbox Sign API",
+      "stars": 12,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-09-03T12:38:23Z",
+      "archived": false,
+      "html_url": "https://github.com/hellosign/dropbox-sign-python"
+    },
+    {
+      "full_name": "DevonCurrent/DropboxSearchTool",
+      "description": "Dropbox Search Tool allows for Dropbox files' contents to be searched using Dropbox Python API: https://github.com/dropbox/dropbox-sdk-python",
+      "stars": 4,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2019-06-19T12:56:02Z",
+      "archived": false,
+      "html_url": "https://github.com/DevonCurrent/DropboxSearchTool"
+    },
+    {
+      "full_name": "cpfair/dropbox-sdk-python",
+      "description": "Py3k Dropbox SDK",
+      "stars": 3,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2014-04-23T06:16:02Z",
+      "archived": false,
+      "html_url": "https://github.com/cpfair/dropbox-sdk-python"
+    },
+    {
+      "full_name": "hellosign/sdk-tester",
+      "description": "This project aims to allow making an API request using any of our supported OpenAPI SDKs.",
+      "stars": 2,
+      "language": "Python",
+      "license": "Apache-2.0",
+      "pushed_at": "2026-05-11T09:26:10Z",
+      "archived": true,
+      "html_url": "https://github.com/hellosign/sdk-tester"
+    },
+    {
+      "full_name": "SandeshKa07/Clipcast",
+      "description": "Greetings!  We, the team \"Fried Pipers\" are proud to present to you our Python and Dropbox based clipboard. More often that ever, we come across the need to share links, code snippets or any other tex",
+      "stars": 2,
+      "language": "Python",
+      "license": "GPL-2.0",
+      "pushed_at": "2015-06-07T04:56:46Z",
+      "archived": false,
+      "html_url": "https://github.com/SandeshKa07/Clipcast"
+    }
+  ],
+  "lanzou python": [
+    {
+      "full_name": "rachpt/lanzou-gui",
+      "description": "蓝奏云 | 蓝奏云客户端 | 蓝奏网盘 GUI版本",
+      "stars": 1337,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2022-06-05T05:51:47Z",
+      "archived": false,
+      "html_url": "https://github.com/rachpt/lanzou-gui"
+    },
+    {
+      "full_name": "zaxtyson/LanZouCloud-API",
+      "description": "蓝奏云网盘第三方 API",
+      "stars": 811,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2024-03-03T11:58:50Z",
+      "archived": false,
+      "html_url": "https://github.com/zaxtyson/LanZouCloud-API"
+    },
+    {
+      "full_name": "zaxtyson/LanZouCloud-CMD",
+      "description": "🚀 蓝奏云 CMD | 无限制上传",
+      "stars": 521,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2023-02-08T01:05:48Z",
+      "archived": false,
+      "html_url": "https://github.com/zaxtyson/LanZouCloud-CMD"
+    },
+    {
+      "full_name": "vcheckzen/LanzouCloudAPI",
+      "description": "[ 蓝奏云直链解析 ] Redirect to Download Server When Given LanZouCloud Sharing Link",
+      "stars": 77,
+      "language": "Python",
+      "license": "GPL-3.0",
+      "pushed_at": "2026-05-20T00:00:13Z",
+      "archived": false,
+      "html_url": "https://github.com/vcheckzen/LanzouCloudAPI"
+    },
+    {
+      "full_name": "daimiaopeng/LanZouCloud",
+      "description": "蓝奏云批量上传",
+      "stars": 30,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2020-01-09T06:07:04Z",
+      "archived": false,
+      "html_url": "https://github.com/daimiaopeng/LanZouCloud"
+    },
+    {
+      "full_name": "liuran001/Lanzou_DirectLink_sh",
+      "description": "通过脚本以不依赖API的方式获取蓝奏云的下载直链",
+      "stars": 26,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2025-04-22T12:56:47Z",
+      "archived": false,
+      "html_url": "https://github.com/liuran001/Lanzou_DirectLink_sh"
+    },
+    {
+      "full_name": "daimiaopeng/LanZou",
+      "description": "利用蓝奏云做图床或者获取下载直链",
+      "stars": 18,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2020-07-11T09:01:41Z",
+      "archived": false,
+      "html_url": "https://github.com/daimiaopeng/LanZou"
+    },
+    {
+      "full_name": "koala9527/lanzouyun_Code",
+      "description": "蓝奏云 数字验证码制作字库识别",
+      "stars": 8,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2020-08-15T04:01:49Z",
+      "archived": false,
+      "html_url": "https://github.com/koala9527/lanzouyun_Code"
+    }
+  ],
+  "123pan python": [
+    {
+      "full_name": "123panNextGen/123pan",
+      "description": "第三方123云盘客户端，解决了123云盘官方客户端的若干问题，并使用多种方式解除部分流量限制，使用Python3和PyQt6制作",
+      "stars": 443,
+      "language": "Python",
+      "license": "GPL-3.0",
+      "pushed_at": "2026-09-04T23:15:54Z",
+      "archived": false,
+      "html_url": "https://github.com/123panNextGen/123pan"
+    },
+    {
+      "full_name": "realcwj/123Pan-Unlimited-Share",
+      "description": "123云盘无限制分享工具：不受限制的分享任何文件",
+      "stars": 187,
+      "language": "Python",
+      "license": "GPL-3.0",
+      "pushed_at": "2025-07-10T18:04:28Z",
+      "archived": false,
+      "html_url": "https://github.com/realcwj/123Pan-Unlimited-Share"
+    },
+    {
+      "full_name": "OzoO0/cloud-auto-save-x",
+      "description": "夸克网盘、115网盘、迅雷云盘、UC网盘、123网盘、阿里网盘、百度网盘、天翼云盘、光鸭云盘、移动云盘 追剧、网盘签到、自动转存、搜刮、整理、302、STRM、CAS、反代、通知、刷新媒体库一条龙",
+      "stars": 166,
+      "language": "Python",
+      "license": "AGPL-3.0",
+      "pushed_at": "2026-09-04T05:49:14Z",
+      "archived": false,
+      "html_url": "https://github.com/OzoO0/cloud-auto-save-x"
+    },
+    {
+      "full_name": "Bao-qing/123pan",
+      "description": "123云盘Cli工具和模块",
+      "stars": 128,
+      "language": "Python",
+      "license": "NOASSERTION",
+      "pushed_at": "2026-07-05T16:16:59Z",
+      "archived": false,
+      "html_url": "https://github.com/Bao-qing/123pan"
+    },
+    {
+      "full_name": "realcwj/123Pan-Unlimited-WebDAV",
+      "description": "123云盘无限制挂载工具：不受容量限制的挂载资源",
+      "stars": 124,
+      "language": "Python",
+      "license": "GPL-3.0",
+      "pushed_at": "2025-07-10T18:20:20Z",
+      "archived": false,
+      "html_url": "https://github.com/realcwj/123Pan-Unlimited-WebDAV"
+    },
+    {
+      "full_name": "OzoO0/cloud-auto-save",
+      "description": "夸克、115、迅雷、UC、123网盘、阿里网盘、百度网盘、天翼云盘签到、自动转存、命名整理、发推送提醒和刷新媒体库一条龙",
+      "stars": 48,
+      "language": "Python",
+      "license": "AGPL-3.0",
+      "pushed_at": "2026-05-20T08:56:57Z",
+      "archived": false,
+      "html_url": "https://github.com/OzoO0/cloud-auto-save"
+    },
+    {
+      "full_name": "SodaCodeSave/Pan123",
+      "description": "123云盘开放平台非官方PythonSDK",
+      "stars": 28,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-02-12T10:35:06Z",
+      "archived": true,
+      "html_url": "https://github.com/SodaCodeSave/Pan123"
+    },
+    {
+      "full_name": "OlyMarco/123pan-uploader-cli",
+      "description": "[support qr_code login~] Server-side 123Pan tool - Upload ML checkpoints without interrupting training, multi-threaded downloads",
+      "stars": 24,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2026-07-05T01:57:13Z",
+      "archived": false,
+      "html_url": "https://github.com/OlyMarco/123pan-uploader-cli"
+    }
+  ]
+}

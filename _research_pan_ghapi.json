@@ -1,0 +1,319 @@
+{
+  "baidu": [
+    {
+      "repo": "houtianze/bypy",
+      "full_name": "houtianze/bypy",
+      "description": "Python client for Baidu Yun (Personal Cloud Storage) 百度云/百度网盘Python客户端",
+      "stars": 8582,
+      "forks": 1413,
+      "language": "Python",
+      "license": "MIT",
+      "archived": false,
+      "created_at": "2013-12-30T17:47:38Z",
+      "updated_at": "2026-09-04T05:46:04Z",
+      "pushed_at": "2025-04-02T01:11:10Z",
+      "open_issues": 48,
+      "homepage": "",
+      "default_branch": "master",
+      "topics": []
+    },
+    {
+      "repo": "foyoux/py-baidu-netdisk",
+      "error": "404 not found"
+    },
+    {
+      "repo": "PeterDing/iScript",
+      "full_name": "PeterDing/iScript",
+      "description": "各种脚本 -- 关于 虾米 xiami.com, 百度网盘 pan.baidu.com, 115网盘 115.com, 网易音乐 music.163.com, 百度音乐 music.baidu.com, 360网盘/云盘 yunpan.cn, 视频解析 flvxz.com, bt torrent ↔ magnet, ed2k 搜索, tumblr 图片下载, unzip",
+      "stars": 5118,
+      "forks": 1160,
+      "language": "Python",
+      "license": "MIT",
+      "archived": false,
+      "created_at": "2014-04-26T09:16:50Z",
+      "updated_at": "2026-09-05T08:49:55Z",
+      "pushed_at": "2022-10-25T18:53:06Z",
+      "open_issues": 71,
+      "homepage": "",
+      "default_branch": "master",
+      "topics": [
+        "baiduyun",
+        "iscript",
+        "magnet-torrent",
+        "music",
+        "python2",
+        "tumblr",
+        "unzip",
+        "xiami"
+      ]
+    },
+    {
+      "repo": "baidupcs/baidupcs",
+      "error": "404 not found"
+    },
+    {
+      "repo": "ly0/baidu-netdisk-downloaderx",
+      "error": "404 not found"
+    }
+  ],
+  "aliyun": [
+    {
+      "repo": "foyoux/aliyunpan",
+      "error": "404 not found"
+    },
+    {
+      "repo": "wxy1343/aliyunpan",
+      "full_name": "wxy1343/aliyunpan",
+      "description": "阿里云盘cli",
+      "stars": 475,
+      "forks": 62,
+      "language": "Python",
+      "license": "GPL-3.0",
+      "archived": false,
+      "created_at": "2020-12-05T21:25:39Z",
+      "updated_at": "2026-08-10T13:33:29Z",
+      "pushed_at": "2023-02-17T15:11:28Z",
+      "open_issues": 20,
+      "homepage": "",
+      "default_branch": "main",
+      "topics": [
+        "aliyundrive",
+        "aliyunpan",
+        "cli",
+        "tui"
+      ]
+    },
+    {
+      "repo": "tickstep/aliyunpan",
+      "full_name": "tickstep/aliyunpan",
+      "description": "阿里云盘命令行客户端，支持JavaScript插件，支持同步备份功能。",
+      "stars": 5102,
+      "forks": 397,
+      "language": "Go",
+      "license": "Apache-2.0",
+      "archived": false,
+      "created_at": "2021-08-04T02:50:25Z",
+      "updated_at": "2026-09-04T17:01:56Z",
+      "pushed_at": "2026-07-05T01:42:40Z",
+      "open_issues": 21,
+      "homepage": "",
+      "default_branch": "main",
+      "topics": [
+        "adrive",
+        "backup",
+        "linux",
+        "macos",
+        "sync",
+        "windows"
+      ]
+    },
+    {
+      "repo": "Xhofe/alist",
+      "error": "HTTPStatusError: Redirect response '301 Moved Permanently' for url 'https://api.github.com/repos/Xhofe/alist'\nRedirect location: 'https://api.github.com/repositories/323965659'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/301"
+    },
+    {
+      "repo": "messense/aliyundrive-webdav",
+      "full_name": "messense/aliyundrive-webdav",
+      "description": "阿里云盘 WebDAV 服务",
+      "stars": 9762,
+      "forks": 1070,
+      "language": "Rust",
+      "license": "MIT",
+      "archived": true,
+      "created_at": "2021-08-18T13:53:39Z",
+      "updated_at": "2026-09-04T01:50:41Z",
+      "pushed_at": "2026-02-20T14:17:37Z",
+      "open_issues": 25,
+      "homepage": "",
+      "default_branch": "main",
+      "topics": [
+        "aliyundrive",
+        "aliyundrive-client",
+        "luci-app",
+        "openwrt-package",
+        "webdav-server"
+      ]
+    }
+  ],
+  "quark": [
+    {
+      "repo": "CikeyQi/quark-netdisk",
+      "error": "404 not found"
+    },
+    {
+      "repo": "LiLittleCat/awesome-free-chatgpt",
+      "full_name": "LiLittleCat/awesome-free-chatgpt",
+      "description": "🆓免费的 ChatGPT 镜像网站列表，持续更新。List of free ChatGPT mirror sites, continuously updated. ",
+      "stars": 21251,
+      "forks": 1393,
+      "language": "Python",
+      "license": "MIT",
+      "archived": false,
+      "created_at": "2023-03-09T07:37:37Z",
+      "updated_at": "2026-09-05T07:46:08Z",
+      "pushed_at": "2025-06-23T12:16:37Z",
+      "open_issues": 122,
+      "homepage": "",
+      "default_branch": "main",
+      "topics": [
+        "awesome",
+        "awesome-list",
+        "chat",
+        "chatgpt",
+        "free",
+        "freechatgpt"
+      ]
+    }
+  ],
+  "115": [
+    {
+      "repo": "Aruelius/115driver",
+      "full_name": "Aruelius/115driver",
+      "description": "This is a 115 cloud driver package.",
+      "stars": 0,
+      "forks": 0,
+      "language": null,
+      "license": "MIT",
+      "archived": false,
+      "created_at": "2024-01-11T14:32:09Z",
+      "updated_at": "2024-01-11T14:32:09Z",
+      "pushed_at": "2024-01-12T16:45:35Z",
+      "open_issues": 0,
+      "homepage": "",
+      "default_branch": "main",
+      "topics": []
+    },
+    {
+      "repo": "tickstep/115driver",
+      "error": "404 not found"
+    },
+    {
+      "repo": "chenkkk/115",
+      "error": "404 not found"
+    }
+  ],
+  "tianyi": [
+    {
+      "repo": "tickstep/cloudpan189-go",
+      "full_name": "tickstep/cloudpan189-go",
+      "description": "天翼云盘命令行客户端(CLI)，基于GO语言实现",
+      "stars": 654,
+      "forks": 119,
+      "language": "Go",
+      "license": "Apache-2.0",
+      "archived": true,
+      "created_at": "2020-05-27T13:55:33Z",
+      "updated_at": "2026-08-25T06:17:25Z",
+      "pushed_at": "2026-03-02T03:27:09Z",
+      "open_issues": 60,
+      "homepage": "",
+      "default_branch": "master",
+      "topics": []
+    }
+  ],
+  "onedrive": [
+    {
+      "repo": "OneDrive/onedrive-sdk-python",
+      "full_name": "OneDrive/onedrive-sdk-python",
+      "description": "OneDrive SDK for Python! https://dev.onedrive.com ",
+      "stars": 1089,
+      "forks": 191,
+      "language": "Python",
+      "license": "MIT",
+      "archived": true,
+      "created_at": "2015-09-04T22:23:01Z",
+      "updated_at": "2026-08-08T10:33:25Z",
+      "pushed_at": "2023-11-05T07:23:09Z",
+      "open_issues": 1,
+      "homepage": null,
+      "default_branch": "master",
+      "topics": []
+    },
+    {
+      "repo": "OneDrive/onedrive-api-docs",
+      "full_name": "OneDrive/onedrive-api-docs",
+      "description": "Official documentation for the OneDrive API",
+      "stars": 481,
+      "forks": 236,
+      "language": "TypeScript",
+      "license": "MIT",
+      "archived": false,
+      "created_at": "2014-12-16T00:09:49Z",
+      "updated_at": "2026-08-15T03:51:10Z",
+      "pushed_at": "2026-05-14T12:37:52Z",
+      "open_issues": 125,
+      "homepage": null,
+      "default_branch": "live",
+      "topics": []
+    }
+  ],
+  "googledrive": [
+    {
+      "repo": "googleapis/google-api-python-client",
+      "full_name": "googleapis/google-api-python-client",
+      "description": "🐍 The official Python client library for Google's discovery based APIs.",
+      "stars": 8923,
+      "forks": 2581,
+      "language": "Python",
+      "license": "Apache-2.0",
+      "archived": false,
+      "created_at": "2014-01-08T21:55:56Z",
+      "updated_at": "2026-09-04T18:35:47Z",
+      "pushed_at": "2026-09-04T20:39:28Z",
+      "open_issues": 49,
+      "homepage": "https://googleapis.github.io/google-api-python-client/docs/",
+      "default_branch": "main",
+      "topics": []
+    },
+    {
+      "repo": "gsuitedev/PyDrive",
+      "error": "404 not found"
+    },
+    {
+      "repo": "googleworkspace/drive-api-python-samples",
+      "error": "404 not found"
+    }
+  ],
+  "dropbox": [
+    {
+      "repo": "dropbox/dropbox-sdk-python",
+      "full_name": "dropbox/dropbox-sdk-python",
+      "description": "The Official Dropbox API V2 SDK for Python",
+      "stars": 983,
+      "forks": 330,
+      "language": "Python",
+      "license": "MIT",
+      "archived": false,
+      "created_at": "2015-06-12T22:23:27Z",
+      "updated_at": "2026-09-04T15:41:53Z",
+      "pushed_at": "2026-09-03T06:05:46Z",
+      "open_issues": 20,
+      "homepage": "https://www.dropbox.com/developers",
+      "default_branch": "main",
+      "topics": [
+        "dropbox",
+        "dropbox-sdk",
+        "dropbox-v2",
+        "python",
+        "sdk",
+        "sdk-python"
+      ]
+    }
+  ],
+  "lanzou": [
+    {
+      "repo": "zaxtyson/LanZouCloud",
+      "error": "HTTPStatusError: Redirect response '301 Moved Permanently' for url 'https://api.github.com/repos/zaxtyson/LanZouCloud'\nRedirect location: 'https://api.github.com/repositories/196978724'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/301"
+    },
+    {
+      "repo": "rocketcc/lanzou-downloader",
+      "error": "404 not found"
+    }
+  ],
+  "123pan": [
+    {
+      "repo": "tickstep/123pan",
+      "error": "404 not found"
+    }
+  ]
+}

@@ -4,3 +4,8 @@ httpx>=0.27
 PyYAML>=6.0
 pydantic>=2.0
 mcp>=1.29
+lark-oapi>=1.7.3
+# 网盘联通（Dropbox + Google Drive）
+dropbox>=12.2.1
+google-api-python-client>=2.200.0
+google-auth>=2.57.1

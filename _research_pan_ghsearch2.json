@@ -1,0 +1,248 @@
+{
+  "115pan python": [
+    {
+      "full_name": "PeterDing/iScript",
+      "description": "各种脚本 -- 关于 虾米 xiami.com, 百度网盘 pan.baidu.com, 115网盘 115.com, 网易音乐 music.163.com, 百度音乐 music.baidu.com, 360网盘/云盘 yunpan.cn, 视频解析 flvxz.com, bt torrent ↔ magnet, ed2k 搜索, tumblr 图片下载, unzip",
+      "stars": 5118,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2022-10-25T18:53:06Z",
+      "archived": false,
+      "html_url": "https://github.com/PeterDing/iScript"
+    },
+    {
+      "full_name": "walkingddd/TgtoDrive",
+      "description": "网盘文件管理增强工具，支持115、123、光鸭网盘转存、盘内影视与音乐整理、STRM 生成，以及 Emby、飞牛影视和飞牛音乐反代与 302 播放。",
+      "stars": 2035,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-09-05T08:18:00Z",
+      "archived": false,
+      "html_url": "https://github.com/walkingddd/TgtoDrive"
+    },
+    {
+      "full_name": "qiqiandfei/Telegram-115bot",
+      "description": "一个基于 Python 的 Telegram 机器人，用于管理和控制 115 网盘，支持离线下载、视频上传、目录同步等功能",
+      "stars": 234,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-07-22T01:49:29Z",
+      "archived": false,
+      "html_url": "https://github.com/qiqiandfei/Telegram-115bot"
+    },
+    {
+      "full_name": "OzoO0/cloud-auto-save-x",
+      "description": "夸克网盘、115网盘、迅雷云盘、UC网盘、123网盘、阿里网盘、百度网盘、天翼云盘、光鸭云盘、移动云盘 追剧、网盘签到、自动转存、搜刮、整理、302、STRM、CAS、反代、通知、刷新媒体库一条龙",
+      "stars": 166,
+      "language": "Python",
+      "license": "AGPL-3.0",
+      "pushed_at": "2026-09-04T05:49:14Z",
+      "archived": false,
+      "html_url": "https://github.com/OzoO0/cloud-auto-save-x"
+    },
+    {
+      "full_name": "feelfar/115-for-kodi",
+      "description": "kodi  addon 115网盘 ",
+      "stars": 161,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2025-01-10T16:36:39Z",
+      "archived": false,
+      "html_url": "https://github.com/feelfar/115-for-kodi"
+    },
+    {
+      "full_name": "shichao-an/115wangpan",
+      "description": "(Deprecated) Unofficial Python API wrapper SDK for 115.com (115网盘)",
+      "stars": 111,
+      "language": "Python",
+      "license": "BSD-2-Clause",
+      "pushed_at": "2017-05-18T04:50:03Z",
+      "archived": false,
+      "html_url": "https://github.com/shichao-an/115wangpan"
+    },
+    {
+      "full_name": "xianer235/115-media-hub",
+      "description": " 115 Media Hub 是一个面向 115 网盘场景的一体化自动化控制台，集成 TG 频道资源发现、磁力/网盘链接解析导入、影视订阅追更、文件夹监控刷新与批量任务管理，帮助你把“找资源、存资源、生成strm媒体库”串成可持续运行的流程。",
+      "stars": 85,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2026-08-27T16:08:50Z",
+      "archived": false,
+      "html_url": "https://github.com/xianer235/115-media-hub"
+    },
+    {
+      "full_name": "OzoO0/cloud-auto-save",
+      "description": "夸克、115、迅雷、UC、123网盘、阿里网盘、百度网盘、天翼云盘签到、自动转存、命名整理、发推送提醒和刷新媒体库一条龙",
+      "stars": 48,
+      "language": "Python",
+      "license": "AGPL-3.0",
+      "pushed_at": "2026-05-20T08:56:57Z",
+      "archived": false,
+      "html_url": "https://github.com/OzoO0/cloud-auto-save"
+    }
+  ],
+  "115 cloud driver": [
+    {
+      "full_name": "danderfer/Comp_Sci_Sem_2",
+      "description": "According to all known laws of aviation, there is no way that a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anyway. Because ",
+      "stars": 205,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2023-04-03T17:47:53Z",
+      "archived": false,
+      "html_url": "https://github.com/danderfer/Comp_Sci_Sem_2"
+    },
+    {
+      "full_name": "handyman5/acd_fuse",
+      "description": "FUSE filesystem driver for Amazon Cloud Drive",
+      "stars": 185,
+      "language": "Python",
+      "license": "NOASSERTION",
+      "pushed_at": "2016-01-06T13:35:38Z",
+      "archived": false,
+      "html_url": "https://github.com/handyman5/acd_fuse"
+    },
+    {
+      "full_name": "simoncadman/CUPS-Cloud-Print",
+      "description": "Google Cloud Print driver for CUPS, allows printing to printers hosted on Google Cloud Print",
+      "stars": 178,
+      "language": "Python",
+      "license": "NOASSERTION",
+      "pushed_at": "2020-08-21T13:59:48Z",
+      "archived": true,
+      "html_url": "https://github.com/simoncadman/CUPS-Cloud-Print"
+    },
+    {
+      "full_name": "HuckleR2003/PC_Workman_HCK",
+      "description": "System monitor with offline AI (82 intents, 9-layer routing) that learns YOUR PC. TURBO optimization, thermal baselines, voltage SPC, ghost driver detection, 373 process definitions. optimization feat",
+      "stars": 72,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2026-09-02T10:01:26Z",
+      "archived": false,
+      "html_url": "https://github.com/HuckleR2003/PC_Workman_HCK"
+    },
+    {
+      "full_name": "Faceplugin-ltd/ID-Document-Recognition-Docker",
+      "description": "ID document recognition SDK for Docker and Linux — recognize ID cards, passports, and driver licenses with OCR, MRZ, barcode, and QR scanning. Fully on-premise with no cloud dependency.",
+      "stars": 43,
+      "language": "Python",
+      "license": "NOASSERTION",
+      "pushed_at": "2026-09-04T18:39:30Z",
+      "archived": false,
+      "html_url": "https://github.com/Faceplugin-ltd/ID-Document-Recognition-Docker"
+    },
+    {
+      "full_name": "JWriter20/CaptchaKraken",
+      "description": "CaptchaKraken — self or cloud hosted captcha solver. Monorepo: TypeScript browser driver (npm: captchakraken) + Python engine (PyPI: captchakraken).",
+      "stars": 42,
+      "language": "Python",
+      "license": "NOASSERTION",
+      "pushed_at": "2026-09-01T03:58:37Z",
+      "archived": false,
+      "html_url": "https://github.com/JWriter20/CaptchaKraken"
+    },
+    {
+      "full_name": "ansible-community/molecule-hetznercloud",
+      "description": "A molecule driver for Hetzner Cloud",
+      "stars": 29,
+      "language": "Python",
+      "license": "LGPL-3.0",
+      "pushed_at": "2026-09-02T01:08:27Z",
+      "archived": false,
+      "html_url": "https://github.com/ansible-community/molecule-hetznercloud"
+    },
+    {
+      "full_name": "craigm26/OpenCastor",
+      "description": "OpenCastor — productized open-core RCAN runtime. Gateway-as-kernel + drivers + fleet + cloud bridge + UI. Layer 4 of the OpenCastor stack. See rcan.dev/compatibility for protocol versions.",
+      "stars": 28,
+      "language": "Python",
+      "license": "Apache-2.0",
+      "pushed_at": "2026-09-01T09:00:07Z",
+      "archived": false,
+      "html_url": "https://github.com/craigm26/OpenCastor"
+    }
+  ],
+  "pydrive": [
+    {
+      "full_name": "googlearchive/PyDrive",
+      "description": "Google Drive API Python wrapper library",
+      "stars": 1312,
+      "language": "Python",
+      "license": "NOASSERTION",
+      "pushed_at": "2021-06-24T05:24:59Z",
+      "archived": true,
+      "html_url": "https://github.com/googlearchive/PyDrive"
+    },
+    {
+      "full_name": "iterative/PyDrive2",
+      "description": "Google Drive API Python wrapper library. Maintained fork of PyDrive.",
+      "stars": 670,
+      "language": "Python",
+      "license": "NOASSERTION",
+      "pushed_at": "2026-08-05T01:53:05Z",
+      "archived": false,
+      "html_url": "https://github.com/iterative/PyDrive2"
+    },
+    {
+      "full_name": "Leonard-Plotkin/pydriver",
+      "description": "Python framework for training and evaluating object detectors and classifiers in road traffic environment",
+      "stars": 47,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2015-10-22T11:12:02Z",
+      "archived": true,
+      "html_url": "https://github.com/Leonard-Plotkin/pydriver"
+    },
+    {
+      "full_name": "n6il/pyDriveWire",
+      "description": "Python Implementation of DriveWire 4",
+      "stars": 35,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2026-07-23T20:50:06Z",
+      "archived": false,
+      "html_url": "https://github.com/n6il/pyDriveWire"
+    },
+    {
+      "full_name": "aluna1997/Python_and_PyDrive2",
+      "description": "Funciones necesarias para el manejo de Google Drive a través de Python.",
+      "stars": 20,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2021-10-17T22:30:30Z",
+      "archived": false,
+      "html_url": "https://github.com/aluna1997/Python_and_PyDrive2"
+    },
+    {
+      "full_name": "vaibhav1929/pydrive-project",
+      "description": "File storage & sharing system (like google drive) built with Django (python)",
+      "stars": 12,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2020-07-29T11:12:36Z",
+      "archived": false,
+      "html_url": "https://github.com/vaibhav1929/pydrive-project"
+    },
+    {
+      "full_name": "YoongiKim/pydrive",
+      "description": "GTA5 Autonomous Driving",
+      "stars": 7,
+      "language": "Python",
+      "license": null,
+      "pushed_at": "2019-01-01T07:59:16Z",
+      "archived": false,
+      "html_url": "https://github.com/YoongiKim/pydrive"
+    },
+    {
+      "full_name": "robindz/pydrive",
+      "description": "Python program to download Google Drive files.",
+      "stars": 6,
+      "language": "Python",
+      "license": "MIT",
+      "pushed_at": "2020-09-15T16:09:28Z",
+      "archived": false,
+      "html_url": "https://github.com/robindz/pydrive"
+    }
+  ]
+}
