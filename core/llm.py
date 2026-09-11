@@ -63,10 +63,12 @@ class LLMGateway:
         return any(h in msg for h in _TRANSIENT_HINTS)
 
     def chat(self, messages: List[Dict], tools: Optional[List[Dict]] = None,
-             tool_choice: str = "auto") -> Dict:
+             tool_choice: str = "auto", temperature: Optional[float] = None) -> Dict:
         """调用 chat/completions。
 
         tool_choice: "auto"（模型自主）/ "required"（强制调用一个工具）/ "none"。
+        temperature: 可选，本轮覆盖实例温度（表达层用：情绪改变语气温度，
+                     不改变事实与判断）。None = 用实例默认。
         返回: {"content": str|None, "tool_calls": [{"id","name","arguments"}], "finish_reason": str}
         """
         if not self._ready:
@@ -82,7 +84,7 @@ class LLMGateway:
         kwargs: Dict[str, Any] = {
             "model": self.model,
             "messages": messages,
-            "temperature": self.temperature,
+            "temperature": self.temperature if temperature is None else float(temperature),
             "max_tokens": self.max_tokens,
         }
         if tools:

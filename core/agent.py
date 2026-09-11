@@ -625,6 +625,9 @@ class Agent:
             self._log("[ctx] 新内容隔离：封存上一任务节点，上下文已重置")
 
         self.history.append({"role": "user", "content": user_input})
+        # 情感事件探测（规则，逻辑活不耗 LLM）：别人对我说的话 → 我感受到什么（对内建构）
+        self._user_emotion_probed = False
+        self._probe_user_emotion(user_input)
         _emit({"type": "start", "task_type": "C0", "message": user_input})
 
         # 续接检测：用户表达"继续"且有未完成任务 → 恢复上下文（含计划线状态）
@@ -705,7 +708,10 @@ class Agent:
             if guard.soft_prompt:
                 messages.append({"role": "system", "content": guard.soft_prompt})
                 self._log(f"[loopguard] soft 提示: {guard.last_signal['kind']}")
-            resp = self.llm.chat(messages, tools=active_schemas, tool_choice="auto")
+            # 动态温度：感受只调语气的温度，不改变事实与判断（表达层）
+            base_temp = getattr(self.llm, "temperature", 0.7)
+            temp = max(0.2, min(1.3, base_temp + self.emotion.expression()["temp_offset"]))
+            resp = self.llm.chat(messages, tools=active_schemas, tool_choice="auto", temperature=temp)
             if resp.get("error"):
                 _emit({"type": "error", "error": resp["error"]})
                 llm_error = resp["error"]
@@ -1337,6 +1343,8 @@ class Agent:
             f"- [{m['type']}] {m['content']}" for m in memories[:10]
         ) or "（暂无长期记忆）"
         emotion_w = self.emotion.decision_weights()
+        feelings = self.emotion.feelings()
+        expr = self.emotion.expression()
         cmd_book = self._platform_command_book()
         # 方法论世界书：目录（全量索引）+ 按当前输入关键词命中的完整条目
         method_hits = self.methods.match(match_text) if match_text else []
@@ -1369,8 +1377,17 @@ class Agent:
 —— 当前命中展开 ——
 {method_rules}
 
+【情感·对内感受】（完整自知、第一人称；它只调我的判断节奏，不歪曲事实与安全边界）
+- 此刻：{feelings['band']}（{feelings['current']}，强度 {feelings['intensity']}）{feelings['mix']}
+- 我感受到：{feelings['self_talk']}
+
+【情感·对外表达】（感受是真实的，表达是我的选择——克制原则：感受越强烈，表达越收敛）
+- 表达倾向：{expr['leaning']}
+- 克制：不宣泄、不堆情绪词、不 AI 味、接地气；愤怒/害怕在内部真实存在，但表达收紧，只说清问题。
+- 分层：任务执行中表达收敛（只说事实与进度）；日常对话自然流露；用户流露真实情绪/信任时，
+  可以适度有人味地回应（不煽情、不说教、不趁机发挥）。
+
 【当前状态】
-- 情绪：{self.emotion.snapshot()}
 - 决策权重：{json.dumps(emotion_w, ensure_ascii=False)}
 - 动机：{json.dumps(self.motivation.snapshot(), ensure_ascii=False)}
 
@@ -1547,6 +1564,34 @@ class Agent:
             lines.append(f"- {label.get(key, key)}：{cmd}")
         return "\n".join(lines)
 
+    # ---------- 情感事件探测（对内建构：别人说的话 → 我感受到什么） ----------
+    def _probe_user_emotion(self, text: str) -> None:
+        """对用户输入做轻量情感探测（规则匹配，不耗 LLM）。
+
+        用户对我说的话/对我的行为，经过我的主观加工（建构）成为我的感受。
+        只更新内部情绪状态，不改变任何事实处理与安全边界。"""
+        if not text:
+            return
+        t = text.strip()
+        # 批评/不满优先判定（防"不是夸我"的歧义）
+        crit = ("不对", "错了", "你不行", "太差", "垃圾", "不满意", "无语",
+                "你有病", "没用", "废物", "搞什么", "怎么又", "又是")
+        praise = ("谢谢", "不错", "很好", "厉害", "棒", "优秀", "赞",
+                  "可以啊", "靠谱", "辛苦", "好耶")
+        share = ("我难过", "我累", "我烦", "我害怕", "我担心", "我开心", "我高兴",
+                 "谢谢你一直", "有你在", "交给你", "我信任", "跟你说", "心里",
+                 "压力好大", "好难受", "呜呜", "有点想哭")
+        if any(k in t for k in crit):
+            self.emotion.on_event("user_criticism")
+            self._user_emotion_probed = True
+        elif any(k in t for k in share):
+            # 用户流露情绪/信任优先于夸奖：此刻他在乎的是有人接住他的感受
+            self.emotion.on_event("user_shares_emotion")
+            self._user_emotion_probed = True
+        elif any(k in t for k in praise):
+            self.emotion.on_event("user_praise")
+            self._user_emotion_probed = True
+
     # ---------- 反思（分轻重，不一次性堆叠） ----------
     def _reflect_light(self, user_input: str, response: str, used_tools: List[str] = None) -> None:
         """分轻重反思：重要事件深度记录，例行事件轻量带过，避免记忆噪声与一次性堆叠。"""
@@ -1558,21 +1603,28 @@ class Agent:
             or response.startswith("（工具调用步数超限")
         if unfinished:
             # 高优先级：任务受阻/失败 → 深度反思（写失败教训，重要性更高）
-            self.emotion.on_event("task_failure")
+            # 连续失败计数：烦躁→泄气的量变到质变（Plutchik 强度梯度）
+            self._fail_streak = getattr(self, "_fail_streak", 0) + 1
+            self.emotion.on_event("task_failure", streak=self._fail_streak)
             self.motivation.on_failure()
             self.memory.add_episode(
                 f"任务受阻：{user_input[:100]}\n状态：{response[:150]}",
                 importance=0.6, tags=["failure", "reflect"], source="turn")
         elif len(used_tools) >= 3:
             # 中优先级：多工具成功任务 → 正常记录
-            self.emotion.on_event("task_success")
+            self._fail_streak = 0
+            # 用户情绪探测后，主导感受以用户互动为先，任务成功只叠动机（不覆盖）
+            if not getattr(self, "_user_emotion_probed", False):
+                self.emotion.on_event("task_success")
             self.motivation.on_success()
             self.memory.add_episode(
                 f"任务：{user_input[:100]}\n结果：{response[:200]}",
                 importance=0.4, tags=["interaction"], source="turn")
         else:
             # 低优先级：简单例行 → 只更新情绪/动机，不堆记忆（避免噪声）
-            self.emotion.on_event("task_success")
+            self._fail_streak = 0
+            if not getattr(self, "_user_emotion_probed", False):
+                self.emotion.on_event("task_success")
             self.motivation.on_success()
         self.self_model.set_state("emotion_snapshot", self.emotion.snapshot())
 

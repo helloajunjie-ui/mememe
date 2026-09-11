@@ -601,9 +601,10 @@ function loadStatus() {
     if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
     var modeMap = {FIRST_BOOT:"首次觉醒", RECOVERY_BOOT:"恢复启动", NORMAL_BOOT:"正常启动"};
     var mode = modeMap[d.boot_mode] || d.boot_mode || "?";
-    var emo = d.emotion && (d.emotion.mood || d.emotion.mood_name || "");
+    var emo = d.emotion && (d.emotion.current || d.emotion.mood || d.emotion.mood_name || "");
+    var emoInt = d.emotion ? (Math.round((d.emotion.intensity || 0) * 100)) : 0;
     var html = '<span class="badge gray">'+escapeHtml(mode)+'</span>';
-    if (emo) html += '<span class="badge">情绪·'+escapeHtml(emo)+'</span>';
+    if (emo) html += '<span class="badge" title="感受强度 '+emoInt+'%">情绪·'+escapeHtml(emo)+'</span>';
     html += '<span class="badge">记忆 '+d.memory_count+'</span>';
     html += '<span class="badge">方法论 '+d.method_count+'</span>';
     b.innerHTML = html;
