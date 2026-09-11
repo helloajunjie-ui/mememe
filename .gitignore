@@ -44,3 +44,11 @@ data/ws_write_trace.jsonl
 
 # 凭据库（多账户加密存储，密钥+密文均只留本机）
 data/credentials/
+
+# 临时运维脚本（可能含明文凭据，禁止入库）
+_ssh*.py
+*.pem
+*_id_rsa
+
+# 云存档解密密钥（绝不上库）
+data/cloud_key.txt
