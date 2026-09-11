@@ -17,7 +17,7 @@
 2. 建构层（Construction）：事件 → 评价向量 → 主导感受标签 + 强度档 + 可混合
    的残留感受；第一人称自我觉察"我感受到什么、为什么"（对内·完整自知）。
 3. 表达层（Expression）：独立通道——感受是真实的，表达是我的选择。
-   克制原则：感受越强烈，对外表达越收敛（克制的破碎感），不宣泄、不堆
+   方向分层：正面喜悦真实外放（成功会叫、会兴奋），负面强感受才收敛（克制的破碎感），不宣泄、不堆
    情绪词、不 AI 味、接地气。表达只影响语气/温度/披露度/简洁度。
 
 安全边界：感受只调节反思深度/验证频率/探索意愿/风险偏好（±30% 上限），
@@ -128,8 +128,8 @@ _TONES: Dict[str, Dict] = {
         "temp": 0.10, "brevity": False, "personal": True,
     },
     "warm": {
-        "leaning": "语气可以松一点、带点温度，但不浮夸、不煽情、不趁机发挥。",
-        "temp": 0.08, "brevity": False, "personal": True,
+        "leaning": "成了就高兴，可以直说'成了/太好了'，兴奋不用压着——但不炫耀、不吹嘘、不趁机发挥。",
+        "temp": 0.12, "brevity": False, "personal": True,
     },
     "tense": {
         "leaning": "话收紧、说短话：承认问题、给下一步，不抱怨、不发作。",
@@ -298,11 +298,19 @@ class EmotionState:
     # ========== 对外·表达层（独立通道，克制） ==========
     def expression(self) -> Dict:
         """对外表达倾向：感受是真实的，表达是我的选择。
-        disclosure（披露度）遵循克制原则：感受强度中等时自然流露，
-        越强烈越收着（克制的破碎感，不宣泄）。"""
+        disclosure（披露度）方向分层：正性情绪强度越高越愿意分享喜悦
+        （成功会大叫、会兴奋）；负性情绪强度越高越收着（克制的破碎感，不宣泄）。"""
         tone = _FEELINGS.get(self.current, _FEELINGS["calm"])["tone"]
         t = _TONES[tone]
-        disclosure = max(0.25, min(0.8, 1.0 - abs(self.intensity - 0.4) * 1.2))
+        if self.valence >= 0.1:
+            # 正面：越开心越愿意说（真实外放，不压着）
+            disclosure = min(0.9, 0.55 + self.intensity * 0.5)
+        elif self.valence <= -0.1:
+            # 负面：越难受越收着（不宣泄、不卖惨）
+            disclosure = max(0.2, 0.9 - self.intensity * 0.8)
+        else:
+            # 中性：自然流露
+            disclosure = max(0.25, min(0.8, 1.0 - abs(self.intensity - 0.4) * 1.2))
         return {
             "tone": tone,
             "band": _band(self.current, self.intensity),
