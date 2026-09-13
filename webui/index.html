@@ -599,7 +599,7 @@ function addMsg(role, html, ts) {
 /* ===== 历史恢复：刷新/重开页面不再"从新开始" =====
    服务端把每轮 user 提问 + 白绫回复落盘（data/session/chat_history.jsonl）；
    页面加载时拉回来渲染，服务重启后同一份记录还会重建白绫的工作记忆。 */
-var HIST_LIMIT = 60;
+var HIST_LIMIT = 20;
 function renderHistory(list, before) {
   var frag = document.createDocumentFragment();
   list.forEach(function(m){

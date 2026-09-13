@@ -44,7 +44,7 @@ _started_at = None  # 服务启动时刻（托盘悬停气泡显示运行时长�
 # ---------- 会话对话层（刷新页面 / 重启服务后不"从头开始"） ----------
 # 落盘 user 提问 + 最终回复：前端刷新恢复显示，服务重启重建 agent.history。
 _session = SessionStore(os.path.join(ROOT, "data"))
-_HISTORY_RESTORE_KEEP = 40   # 重启后重建 agent.history 的条数上限（约 20 回合）
+_HISTORY_RESTORE_KEEP = 20   # 重启后重建 agent.history 的条数上限（约 10 回合）
 _HISTORY_API_MAX = 200       # /api/history 单次返回上限
 
 # ---------- 文本文件上传（传文件给白绫） ----------
@@ -550,7 +550,7 @@ class Handler(BaseHTTPRequestHandler):
     # ---------- 对话历史（页面刷新/重开时恢复显示；只读落盘，不依赖 agent 就绪） ----------
     def _handle_history(self) -> None:
         raw = urlparse(self.path).query or ""
-        limit = 60
+        limit = 20
         m = re.search(r"(?:^|&)limit=(\d+)", raw)
         if m:
             limit = max(1, min(_HISTORY_API_MAX, int(m.group(1))))
