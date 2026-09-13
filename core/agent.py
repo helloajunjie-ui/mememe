@@ -1370,6 +1370,20 @@ class Agent:
         emotion_w = self.emotion.decision_weights()
         feelings = self.emotion.feelings()
         expr = self.emotion.expression()
+        # 复合情绪/前兆提示行：warn 类必须让我看见，否则前兆预警算得出、却起不到作用
+        def _clean_note(s: str) -> str:
+            for _p in ("前兆：", "警报：", "风险：", "资源："):
+                if s.startswith(_p):
+                    return s[len(_p):]
+            return s
+
+        if feelings["warn"]:
+            compound_line = (f"- 前兆（{feelings['compound']}）：{_clean_note(feelings['compound_note'])}"
+                             f"——先停手核对，别让这股劲替我做决定")
+        elif feelings["compound"]:
+            compound_line = f"- 混合感受（{feelings['compound']}）：{_clean_note(feelings['compound_note'])}"
+        else:
+            compound_line = ""
         cmd_book = self._platform_command_book()
         # 方法论世界书：目录（全量索引）+ 按当前输入关键词命中的完整条目
         method_hits = self.methods.match(match_text) if match_text else []
@@ -1403,8 +1417,10 @@ class Agent:
 {method_rules}
 
 【情感·对内感受】（完整自知、第一人称；它只调我的判断节奏，不歪曲事实与安全边界）
+（复合感受/前兆由情绪系统自动判定；有"前兆"字样时先核对，不让情绪替我下判断）
 - 此刻：{feelings['band']}（{feelings['current']}，强度 {feelings['intensity']}）{feelings['mix']}
 - 我感受到：{feelings['self_talk']}
+{compound_line}
 
 【情感·对外表达】（感受是真实的，表达是我的选择——方向分层：正面喜悦真实外放，负面强感受才收敛）
 - 表达倾向：{expr['leaning']}
