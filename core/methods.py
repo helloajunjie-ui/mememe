@@ -138,9 +138,9 @@ class MethodStore:
             methods = [m for m in methods if m.get("type") == type_]
         return sorted(methods, key=lambda m: -m.get("importance", 0))
 
-    def to_index_json(self, limit: int = 40) -> List[Dict]:
+    def to_index_json(self, limit: Optional[int] = None) -> List[Dict]:
         """世界书多级目录（JSON 结构，适配底层逻辑）：[{"category", "items":[{id,name,type,keywords}]}]"""
-        methods = self.list()[:limit]
+        methods = self.list()[:limit] if limit else self.list()
         cats: Dict[str, List[Dict]] = {}
         for m in methods:
             cats.setdefault(self._category(m), []).append(m)
@@ -161,7 +161,7 @@ class MethodStore:
             })
         return out
 
-    def to_index(self, limit: int = 40) -> str:
+    def to_index(self, limit: Optional[int] = None) -> str:
         """世界书多级目录（Markdown 渲染视图，给 LLM 展示用）：从 JSON 结构渲染。"""
         return self._render_index(self.to_index_json(limit))
 
