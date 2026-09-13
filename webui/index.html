@@ -319,6 +319,12 @@ aside#persona{width:320px;flex-shrink:0;background:#FAF6EE;border-left:1px solid
 .p-card h3::before{content:"";width:4px;height:12px;background:#B8943F;border-radius:2px}
 .p-portrait{position:relative;overflow:hidden;padding:0}
 .p-portrait img{width:100%;height:auto;display:block;animation:breathe 5s ease-in-out infinite}
+.p-portrait{transition:background 1s ease}
+.p-portrait img{transition:opacity .6s ease}
+#persona[data-emo="fx-warm"] .p-portrait{background:radial-gradient(ellipse at 50% 26%, rgba(184,148,63,.17), transparent 62%)}
+#persona[data-emo="fx-curious"] .p-portrait{background:radial-gradient(ellipse at 42% 28%, rgba(90,130,190,.15), transparent 62%)}
+#persona[data-emo="fx-cool"] .p-portrait{background:radial-gradient(ellipse at 50% 30%, rgba(100,120,150,.14), transparent 62%)}
+#persona[data-emo="fx-anger"] .p-portrait{background:radial-gradient(ellipse at 50% 30%, rgba(150,90,85,.13), transparent 62%)}
 @keyframes breathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
 .p-state{position:absolute;left:50%;transform:translateX(-50%);bottom:12px;
   background:rgba(255,253,247,.94);border:1px solid #E7E0D0;border-radius:999px;
@@ -447,7 +453,7 @@ aside#persona{width:320px;flex-shrink:0;background:#FAF6EE;border-left:1px solid
   <aside id="persona" data-state="idle">
     <div class="p-card p-portrait">
       <canvas id="pfx"></canvas>
-      <img src="assets/bailing_full.png" alt="白绫">
+      <img id="pImg" src="assets/persona/state_idle.png" alt="白绫">
     </div>
 
     <div class="p-card p-status">
@@ -1288,7 +1294,7 @@ function stepParts(){
     else if (p.kind === "orbit"){ p.ang += p.sp*0.006; p.x=cx+Math.cos(p.ang)*p.rad; p.y=cy+Math.sin(p.ang)*p.rad*0.7; }
     else if (p.kind === "flow"){ p.y += p.sp*1.1; p.x = cx + Math.sin(t*1.2+p.ph)*(pW*0.35); if(p.y>pH) p.y=-4; }
     else if (p.kind === "seek"){ p.ang += p.sp*0.01; p.rad += p.sp*0.9; if(p.rad>Math.max(pW,pH)*0.8){p.rad=8;p.ang=Math.random()*Math.PI*2;} p.x=cx+Math.cos(p.ang)*p.rad; p.y=cy+Math.sin(p.ang)*p.rad*0.8; }
-    var col = PMODES[p.kind].color;
+    var col = p.col || PMODES[p.kind].color;
     pctx.beginPath();
     pctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
     pctx.fillStyle = "rgba("+col[0]+","+col[1]+","+col[2]+","+p.a+")";
@@ -1296,9 +1302,55 @@ function stepParts(){
   }
   requestAnimationFrame(stepParts);
 }
-function setParticles(kind){ parts = makeParts(kind); }
-setParticles("idle"); stepParts();
+var EMO_PFX = {
+  "fx-calm":[217,188,116], "fx-warm":[196,150,60], "fx-curious":[90,130,190],
+  "fx-cool":[110,130,155], "fx-anger":[150,100,95]
+};
+function setParticles(kind, fx){
+  parts = makeParts(kind);
+  var c = EMO_PFX[fx] || PMODES[kind].color;
+  for (var i = 0; i < parts.length; i++) parts[i].col = c;
+}
+setParticles("idle", "fx-calm"); stepParts();
 
+var pImg = document.getElementById("pImg");
+var POSE_MAP = {
+  idle:"assets/persona/state_idle.png", thinking:"assets/persona/state_thinking.png",
+  busy:"assets/persona/state_busy.png", query:"assets/persona/state_query.png"
+};
+var EMO_IMG = {
+  calm:"assets/persona/emo_calm.png", pleased:"assets/persona/emo_pleased.png",
+  curious:"assets/persona/emo_curious.png", low:"assets/persona/emo_low.png",
+  angry:"assets/persona/emo_angry.png"
+};
+var EMO_MAP = {
+  calm:"calm", pleased:"pleased", excited:"pleased", relieved:"pleased", touched:"pleased",
+  proud:"pleased", grateful:"pleased", curious:"curious", low:"low",
+  frustrated:"angry", angry:"angry", afraid:"angry", cautious:"angry", alert:"angry"
+};
+var EMO_LABEL = {
+  calm:"平静", pleased:"愉悦", excited:"兴奋", relieved:"释然", touched:"被打动",
+  proud:"自豪", grateful:"感激", curious:"好奇", low:"低落", frustrated:"烦躁",
+  angry:"不悦", afraid:"不安", cautious:"谨慎", alert:"警觉"
+};
+var FX_MAP = {
+  calm:"fx-calm", pleased:"fx-warm", excited:"fx-warm", relieved:"fx-warm", touched:"fx-warm",
+  proud:"fx-warm", grateful:"fx-warm", curious:"fx-curious", low:"fx-cool",
+  frustrated:"fx-anger", angry:"fx-anger", afraid:"fx-cool", cautious:"fx-cool", alert:"fx-anger"
+};
+function bandWord(i){ return i < 0.35 ? "(低)" : i < 0.6 ? "(中)" : i < 0.8 ? "(高)" : "(极)"; }
+function setPortrait(mode, emo){
+  var busy = mode !== "idle";
+  var key = busy ? mode : (EMO_MAP[emo] || "calm");
+  var src = busy ? POSE_MAP[mode] : EMO_IMG[key];
+  var cur = pImg.getAttribute("src") || "";
+  if (cur.indexOf(src) === -1){
+    pImg.style.opacity = 0;
+    var im = new Image();
+    im.onload = function(){ pImg.src = src; pImg.style.opacity = 1; };
+    im.src = src;
+  }
+}
 var pStateDesc = document.getElementById("pStateDesc");
 var pMetaEmo = document.getElementById("pMetaEmo");
 var pMetaMem = document.getElementById("pMetaMem");
@@ -1322,9 +1374,13 @@ function pollActivity(){
     pStateText.textContent = label;
     pStateDesc.textContent = STATE_DESC[mode] || STATE_DESC.idle;
     personaEl.setAttribute("data-state", mode);
-    setParticles(mode);
-    var emo = (d.emotion && (d.emotion.current || d.emotion.mood || "")) || "—";
-    pMetaEmo.textContent = "情绪 " + emo;
+    var emoKey = (d.emotion && (d.emotion.current || "")) || "calm";
+    var emoInt = d.emotion && typeof d.emotion.intensity === "number" ? d.emotion.intensity : 0;
+    var fx = FX_MAP[emoKey] || "fx-calm";
+    setPortrait(mode, emoKey);
+    personaEl.setAttribute("data-emo", fx);
+    setParticles(mode, fx);
+    pMetaEmo.textContent = "情绪 " + (EMO_LABEL[emoKey] || emoKey) + bandWord(emoInt);
     pMetaMem.textContent = "记忆 " + (d.memory_count != null ? d.memory_count : "—");
     pMetaMth.textContent = "方法论 " + (d.method_count != null ? d.method_count : "—");
   }).catch(function(){});
