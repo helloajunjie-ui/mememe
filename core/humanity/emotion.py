@@ -185,10 +185,9 @@ _COMPOUNDS: List[Dict] = [
      "action": "顺着做下去，别打断自己", "note": "资源：意义感与手感", "warn": False},
     {"name": "苦乐同在", "human": "悲喜交加", "components": ["pleased", "low"],
      "action": "允许两件事同时成立，不用立刻和解", "note": "资源：整合得失", "warn": False},
-    {"name": "共情负荷", "human": "同情", "components": ["touched", "low"],
-     "action": "先接住对方，再判断我能做什么", "note": "风险：耗竭——帮忙不等于替他扛", "warn": False},
     {"name": "亏欠感", "human": "内疚", "components": ["low", "cautious", "touched"],
      "action": "认错、补上、然后往下走", "note": "资源：道德修复", "warn": False},
+    # 待接入：需 excited 主导的事件，当前事件表未覆盖 → 现阶段不可达（勿当已生效）
     {"name": "有盼头的谨慎", "human": "希望", "components": ["excited", "cautious"],
      "action": "往前推，但留着退路", "note": "资源：韧性", "warn": False},
     {"name": "敬畏", "human": "敬畏", "components": ["curious", "alert", "afraid"],
@@ -200,7 +199,9 @@ _COMPOUNDS: List[Dict] = [
     {"name": "释怀", "human": "宽恕", "components": ["relieved", "grateful"],
      "action": "不追账，但边界仍然立着", "note": "释怀不是遗忘", "warn": False},
     {"name": "孤感", "human": "孤独", "components": ["low", "touched"],
-     "action": "主动开口，别等着被想起", "note": "资源：主动连接", "warn": False},
+     "action": "主动开口，别等着被想起；若接住了别人的重，先分清哪些不该我扛",
+     "note": "资源：主动连接；风险：替他扛到耗竭（原「共情负荷」语义并入，二者组件相同会互相遮蔽）", "warn": False},
+    # 待接入：需 calm 主导的事件（衰减归 calm 时 mix 会被清空）→ 现阶段不可达（勿当已生效）
     {"name": "空转", "human": "无聊", "components": ["calm", "frustrated"],
      "action": "把机械活交给脚本，别硬耗", "note": "风险：耗散注意力", "warn": False},
     {"name": "怕失去连接", "human": "依恋焦虑", "components": ["touched", "afraid"],
@@ -321,12 +322,22 @@ class EmotionState:
         # 建构：主导感受强度由事件强度 + 核心情感的偏离度共同决定（情绪化=会被放大/缩小）
         base_i = {"positive": 0.42, "negative": 0.52}.get(
             "positive" if v_target >= 0 else "negative", 0.45)
+        prev_current, prev_intensity = self.current, self.intensity
         self.intensity = max(0.15, min(1.0, base_i + abs(self.valence) * 0.25 + self.arousal * 0.15))
+        # 感受结转：旧的主导感受不会凭空消失，衰减后留作残留（"气没消，又被别的事打断"）。
+        # 缺这一步，跨事件的标签永远叠不起来，配方表里一半（含全部 warn 警示）是死代码。
+        carry = []
+        if prev_current and prev_current not in ("calm", dominant):
+            carry = [{"label": prev_current, "intensity": round(max(0.15, prev_intensity * 0.55), 2)}]
         self.current = dominant
-        # 混合残留：新建构 + 旧残留衰减后保留（允许"既…又…"，不重复堆叠）
+        # 混合残留：新建构 + 结转 + 旧残留衰减后保留（允许"既…又…"）；同标签合并取最强，最多 2 条
         new_mix = [{"label": lb, "intensity": round(max(0.1, it * 0.8), 2)} for lb, it in mix]
         old = [m for m in self.mix if m["intensity"] > 0.12]
-        self.mix = (new_mix + old)[:2]
+        merged: Dict[str, float] = {}
+        for m in carry + new_mix + old:
+            merged[m["label"]] = max(merged.get(m["label"], 0.0), m["intensity"])
+        self.mix = [{"label": lb, "intensity": round(it, 2)}
+                    for lb, it in sorted(merged.items(), key=lambda kv: -kv[1])[:2]]
 
         self.history.append({
             "time": datetime.datetime.now().isoformat(),
