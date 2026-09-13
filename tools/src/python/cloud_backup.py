@@ -35,7 +35,7 @@ _BACKUP_ROOT = _PROJECT_ROOT / "backups"
 _ENV_FILE = _PROJECT_ROOT / ".env"
 _SELF_YAML = _DATA / "self.yaml"
 _KEY_FILE = _DATA / "cloud_key.txt"
-_STATUS_FILE = _DATA / "backup_status.json"
+_STATUS_FILE = _DATA / "cloud_backup_status.json"
 
 # 云端
 _REGISTER_URL = "https://dpoo.my/api/register"
