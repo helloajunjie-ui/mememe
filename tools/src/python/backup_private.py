@@ -31,8 +31,12 @@ _CORE_FILES = ["config.yaml", ".env"]
 
 # 私有目录（递归打包）——2026-09-13 补：资料库与凭据库原为备份盲区
 # library/：白绫的分类资料库（参考/研究/环境/自我）
-# data/credentials/：多账户加密凭据库（仅密文；密钥 data/cloud_key.txt 有意不备份，防密文+密钥同处）
-_PRIVATE_DIRS = ["library", "data/credentials"]
+# data/credentials/：多账户加密凭据库（密文 + 本机解密密钥）
+# data/keys/：私密钥匙区（云存档加密密钥）
+# 注：原设计"密钥不备份以防密文+密钥同处"已作废——该隔离只靠"zip 不外流"维持，
+#     而 zip 里本就有 .env 与凭据库密钥，隔离名存实亡；代价却是密钥一丢、云存档永久作废。
+#     真正需要分离的是**云端**：cloud_backup.py 的打包守卫确保密钥永不进云端包。
+_PRIVATE_DIRS = ["library", "data/credentials", "data/keys"]
 
 # 备份状态文件：每次备份结果写到这里，让 AI（白绫）能自我感知备份状态（结果/运行通知 AI）
 _STATUS_FILE = Path("data/backup_status.json")

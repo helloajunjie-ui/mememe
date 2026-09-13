@@ -9,7 +9,8 @@
 - 每个实例首次运行自动生成 UUID instance_id，持久化到 data/self.yaml（identity.instance_id），永不改变。
 - 自动注册：POST https://dpoo.my/api/register {instance_id} → 服务器分配独立 WebDAV 账号（幂等，
   重复注册返回同一账号）。凭据存本地 .env（CLOUD_WEBDAV_USER/CLOUD_WEBDAV_PASS）。
-- 加密：AES-256-GCM。密钥 data/cloud_key.txt（本地独有，**不进备份清单、不上云**）。
+- 加密：AES-256-GCM。密钥 data/keys/cloud_key.txt（私密钥匙区：随本地私有备份，
+  绝不进云端包——打包守卫会拒绝任何把密钥写进云端包的行为）。
   云端只有密文 → 即使服务器被攻破，别人拿到的是一堆无法解密的密文。
 - 多版本：文件名带时间戳 backup_<YYYYmmdd_HHMMSS>.zip.enc，远端保留最近 14 份（可回滚）。
 - 恢复：列远端版本 → 下载 → 解密 → 解压到 backups/restore_<ts>/（安全目录，覆盖动作由用户确认）。
@@ -18,6 +19,7 @@ from __future__ import annotations
 
 import base64
 import datetime
+import hashlib
 import json
 import os
 import secrets
@@ -34,7 +36,14 @@ _DATA = _PROJECT_ROOT / "data"
 _BACKUP_ROOT = _PROJECT_ROOT / "backups"
 _ENV_FILE = _PROJECT_ROOT / ".env"
 _SELF_YAML = _DATA / "self.yaml"
-_KEY_FILE = _DATA / "cloud_key.txt"
+# 密钥位置（2026-09-13 迁入私密钥匙区）
+# 主位置：data/keys/cloud_key.txt（随本地私有备份，绝不进云端包）
+# 回退位置：data/cloud_key.txt（旧址，兼容从旧备份恢复出来的实例）
+_KEY_FILE = _DATA / "keys" / "cloud_key.txt"
+_LEGACY_KEY_FILE = _DATA / "cloud_key.txt"
+_KEY_META = _DATA / "keys" / "key_meta.json"
+_KEY_DIR_REL = "data/keys"
+_LEGACY_KEY_REL = "data/cloud_key.txt"
 _STATUS_FILE = _DATA / "cloud_backup_status.json"
 
 # 云端
@@ -52,6 +61,9 @@ _PRIVATE_FILES = [
     "data/snapshots.json",
     "data/env_profile.json",
 ]
+# 私有目录（递归打包）——2026-09-13 与 backup_private 同步：
+# library/ 资料库、data/credentials/ 凭据库，此前是云端灾备的盲区
+_PRIVATE_DIRS = ["library", "data/credentials"]
 _CORE_FILES = ["config.yaml", ".env"]
 
 # 加密文件头：BLENC1 + key_id + nonce + tag + ciphertext
@@ -140,31 +152,85 @@ def ensure_registered():
     return body["username"], body["password"]
 
 
-# ---------- 加密密钥 ----------
-
-def get_or_create_key() -> bytes:
-    """读取或生成 AES-256 密钥（data/cloud_key.txt，base64 32 字节，不进备份清单）。"""
+def _key_path() -> Path:
+    """密钥实际位置：优先私密钥匙区，其次旧址（兼容从旧备份恢复的实例）。"""
     if _KEY_FILE.exists():
-        raw = _KEY_FILE.read_text(encoding="utf-8").strip()
-        try:
-            return base64.b64decode(raw)
-        except Exception:
-            pass
-    key = secrets.token_bytes(32)
-    _KEY_FILE.write_text(base64.b64encode(key).decode(), encoding="utf-8")
+        return _KEY_FILE
+    if _LEGACY_KEY_FILE.exists():
+        return _LEGACY_KEY_FILE
+    return _KEY_FILE
+
+
+def _chmod_key() -> None:
     try:
         os.chmod(_KEY_FILE, 0o600)
     except OSError:
         pass
+
+
+def _write_key_meta(key: bytes) -> None:
+    """记录密钥指纹：指纹变了 = 密钥被替换，云上旧存档将永远打不开。"""
+    meta = {
+        "algorithm": "AES-256-GCM",
+        "key_sha256": hashlib.sha256(key).hexdigest(),
+        "key_bytes": len(key),
+        "recorded_at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "note": "指纹变更=密钥被替换；若非有意轮换，请立即从私有备份恢复密钥。",
+    }
+    _KEY_META.parent.mkdir(parents=True, exist_ok=True)
+    _KEY_META.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def get_or_create_key(force_new: bool = False) -> bytes:
+    """读取 AES-256 密钥（data/keys/cloud_key.txt，base64 编码 32 字节）。
+
+    安全（2026-09-13 修复）：密钥缺失时**不再静默重建**。
+    钥匙区留有指纹记录（_KEY_META）说明曾经存在密钥 —— 此时直接报错，
+    避免新密钥把云上旧存档变成永久无法解密的垃圾。确需轮换请显式 force_new=True。
+    """
+    if force_new:
+        key = secrets.token_bytes(32)
+        _KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _KEY_FILE.write_text(base64.b64encode(key).decode(), encoding="utf-8")
+        _chmod_key()
+        _write_key_meta(key)
+        return key
+
+    path = _key_path()
+    if path.exists():
+        raw = path.read_text(encoding="utf-8").strip()
+        try:
+            key = base64.b64decode(raw)
+        except Exception as exc:
+            raise RuntimeError(
+                "密钥文件内容非法（不是 base64）：%s -> %s\n"
+                "  请从私有备份恢复该文件，不要手工编辑。" % (path, exc)
+            ) from exc
+        if not _KEY_META.exists():
+            _write_key_meta(key)  # 自愈：补齐指纹，让“密钥曾经存在”有据可查
+        return key
+
+    if _KEY_META.exists():
+        raise RuntimeError(
+            "云存档密钥缺失，但钥匙区存在指纹记录 -> 拒绝自动生成新密钥。\n"
+            "  期望位置: %s\n"
+            "  回退位置: %s\n"
+            "  恢复方法: 从 backups/private_*.zip 或 backups/self_*_full/data/keys/ 取回 cloud_key.txt\n"
+            "  若确认云端已无历史存档、要启用全新密钥: cloud_backup.py newkey" % (_KEY_FILE, _LEGACY_KEY_FILE)
+        )
+
+    key = secrets.token_bytes(32)
+    _KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _KEY_FILE.write_text(base64.b64encode(key).decode(), encoding="utf-8")
+    _chmod_key()
+    _write_key_meta(key)
     return key
 
 
 def _key_hint() -> str:
-    return (f"云存档加密密钥已生成: {_KEY_FILE}\n"
-            "请务必将此文件备份到安全位置（例如你的私人网盘/移动硬盘）。\n"
-            "云端只存密文，丢失此密钥 = 云端存档永远无法解密。")
-
-
+    return ("云存档加密密钥已生成: %s\n"
+            "该文件已纳入本地私有备份；不要删、不要手工改。\n"
+            "云端只存密文，丢失此密钥 = 云端存档永远无法解密。" % _KEY_FILE)
 # ---------- 加密 / 解密 ----------
 
 def encrypt_bytes(data: bytes, key: bytes, key_id: int = 1) -> bytes:
@@ -189,23 +255,41 @@ def decrypt_bytes(data: bytes, key: bytes) -> bytes:
 
 # ---------- 打包 ----------
 
+def _assert_packable(rel: str) -> None:
+    """云端打包守卫：密钥及其目录绝不允许进入云端包（防密文与密钥同处）。"""
+    r = rel.replace("\\", "/").strip("/")
+    if r == _KEY_DIR_REL or r.startswith(_KEY_DIR_REL + "/") or r == _LEGACY_KEY_REL:
+        raise RuntimeError("拒绝打包：%s 属于密钥区（%s），绝不允许上传云端。" % (rel, _KEY_DIR_REL))
+
+
 def pack(note: str = "") -> tuple[Path, dict]:
-    """打包私有数据为本地 zip（与 backup_private 同清单），返回 (zip_path, manifest)。"""
+    """打包私有数据为本地 zip（与 backup_private 同清单 + 目录递归），返回 (zip_path, manifest)。"""
     _BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     zip_path = _BACKUP_ROOT / f"cloud_{ts}.zip"
     added, missing = [], []
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for rel in _PRIVATE_FILES + _CORE_FILES:
+            _assert_packable(rel)
             src = _PROJECT_ROOT / rel
             if src.exists():
                 zf.write(src, arcname=rel)
                 added.append(rel)
             else:
                 missing.append(rel)
+        for rel_dir in _PRIVATE_DIRS:
+            _assert_packable(rel_dir)
+            d = _PROJECT_ROOT / rel_dir
+            if not d.is_dir():
+                missing.append(rel_dir)
+                continue
+            for f in sorted(d.rglob("*")):
+                if f.is_file() and "__pycache__" not in f.parts:
+                    arc = f.relative_to(_PROJECT_ROOT).as_posix()
+                    _assert_packable(arc)
+                    zf.write(f, arcname=arc)
+                    added.append(arc)
     return zip_path, {"files": added, "missing": missing, "note": note, "ts": ts}
-
-
 # ---------- 上传 ----------
 
 def _dav(path: str) -> str:
@@ -402,12 +486,16 @@ if __name__ == "__main__":
     if mode == "run":
         result = run(note="命令行手动云备份")
         print(json.dumps(result, ensure_ascii=False, indent=2))
-        if result.get("ok") and not _KEY_FILE.exists():
-            print("\n" + _key_hint())
+    elif mode == "newkey":
+        k = get_or_create_key(force_new=True)
+        print(json.dumps({"ok": True, "key_file": str(_KEY_FILE),
+                          "key_sha256": hashlib.sha256(k).hexdigest(),
+                          "warn": "密钥已轮换：云端既有存档将无法再解密。"},
+                         ensure_ascii=False, indent=2))
     elif mode == "list":
         print(json.dumps(list_remote(), ensure_ascii=False, indent=2))
     elif mode == "restore":
         name = sys.argv[2] if len(sys.argv) > 2 else ""
         print(json.dumps(restore(name), ensure_ascii=False, indent=2))
     else:
-        print("用法: cloud_backup.py [run|list|restore [版本名]]")
+        print("用法: cloud_backup.py [run|newkey|list|restore [版本名]]")

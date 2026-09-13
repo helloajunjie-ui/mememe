@@ -52,6 +52,8 @@ _ssh*.py
 
 # 云存档解密密钥（绝不上库）
 data/cloud_key.txt
+# 私密钥匙区（云存档密钥新址 data/keys/cloud_key.txt；绝不入公开仓库）
+data/keys/
 
 # 归档研究产物（本地留存，不入库）
 workspace/archive/
@@ -65,3 +67,11 @@ webui/uploads/
 
 # 白绫资料库（实例知识，不进公开仓库；走私有备份）
 library/
+
+# ===== 实例运行状态（本机状态，不入公开仓库）=====
+# 用通配防新增状态文件漏网（如 cloud_backup_status.json 曾漏防）
+data/*_status.json
+# 工作区废纸篓
+workspace/_trash/
+# 个人形象资产（webui 头像等；与 persona/ 同策略：本地留存）
+webui/assets/
