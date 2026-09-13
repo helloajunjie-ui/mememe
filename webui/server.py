@@ -57,6 +57,12 @@ _TEXT_EXTS = {
 _MAX_UPLOAD = 2 * 1024 * 1024          # 单文件上限 2MB
 _UPLOAD_PREVIEW = 20000                # 返回给前端的内容预览/消息上限（字符）
 
+# 图片扩展名：不按文本解码，原样存盘 → 路径回给前端 → 本体用 vision_look 自己看
+_IMAGE_EXTS = {
+    ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp",
+}
+_MAX_IMAGE_UPLOAD = 12 * 1024 * 1024      # 单张图片上限 12MB
+
 # ---------- Agent 后台异步初始化 ----------
 _agent = None
 _ready = False
@@ -721,14 +727,19 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(400, {"ok": False, "error": f"保存自主时间配置失败: {e}"})
 
 
-    # ---------- 文本文件上传 API ----------
+    # ---------- 文件上传 API（文本解码 / 图片存盘） ----------
     def _handle_upload(self) -> None:
-        """接收文本文件（裸 body + X-Filename 头），解码→保存→返回内容供前端发消息。"""
+        """接收上传文件（裸 body + X-Filename 头）。
+
+        文本类：解码 → 存盘 → 返回内容预览（前端拼进消息带上）。
+        图片类：不解码，按二进制原样存盘 → 只返回路径（本体用 vision_look 自己看）。
+        """
         name = unquote((self.headers.get("X-Filename") or "").strip() or "unnamed.txt")
         name = os.path.basename(name.replace("\\", "/"))
         ext = os.path.splitext(name)[1].lower()
-        if ext not in _TEXT_EXTS:
-            self._send_json(400, {"ok": False, "error": "仅支持文本类文件（txt / md / json / py / csv 等）"})
+        is_image = ext in _IMAGE_EXTS
+        if ext not in _TEXT_EXTS and not is_image:
+            self._send_json(400, {"ok": False, "error": "仅支持文本类文件（txt / md / json / py / csv 等）与图片（png / jpg / jpeg / webp / gif / bmp）"})
             return
         try:
             length = int(self.headers.get("Content-Length", 0) or 0)
@@ -737,10 +748,27 @@ class Handler(BaseHTTPRequestHandler):
         if length <= 0:
             self._send_json(400, {"ok": False, "error": "文件内容为空"})
             return
-        if length > _MAX_UPLOAD:
-            self._send_json(413, {"ok": False, "error": "文件过大（上限 2MB）"})
+        limit = _MAX_IMAGE_UPLOAD if is_image else _MAX_UPLOAD
+        if length > limit:
+            self._send_json(413, {"ok": False, "error": f"文件过大（上限 {limit // (1024 * 1024)}MB）"})
             return
         raw = self.rfile.read(length)
+        up_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
+        os.makedirs(up_dir, exist_ok=True)
+        safe = re.sub(r"[^\w.\-\u4e00-\u9fff]", "_", name) or ("file.png" if is_image else "file.txt")
+        save_path = os.path.join(up_dir, f"{int(time.time())}_{safe}")
+        if is_image:
+            try:
+                with open(save_path, "wb") as f:
+                    f.write(raw)
+            except OSError as e:
+                self._send_json(500, {"ok": False, "error": f"文件保存失败: {e}"})
+                return
+            self._send_json(200, {
+                "ok": True, "kind": "image", "name": name,
+                "bytes": len(raw), "path": save_path,
+            })
+            return
         text = None
         for enc in ("utf-8-sig", "utf-8", "gbk", "latin-1"):
             try:
@@ -751,10 +779,6 @@ class Handler(BaseHTTPRequestHandler):
         if text is None:
             self._send_json(400, {"ok": False, "error": "无法按文本解码，请确认是文本文件"})
             return
-        up_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
-        os.makedirs(up_dir, exist_ok=True)
-        safe = re.sub(r"[^\w.\-\u4e00-\u9fff]", "_", name) or "file.txt"
-        save_path = os.path.join(up_dir, f"{int(time.time())}_{safe}")
         try:
             with open(save_path, "w", encoding="utf-8", newline="") as f:
                 f.write(text)
@@ -763,7 +787,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         truncated = len(text) > _UPLOAD_PREVIEW
         self._send_json(200, {
-            "ok": True, "name": name, "chars": len(text), "bytes": len(raw),
+            "ok": True, "kind": "text", "name": name, "chars": len(text), "bytes": len(raw),
             "path": save_path, "truncated": truncated,
             "content": text[:_UPLOAD_PREVIEW],
         })

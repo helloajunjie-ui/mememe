@@ -329,6 +329,8 @@ aside#persona{width:320px;flex-shrink:0;background:#FAF6EE;border-left:1px solid
 #persona[data-emo="fx-curious"] .p-portrait{background:radial-gradient(ellipse at 42% 28%, rgba(90,130,190,.15), transparent 62%)}
 #persona[data-emo="fx-cool"] .p-portrait{background:radial-gradient(ellipse at 50% 30%, rgba(100,120,150,.14), transparent 62%)}
 #persona[data-emo="fx-anger"] .p-portrait{background:radial-gradient(ellipse at 50% 30%, rgba(150,90,85,.13), transparent 62%)}
+.p-emo{position:absolute;right:12px;bottom:12px;width:76px;height:76px;border-radius:50%;border:2px solid var(--gold-soft);box-shadow:0 4px 14px rgba(90,80,50,.28);overflow:hidden;background:#FFFDF7;z-index:5}
+.p-emo img{width:100%;height:100%;object-fit:cover;display:block;transition:opacity .5s ease}
 @keyframes breathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
 .p-state{position:absolute;left:50%;transform:translateX(-50%);bottom:12px;
   background:rgba(255,253,247,.94);border:1px solid #E7E0D0;border-radius:999px;
@@ -451,13 +453,14 @@ aside#persona{width:320px;flex-shrink:0;background:#FAF6EE;border-left:1px solid
   <button id="send" onclick="send()">发送</button>
   <span class="hint">Esc 清空</span>
 </footer>
-<input type="file" id="fileInput" accept=".txt,.md,.markdown,.log,.csv,.json,.jsonl,.yaml,.yml,.ini,.conf,.toml,.xml,.html,.css,.js,.mjs,.ts,.py,.sh,.bat,.cmd,.ps1,.sql,.rst,.tex" style="display:none" onchange="uploadFile()">
+<input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.webp,.gif,.bmp,.txt,.md,.markdown,.log,.csv,.json,.jsonl,.yaml,.yml,.ini,.conf,.toml,.xml,.html,.css,.js,.mjs,.ts,.py,.sh,.bat,.cmd,.ps1,.sql,.rst,.tex" style="display:none" onchange="uploadFile()">
 <div class="toast" id="toast"></div>
   </div>
   <aside id="persona" data-state="idle">
     <div class="p-card p-portrait">
       <canvas id="pfx"></canvas>
       <img id="pImg" src="assets/persona/state_idle.png" alt="白绫">
+    <div class="p-emo" id="pEmoBadge" title="此刻心情"><img id="pEmo" src="assets/persona/head_calm.png" alt="心情"></div>
     </div>
 
     <div class="p-card p-status">
@@ -1051,13 +1054,20 @@ function uploadFile() {
       toast((o.status === 503 ? "白绫还在初始化中，请稍候再试。" : "传文件失败：" + (d.error || "未知错误")));
       fi.value = ""; input.focus(); return;
     }
-    var tail = d.truncated ? "\n\n……（内容较长已截断，完整内容请用读取文件工具查看保存路径）" : "";
-    var msg = "我传了一份文件给你：「" + d.name + "」（共 " + d.chars + " 字）。文件已保存至：" + d.path + "。请阅读并处理。\n\n===== 文件内容 =====\n" + d.content + tail;
+    var msg, tip;
+    if (d.kind === "image") {
+      msg = "我传了一张图片给你：「" + d.name + "」。图片已保存至：" + d.path + "。请用 vision_look 看一下。";
+      tip = "已收到「" + d.name + "」，正请白绫看图";
+    } else {
+      var tail = d.truncated ? "\n\n……（内容较长已截断，完整内容请用读取文件工具查看保存路径）" : "";
+      msg = "我传了一份文件给你：「" + d.name + "」（共 " + d.chars + " 字）。文件已保存至：" + d.path + "。请阅读并处理。\n\n===== 文件内容 =====\n" + d.content + tail;
+      tip = "已收到「" + d.name + "」，正请白绫阅读";
+    }
     fi.value = "";
     addMsg("user", escapeHtml(msg).replace(/\n/g, "<br>"));
     input.value = msg; input.style.height = "auto";
     send();
-    toast("已收到「" + d.name + "」，正请白绫阅读");
+    toast(tip);
   }).catch(function(e){
     btn.disabled = false; btn.classList.remove("busy");
     toast("上传请求失败：" + String(e) + "。请确认服务端在运行。");
@@ -1398,6 +1408,21 @@ function setPortrait(mode, emo){
     im.src = src;
   }
 }
+var pEmo = document.getElementById("pEmo");
+var HEAD_IMG = {
+  calm:"assets/persona/head_calm.png", pleased:"assets/persona/head_pleased.png",
+  curious:"assets/persona/head_curious.png", low:"assets/persona/head_low.png",
+  angry:"assets/persona/head_angry.png"
+};
+function setEmoHead(emo){
+  var src = HEAD_IMG[EMO_MAP[emo] || "calm"];
+  if (pEmo.getAttribute("src") !== src){
+    pEmo.style.opacity = 0;
+    var im = new Image();
+    im.onload = function(){ pEmo.src = src; pEmo.style.opacity = 1; };
+    im.src = src;
+  }
+}
 var pStateDesc = document.getElementById("pStateDesc");
 var pMetaEmo = document.getElementById("pMetaEmo");
 var pMetaMem = document.getElementById("pMetaMem");
@@ -1425,6 +1450,7 @@ function pollActivity(){
     var emoInt = d.emotion && typeof d.emotion.intensity === "number" ? d.emotion.intensity : 0;
     var fx = FX_MAP[emoKey] || "fx-calm";
     setPortrait(mode, emoKey);
+    setEmoHead(emoKey);
     personaEl.setAttribute("data-emo", fx);
     setParticles(mode, fx);
     pMetaEmo.textContent = "情绪 " + (EMO_LABEL[emoKey] || emoKey) + bandWord(emoInt);
