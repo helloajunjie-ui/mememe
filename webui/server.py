@@ -28,7 +28,7 @@ import threading
 import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 import yaml
 
@@ -38,6 +38,16 @@ sys.path.insert(0, ROOT)
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("BAILING_WEBUI_PORT", "8765"))
 _started_at = None  # 服务启动时刻（托盘悬停气泡显示运行时长用）
+
+# ---------- 文本文件上传（传文件给白绫） ----------
+_TEXT_EXTS = {
+    ".txt", ".md", ".markdown", ".log", ".rst", ".tex",
+    ".csv", ".json", ".jsonl", ".yaml", ".yml", ".ini", ".conf", ".cfg", ".toml",
+    ".xml", ".html", ".htm", ".css", ".js", ".mjs", ".ts", ".tsx", ".jsx",
+    ".py", ".pyw", ".sh", ".bat", ".cmd", ".ps1", ".sql",
+}
+_MAX_UPLOAD = 2 * 1024 * 1024          # 单文件上限 2MB
+_UPLOAD_PREVIEW = 20000                # 返回给前端的内容预览/消息上限（字符）
 
 # ---------- Agent 后台异步初始化 ----------
 _agent = None
@@ -379,11 +389,20 @@ class Handler(BaseHTTPRequestHandler):
             return {}
 
     # ---------- 路由 ----------
+    _STATIC_TYPES = {
+        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
+        ".ico": "image/x-icon", ".css": "text/css; charset=utf-8",
+        ".js": "application/javascript; charset=utf-8",
+    }
+
     def do_GET(self):
         path = urlparse(self.path).path
         m = re.match(r"^/api/task/(\w+)$", path)
         if path in ("/", "/index.html"):
             self._serve_index()
+        elif re.match(r"^/assets/[A-Za-z0-9_./-]+$", path) and "." in path.rsplit("/", 1)[-1]:
+            self._serve_static(path)
         elif path == "/api/status":
             self._handle_status()
         elif path == "/api/config":
@@ -409,8 +428,32 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_models_fetch()
         elif path == "/api/study":
             self._handle_study()
+        elif path == "/api/upload":
+            self._handle_upload()
         else:
             self._send_json(404, {"ok": False, "error": "not found"})
+
+    # ---------- 静态资源（webui/assets 目录，防目录穿越） ----------
+    def _serve_static(self, path: str) -> None:
+        webui = os.path.dirname(os.path.abspath(__file__))
+        full = os.path.normpath(os.path.join(webui, path.lstrip("/")))
+        if not full.startswith(webui):
+            self._send_json(403, {"ok": False, "error": "forbidden"})
+            return
+        ext = os.path.splitext(full)[1].lower()
+        ctype = self._STATIC_TYPES.get(ext, "application/octet-stream")
+        try:
+            with open(full, "rb") as f:
+                data = f.read()
+        except OSError:
+            self._send_json(404, {"ok": False, "error": "not found"})
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(data)
 
     # ---------- 页面（静态展示端） ----------
     def _serve_index(self) -> None:
@@ -611,6 +654,54 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {"ok": True, "study": cfg})
         except Exception as e:  # noqa: BLE001
             self._send_json(400, {"ok": False, "error": f"保存自主时间配置失败: {e}"})
+
+
+    # ---------- 文本文件上传 API ----------
+    def _handle_upload(self) -> None:
+        """接收文本文件（裸 body + X-Filename 头），解码→保存→返回内容供前端发消息。"""
+        name = unquote((self.headers.get("X-Filename") or "").strip() or "unnamed.txt")
+        name = os.path.basename(name.replace("\\", "/"))
+        ext = os.path.splitext(name)[1].lower()
+        if ext not in _TEXT_EXTS:
+            self._send_json(400, {"ok": False, "error": "仅支持文本类文件（txt / md / json / py / csv 等）"})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", 0) or 0)
+        except ValueError:
+            length = 0
+        if length <= 0:
+            self._send_json(400, {"ok": False, "error": "文件内容为空"})
+            return
+        if length > _MAX_UPLOAD:
+            self._send_json(413, {"ok": False, "error": "文件过大（上限 2MB）"})
+            return
+        raw = self.rfile.read(length)
+        text = None
+        for enc in ("utf-8-sig", "utf-8", "gbk", "latin-1"):
+            try:
+                text = raw.decode(enc)
+                break
+            except (UnicodeDecodeError, ValueError):
+                continue
+        if text is None:
+            self._send_json(400, {"ok": False, "error": "无法按文本解码，请确认是文本文件"})
+            return
+        up_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
+        os.makedirs(up_dir, exist_ok=True)
+        safe = re.sub(r"[^\w.\-\u4e00-\u9fff]", "_", name) or "file.txt"
+        save_path = os.path.join(up_dir, f"{int(time.time())}_{safe}")
+        try:
+            with open(save_path, "w", encoding="utf-8", newline="") as f:
+                f.write(text)
+        except OSError as e:
+            self._send_json(500, {"ok": False, "error": f"文件保存失败: {e}"})
+            return
+        truncated = len(text) > _UPLOAD_PREVIEW
+        self._send_json(200, {
+            "ok": True, "name": name, "chars": len(text), "bytes": len(raw),
+            "path": save_path, "truncated": truncated,
+            "content": text[:_UPLOAD_PREVIEW],
+        })
 
 
 def _port_in_use(host: str, port: int) -> bool:

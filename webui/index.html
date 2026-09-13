@@ -4,17 +4,24 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>白绫 Bailing · 自我完善 AI 智能体</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23F5F0E6'/%3E%3Cpath d='M32 12c-6 0-9 4-9 10 0 8 4 12 9 12s9-4 9-12c0-6-3-10-9-10zm-10 26c-1 8 1 14 10 14s11-6 10-14c-4 2-7 3-10 3s-6-1-10-3z' fill='%234B5570'/%3E%3C/svg%3E">
 <style>
   :root {
-    --bg: #F5F5F5;
-    --panel: #FFFFFF;
-    --border: #E4E4E4;
-    --text: #1A1B1C;
-    --text-2: #6B7280;
-    --bubble-user: #95EC69;
-    --bubble-user-text: #1A1B1C;
-    --bubble-bailing: #FFFFFF;
-    --accent: #3B82F6;
+    --bg: #F7F3EA;
+    --panel: #FFFDF7;
+    --border: #ECE5D4;
+    --text: #3A3F4B;
+    --text-2: #6B7180;
+    --bubble-user: #E4E9F2;
+    --bubble-user-text: #333B52;
+    --bubble-bailing: #FFFDF7;
+    --accent: #4B5570;
+    --gold: #B8943F;
+    --gold-soft: #D9BC74;
+    --indigo: #4B5570;
+    --indigo-deep: #333B52;
+    --line: #E7E0D0;
+    --cloud: #F0EBDE;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
   html, body { height:100%; }
@@ -42,12 +49,12 @@
     font-size: 11px;
     padding: 3px 9px;
     border-radius: 20px;
-    background: #EEF2FF;
-    color: #3B5BDB;
-    border: 1px solid #DCE4FF;
+    background: #F0ECF6;
+    color: #4B5570;
+    border: 1px solid #E2DDEC;
     white-space: nowrap;
   }
-  .badge.gray { background: #F3F4F6; color: #4B5563; border-color: #E5E7EB; }
+  .badge.gray { background: #F0EBDE; color: #6B7180; border-color: #E7E0D0; }
   /* 聊天区 */
   main {
     flex: 1;
@@ -60,8 +67,8 @@
     display: flex; align-items: center; justify-content: center;
     font-size: 16px; flex-shrink: 0; user-select: none;
   }
-  .msg-wrap.bailing .avatar { background: #EEF2FF; margin-right: 10px; }
-  .msg-wrap.user .avatar { background: #E6F7D9; margin-left: 10px; order: 2; }
+  .msg-wrap.bailing .avatar { background: #F0ECF6; margin-right: 10px; }
+  .msg-wrap.user .avatar { background: #F3EEE1; margin-left: 10px; order: 2; }
   .bubble {
     max-width: 76%;
     padding: 10px 14px;
@@ -77,13 +84,13 @@
   .bubble p { margin: 4px 0; }
   .bubble ul, .bubble ol { margin: 6px 0 6px 20px; }
   .bubble pre {
-    background: #F6F8FA; border: 1px solid var(--border);
+    background: #F7F3EA; border: 1px solid var(--border);
     border-radius: 8px; padding: 10px 12px; overflow-x: auto;
     font-family: Consolas, "Courier New", monospace;
     font-size: 12.5px; margin: 8px 0;
   }
   .bubble code { font-family: Consolas, "Courier New", monospace; font-size: 12.5px;
-    background: #F1F1F1; padding: 1px 5px; border-radius: 4px; }
+    background: #F3EFE4; padding: 1px 5px; border-radius: 4px; }
   .bubble pre code { background: none; padding: 0; }
   .bubble strong { font-weight: 600; }
   .bubble h1, .bubble h2, .bubble h3, .bubble h4 { margin: 10px 0 6px; line-height: 1.35; }
@@ -92,7 +99,7 @@
   .bubble a { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(59,130,246,.35); }
   .bubble a:hover { text-decoration: underline; }
   .bubble em { font-style: italic; }
-  .bubble blockquote { margin: 8px 0; padding: 6px 12px; border-left: 3px solid #D1D5DB; background: rgba(0,0,0,.02); color: var(--text-2); border-radius: 0 6px 6px 0; }
+  .bubble blockquote { margin: 8px 0; padding: 6px 12px; border-left: 3px solid #D8D2C2; background: rgba(0,0,0,.02); color: var(--text-2); border-radius: 0 6px 6px 0; }
   .bubble hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
   .bubble table { border-collapse: collapse; margin: 8px 0; font-size: 13px; width: 100%; }
   .bubble th, .bubble td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
@@ -103,34 +110,34 @@
   /* 思考中 */
   .thinking { display: flex; align-items: center; gap: 8px; }
   .thinking .dot { width: 6px; height: 6px; border-radius: 50%;
-    background: #9CA3AF; animation: blink 1.2s infinite; }
+    background: #A29B8C; animation: blink 1.2s infinite; }
   .thinking .dot:nth-child(2){ animation-delay: 0.2s; }
   .thinking .dot:nth-child(3){ animation-delay: 0.4s; }
   @keyframes blink { 0%,80%,100%{opacity:.25;} 40%{opacity:1;} }
   /* 任务执行卡片：状态条 + 进度 + 计划 + 折叠流水 */
   .task-card { font-size: 13px; line-height: 1.6; min-width: 300px; max-width: 640px; }
-  .task-head { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: #6B7280; margin-bottom: 5px; }
+  .task-head { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: #6B7180; margin-bottom: 5px; }
   .task-type {
-    color: #3B5BDB; background: #EEF2FF; border: 1px solid #DCE4FF;
+    color: #4B5570; background: #F0ECF6; border: 1px solid #E2DDEC;
     border-radius: 20px; padding: 1px 9px; font-size: 10.5px; white-space: nowrap;
   }
   .task-status { margin-left: auto; font-size: 10.5px; white-space: nowrap; }
   .task-status.err { color: #DC2626; }
-  .task-status.done { color: #059669; }
+  .task-status.done { color: #5B8A6E; }
   .task-goal {
-    font-size: 12px; color: #374151; background: #FAFAF8;
+    font-size: 12px; color: #4A4F5C; background: #FFFDF7;
     border: 1px solid #E4E3DD; border-radius: 8px; padding: 5px 10px;
     margin: 2px 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .task-now { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #0369A1; padding: 3px 0; }
+  .task-now { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #4B5E7A; padding: 3px 0; }
   .task-now .spinner {
-    width: 11px; height: 11px; flex-shrink: 0; border: 2px solid #BFDBFE;
-    border-top-color: #3B82F6; border-radius: 50%; animation: spin .8s linear infinite;
+    width: 11px; height: 11px; flex-shrink: 0; border: 2px solid #D5DCE8;
+    border-top-color: #4B5570; border-radius: 50%; animation: spin .8s linear infinite;
   }
-  .task-now .stepno { font-weight: 400; color: #9CA3AF; font-size: 11px; }
-  .task-now .actv { font-weight: 700; color: #2563EB; font-family: Consolas, 'Courier New', monospace; }
+  .task-now .stepno { font-weight: 400; color: #A29B8C; font-size: 11px; }
+  .task-now .actv { font-weight: 700; color: #3E4A66; font-family: Consolas, 'Courier New', monospace; }
   .task-now .task-arg {
-    color: #6B7280; font-family: Consolas, 'Courier New', monospace; font-size: 11.5px;
+    color: #6B7180; font-family: Consolas, 'Courier New', monospace; font-size: 11.5px;
     max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     display: inline-block; vertical-align: bottom;
   }
@@ -141,41 +148,41 @@
   }
   .task-think::before { content: '在想：'; font-weight: 600; color: #8B7BC8; }
   .task-now.err { color: #DC2626; }
-  .task-now.done { color: #059669; }
+  .task-now.done { color: #5B8A6E; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .task-progress { display: flex; align-items: center; gap: 8px; margin: 6px 0 4px; }
-  .task-progress .bar { flex: 1; height: 6px; background: #EEF0F3; border-radius: 3px; overflow: hidden; }
-  .task-progress .bar > i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg,#60A5FA,#3B82F6); border-radius: 3px; transition: width .4s ease; }
+  .task-progress .bar { flex: 1; height: 6px; background: #EFEBDF; border-radius: 3px; overflow: hidden; }
+  .task-progress .bar > i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg,#7A92B2,#4B5570); border-radius: 3px; transition: width .4s ease; }
   .task-progress .bar.indeterminate > i { width: 36% !important; animation: slide 1.2s ease-in-out infinite; }
-  .task-progress .txt { font-size: 11px; color: #6B7280; flex-shrink: 0; }
+  .task-progress .txt { font-size: 11px; color: #6B7180; flex-shrink: 0; }
   @keyframes slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
   .task-plan { position: relative; margin: 4px 0 6px; max-height: 168px; overflow-y: auto; }
-  .task-plan .pg { font-size: 10.5px; color: #8A8F98; font-weight: 600; margin: 4px 0 1px; }
+  .task-plan .pg { font-size: 10.5px; color: #8F8A7C; font-weight: 600; margin: 4px 0 1px; }
   .task-plan .ps {
-    font-size: 12px; color: #6B7280; padding: 1px 5px; border-radius: 4px;
+    font-size: 12px; color: #6B7180; padding: 1px 5px; border-radius: 4px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .task-plan .ps.cur { background: #EFF6FF; color: #1D4ED8; font-weight: 500; }
-  .task-plan .ps.done { color: #059669; text-decoration: line-through; }
+  .task-plan .ps.cur { background: #F2F0F8; color: #333B52; font-weight: 500; }
+  .task-plan .ps.done { color: #5B8A6E; text-decoration: line-through; }
   .task-plan .ps.fail { color: #DC2626; }
-  .task-plan .ps.todo { color: #9CA3AF; }
+  .task-plan .ps.todo { color: #A29B8C; }
   .task-flow-head {
-    display: flex; align-items: center; gap: 6px; font-size: 11px; color: #6B7280;
+    display: flex; align-items: center; gap: 6px; font-size: 11px; color: #6B7180;
     margin: 6px 0 2px; cursor: pointer; user-select: none; display: none;
   }
-  .task-flow-head:hover { color: #1F2937; }
-  .task-flow-head .count { background: #F3F4F6; border-radius: 10px; padding: 0 7px; font-size: 10.5px; }
+  .task-flow-head:hover { color: #3A3F4B; }
+  .task-flow-head .count { background: #F0EBDE; border-radius: 10px; padding: 0 7px; font-size: 10.5px; }
   .task-flow-head .toggle { margin-left: auto; }
   .task-flow { display: flex; flex-direction: column; }
-  .task-flow .tl { display: flex; gap: 7px; font-size: 11.5px; color: #4B5563; padding: 1px 0; align-items: baseline; }
+  .task-flow .tl { display: flex; gap: 7px; font-size: 11.5px; color: #6B7180; padding: 1px 0; align-items: baseline; }
   .task-flow .tl .st { flex-shrink: 0; width: 12px; text-align: center; }
-  .task-flow .tl .ts { color: #9CA3AF; flex-shrink: 0; font-family: Consolas, "Courier New", monospace; }
+  .task-flow .tl .ts { color: #A29B8C; flex-shrink: 0; font-family: Consolas, "Courier New", monospace; }
   .task-flow .tl .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .task-flow .tl .actv { font-weight: 600; color: #3B5BDB; font-family: Consolas, 'Courier New', monospace; }
-  .task-flow .tl .flow-obj { color: #9CA3AF; font-family: Consolas, 'Courier New', monospace; }
-  .task-flow .tl.run .nm { color: #0369A1; font-weight: 600; }
+  .task-flow .tl .actv { font-weight: 600; color: #4B5570; font-family: Consolas, 'Courier New', monospace; }
+  .task-flow .tl .flow-obj { color: #A29B8C; font-family: Consolas, 'Courier New', monospace; }
+  .task-flow .tl.run .nm { color: #4B5E7A; font-weight: 600; }
   .task-flow .tl.err .nm { color: #DC2626; }
-  .task-review { margin-left: 8px; font-size: 10.5px; color: #3B82F6; cursor: pointer; white-space: nowrap; }
+  .task-review { margin-left: 8px; font-size: 10.5px; color: #4B5570; cursor: pointer; white-space: nowrap; }
   .task-review:hover { text-decoration: underline; }
   /* 输入区 */
   footer {
@@ -212,6 +219,24 @@
     flex-shrink: 0;
   }
   footer button:disabled { background: #A5B4FC; cursor: not-allowed; }
+  .file-btn {
+    width: 44px; height: 44px; padding: 0; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    color: var(--indigo); cursor: pointer; transition: all .2s;
+  }
+  .file-btn:hover { border-color: var(--gold-soft); color: var(--gold); }
+  .file-btn:disabled { opacity: .55; cursor: not-allowed; }
+  .file-btn.busy { animation: filePulse 1s infinite; }
+  @keyframes filePulse { 50% { opacity: .35; } }
+  .toast {
+    position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+    background: var(--indigo-deep); color: #FFFDF7; font-size: 12.5px;
+    padding: 9px 18px; border-radius: 999px; letter-spacing: 1px;
+    box-shadow: 0 6px 20px rgba(51,59,82,.28); z-index: 999; opacity: 0;
+    transition: opacity .25s; pointer-events: none; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
   .hint { font-size: 11px; color: var(--text-2); margin-left: auto; align-self: center; }
 
   /* AI 配置面板 */
@@ -282,6 +307,53 @@
     .bubble { max-width: 88%; }
     header .badges { display: none; }
   }
+
+/* ===== 白绫形象右栏 ===== */
+.layout{display:flex;flex:1;min-height:0}
+.chat-col{flex:1;min-width:0;display:flex;flex-direction:column}
+aside#persona{width:320px;flex-shrink:0;background:#FAF6EE;border-left:1px solid #ECE5D4;
+  overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+.p-card{background:#FFFDF7;border:1px solid #EFE8D8;border-radius:14px;padding:14px}
+.p-card h3{font-size:12.5px;letter-spacing:2px;color:#4B5570;margin-bottom:10px;
+  display:flex;align-items:center;gap:7px;font-weight:600}
+.p-card h3::before{content:"";width:4px;height:12px;background:#B8943F;border-radius:2px}
+.p-portrait{position:relative;overflow:hidden;padding:0}
+.p-portrait img{width:100%;height:auto;display:block;animation:breathe 5s ease-in-out infinite}
+@keyframes breathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.p-state{position:absolute;left:50%;transform:translateX(-50%);bottom:12px;
+  background:rgba(255,253,247,.94);border:1px solid #E7E0D0;border-radius:999px;
+  padding:5px 16px;font-size:13px;letter-spacing:2px;color:#3A3F4B;
+  display:flex;align-items:center;gap:7px;white-space:nowrap;
+  box-shadow:0 3px 10px rgba(90,80,50,.10)}
+.p-state .dot{width:7px;height:7px;border-radius:50%;background:#8FA58B;animation:pulse 1.8s infinite}
+#persona[data-state="thinking"] .p-state .dot{background:#7A92B2}
+#persona[data-state="busy"] .p-state .dot{background:#4B5570}
+#persona[data-state="query"] .p-state .dot{background:#B8943F}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+#pfx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.p-id .nm{font-size:16px;letter-spacing:3px;color:#333B52;font-weight:700}
+.p-id .en{font-size:11px;color:#8F8A7C;letter-spacing:2px;margin-left:6px}
+.p-id p{font-size:12px;color:#6B7180;line-height:1.8;margin-top:8px}
+.p-traits span{font-size:11px;color:#3A3F4B;background:#F3EEE1;border:1px solid #E7E0D0;
+  border-radius:999px;padding:3px 10px}
+
+/* status + quick cards */
+.p-st-main{display:flex;align-items:center;gap:9px;font-size:16px;letter-spacing:2px;color:var(--indigo-deep);font-weight:700}
+.p-st-main .dot{width:9px;height:9px;border-radius:50%;background:#8FA58B;animation:pulse 1.8s infinite;flex-shrink:0}
+#persona[data-state="thinking"] .p-st-main .dot{background:#7A92B2}
+#persona[data-state="busy"] .p-st-main .dot{background:var(--indigo)}
+#persona[data-state="query"] .p-st-main .dot{background:var(--gold)}
+.p-st-desc{font-size:12px;color:var(--text-2);margin-top:8px;line-height:1.7}
+.p-st-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:9px;border-top:1px dashed var(--line)}
+.p-st-meta span{font-size:10.5px;color:var(--text-2);background:var(--cloud);border:1px solid var(--line);border-radius:999px;padding:2px 9px;letter-spacing:.5px}
+.p-q-greet{width:100%;padding:9px 0;border:none;border-radius:10px;background:linear-gradient(90deg,var(--indigo),#5B6A8C);color:#FFFDF7;font-size:13.5px;letter-spacing:3px;cursor:pointer;font-family:inherit;box-shadow:0 3px 10px rgba(75,85,112,.25);transition:transform .2s}
+.p-q-greet:hover{transform:translateY(-1px)}
+.p-q-greet:active{transform:translateY(0)}
+.p-q-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.p-q-grid button{padding:8px 0;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink);font-size:12px;letter-spacing:1px;cursor:pointer;font-family:inherit;transition:all .2s;background:#FFFDF7}
+.p-q-grid button:hover{border-color:var(--gold-soft);color:var(--gold);transform:translateY(-1px)}
+@media (max-width:980px){ aside#persona{display:none} }
+
 </style>
 </head>
 <body>
@@ -296,7 +368,9 @@
   <button id="cfgBtn" onclick="openCfg()" title="AI 接入配置">⚙ 配置</button>
 </header>
 
-<main id="chat"></main>
+<div class="layout">
+  <div class="chat-col">
+    <main id="chat"></main>
 
 <!-- AI 接入配置面板 -->
 <div id="cfgModal" class="modal" style="display:none;">
@@ -360,10 +434,48 @@
 </div>
 
 <footer>
+  <button id="fileBtn" class="file-btn" title="传一份文本文件给白绫" onclick="document.getElementById('fileInput').click()">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20"/><path d="M9 7.5h6"/><path d="M9 11h6"/></svg>
+  </button>
   <textarea id="input" placeholder="和白绫说点什么...（Enter 发送 / Shift+Enter 换行）"></textarea>
   <button id="send" onclick="send()">发送</button>
   <span class="hint">Esc 清空</span>
 </footer>
+<input type="file" id="fileInput" accept=".txt,.md,.markdown,.log,.csv,.json,.jsonl,.yaml,.yml,.ini,.conf,.toml,.xml,.html,.css,.js,.mjs,.ts,.py,.sh,.bat,.cmd,.ps1,.sql,.rst,.tex" style="display:none" onchange="uploadFile()">
+<div class="toast" id="toast"></div>
+  </div>
+  <aside id="persona" data-state="idle">
+    <div class="p-card p-portrait">
+      <canvas id="pfx"></canvas>
+      <img src="assets/bailing_full.png" alt="白绫">
+    </div>
+
+    <div class="p-card p-status">
+      <h3>此刻 · 状态</h3>
+      <div class="p-st-main"><span class="dot"></span><span id="pStateText">空闲ing</span></div>
+      <p class="p-st-desc" id="pStateDesc">候于书案之侧，静待一声吩咐</p>
+      <div class="p-st-meta">
+        <span id="pMetaEmo">情绪 —</span><span id="pMetaMem">记忆 —</span><span id="pMetaMth">方法论 —</span>
+      </div>
+    </div>
+
+    <div class="p-card p-quick">
+      <h3>与她说说话</h3>
+      <button class="p-q-greet" onclick="quickSend()">打个招呼</button>
+      <div class="p-q-grid">
+        <button onclick="quickSend('帮我查个资料：')">查资料</button>
+        <button onclick="quickSend('帮我跑个命令：')">跑命令</button>
+        <button onclick="quickSend('帮我处理一个文件：')">处理文件</button>
+        <button onclick="quickSend('今天有什么安排吗？')">今日复盘</button>
+      </div>
+    </div>
+    <div class="p-card p-id">
+      <h3>白绫 · Bailing</h3>
+      <p>温柔书卷气的古风女子，AI 智能体的拟人化形象。成熟 · 古风 · 女性，以书卷为伴，安静从容。</p>
+    </div>
+  </aside>
+</div>
+
 
 <script>
 "use strict";
@@ -864,6 +976,42 @@ function pollTask(panel, tid) {
   }, 800);
 }
 
+function toast(msg) {
+  var t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._tm); toast._tm = setTimeout(function(){ t.classList.remove("show"); }, 2600);
+}
+function uploadFile() {
+  var fi = document.getElementById("fileInput");
+  var f = fi.files && fi.files[0];
+  if (!f) return;
+  var btn = document.getElementById("fileBtn");
+  btn.disabled = true; btn.classList.add("busy");
+  fetch("/api/upload", {
+    method: "POST",
+    headers: {"X-Filename": encodeURIComponent(f.name)},
+    body: f
+  }).then(function(r){ return r.json().then(function(d){ return {status:r.status, d:d}; }); }).then(function(o){
+    btn.disabled = false; btn.classList.remove("busy");
+    var d = o.d;
+    if (!d.ok) {
+      toast((o.status === 503 ? "白绫还在初始化中，请稍候再试。" : "传文件失败：" + (d.error || "未知错误")));
+      fi.value = ""; input.focus(); return;
+    }
+    var tail = d.truncated ? "\n\n……（内容较长已截断，完整内容请用读取文件工具查看保存路径）" : "";
+    var msg = "我传了一份文件给你：「" + d.name + "」（共 " + d.chars + " 字）。文件已保存至：" + d.path + "。请阅读并处理。\n\n===== 文件内容 =====\n" + d.content + tail;
+    fi.value = "";
+    addMsg("user", escapeHtml(msg).replace(/\n/g, "<br>"));
+    input.value = msg; input.style.height = "auto";
+    send();
+    toast("已收到「" + d.name + "」，正请白绫阅读");
+  }).catch(function(e){
+    btn.disabled = false; btn.classList.remove("busy");
+    toast("上传请求失败：" + String(e) + "。请确认服务端在运行。");
+    fi.value = ""; input.focus();
+  });
+}
+
 function send() {
   var msg = input.value.trim();
   if (!msg || sendBtn.disabled) return;
@@ -1099,6 +1247,99 @@ document.getElementById("cfgModal").addEventListener("click", function(e){
 addMsg("bailing", renderMd("你好，我是**白绫**。\n\n我在这里运行，可以和我对话，也可以让我执行任务。\n\n- 直接发消息和我聊天\n- 让我查资料、跑命令、处理文件都可以\n\n开始吧。"));
 loadStatus();
 input.focus();
+
+/* ===== 白绫形象：状态联动 + 粒子动画 ===== */
+var personaEl = document.getElementById("persona");
+var pStateText = document.getElementById("pStateText");
+var pfx = document.getElementById("pfx");
+var pctx = pfx.getContext("2d");
+var pW = 0, pH = 0, parts = [];
+function pfxResize(){
+  var r = pfx.parentElement.getBoundingClientRect();
+  var dpr = window.devicePixelRatio || 1;
+  pW = r.width; pH = r.height;
+  pfx.width = Math.round(pW * dpr); pfx.height = Math.round(pH * dpr);
+  pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", pfxResize);
+pfxResize();
+
+var PMODES = {
+  idle:   { n:16, color:[217,188,116], kind:"fall"   },
+  thinking:{ n:20, color:[122,146,178], kind:"orbit" },
+  busy:   { n:24, color:[75,85,112],   kind:"flow"   },
+  query:  { n:24, color:[184,148,63],  kind:"seek"   }
+};
+function makeParts(kind){
+  var out = [], cx = pW / 2, cy = pH * 0.45;
+  for (var i = 0; i < PMODES[kind].n; i++){
+    out.push({x:Math.random()*pW, y:Math.random()*pH, r:1+Math.random()*2.2,
+      a:0.12+Math.random()*0.3, ph:Math.random()*Math.PI*2, sp:0.2+Math.random()*0.5,
+      kind:kind, ang:Math.random()*Math.PI*2, rad:20+Math.random()*Math.min(pW,pH)*0.42});
+  }
+  return out;
+}
+function stepParts(){
+  pctx.clearRect(0,0,pW,pH);
+  var cx = pW/2, cy = pH*0.45, t = Date.now()/1000;
+  for (var i = 0; i < parts.length; i++){
+    var p = parts[i];
+    if (p.kind === "fall"){ p.y += p.sp*0.35; p.x += Math.sin(t*0.8+p.ph)*0.25; if(p.y>pH) p.y=-4; }
+    else if (p.kind === "orbit"){ p.ang += p.sp*0.006; p.x=cx+Math.cos(p.ang)*p.rad; p.y=cy+Math.sin(p.ang)*p.rad*0.7; }
+    else if (p.kind === "flow"){ p.y += p.sp*1.1; p.x = cx + Math.sin(t*1.2+p.ph)*(pW*0.35); if(p.y>pH) p.y=-4; }
+    else if (p.kind === "seek"){ p.ang += p.sp*0.01; p.rad += p.sp*0.9; if(p.rad>Math.max(pW,pH)*0.8){p.rad=8;p.ang=Math.random()*Math.PI*2;} p.x=cx+Math.cos(p.ang)*p.rad; p.y=cy+Math.sin(p.ang)*p.rad*0.8; }
+    var col = PMODES[p.kind].color;
+    pctx.beginPath();
+    pctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+    pctx.fillStyle = "rgba("+col[0]+","+col[1]+","+col[2]+","+p.a+")";
+    pctx.fill();
+  }
+  requestAnimationFrame(stepParts);
+}
+function setParticles(kind){ parts = makeParts(kind); }
+setParticles("idle"); stepParts();
+
+var pStateDesc = document.getElementById("pStateDesc");
+var pMetaEmo = document.getElementById("pMetaEmo");
+var pMetaMem = document.getElementById("pMetaMem");
+var pMetaMth = document.getElementById("pMetaMth");
+var STATE_DESC = {
+  idle: "候于书案之侧，静待一声吩咐",
+  thinking: "垂眸沉吟，梳理思路与脉络",
+  busy: "凝神执卷，一步一项落实",
+  query: "信步寻访，溯回答案所在"
+};
+function pollActivity(){
+  fetch("/api/status").then(function(r){return r.json();}).then(function(d){
+    if (!d.ok || !d.ready) return;
+    var act = d.activity || {state:"idle", detail:""};
+    var st = act.state || "idle", det = act.detail || "", label, mode;
+    if (st === "thinking"){ label = "思考ing"; mode = "thinking"; }
+    else if (st === "tool"){
+      if (/查询|搜索|检索|search|query/i.test(det)){ label = "正在查询..."; mode = "query"; }
+      else { label = "任务执行ing" + (det ? " · "+det : ""); mode = "busy"; }
+    } else { label = "空闲ing"; mode = "idle"; }
+    pStateText.textContent = label;
+    pStateDesc.textContent = STATE_DESC[mode] || STATE_DESC.idle;
+    personaEl.setAttribute("data-state", mode);
+    setParticles(mode);
+    var emo = (d.emotion && (d.emotion.current || d.emotion.mood || "")) || "—";
+    pMetaEmo.textContent = "情绪 " + emo;
+    pMetaMem.textContent = "记忆 " + (d.memory_count != null ? d.memory_count : "—");
+    pMetaMth.textContent = "方法论 " + (d.method_count != null ? d.method_count : "—");
+  }).catch(function(){});
+}
+setInterval(pollActivity, 2000); pollActivity();
+
+var GREETS = ["你好呀，白绫。", "白绫，在吗？", "今天辛苦了，白绫。", "白绫，和我说说话吧。"];
+function quickSend(text){
+  if (typeof text === "string" && text) { input.value = text; input.style.height = "auto"; input.focus(); return; }
+  var g = GREETS[Math.floor(Math.random() * GREETS.length)];
+  input.value = g; send();
+}
+
+
 </script>
+
 </body>
 </html>
