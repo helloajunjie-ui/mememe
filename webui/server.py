@@ -122,6 +122,7 @@ def _run_task(tid: str, message: str) -> None:
     except Exception as e:  # noqa: BLE001
         _tasks.fail(tid, f"白绫处理失败: {e}")
         return
+    _ensure_history(a)                # 兜底：上下文为空 → 从落盘续上（不重启也接得上）
     _session.append("user", message)  # 提问先落盘：执行中刷新/崩溃也不丢
     try:
         with _turn_lock:  # 本地单用户，串行化 turn，避免历史交错
@@ -351,6 +352,21 @@ def _restore_history(a, keep: int = _HISTORY_RESTORE_KEEP) -> int:
     except Exception as e:  # noqa: BLE001
         print(f"  对话历史恢复失败（不影响启动）: {e}")
         return 0
+
+
+def _ensure_history(a) -> None:
+    """兜底：进程内上下文为空、但落盘有对话时补一次恢复。
+
+    _restore_history 只在启动时跑一次；若那时落盘还没有数据（历史是事后补齐的），
+    进程就会一直"断片"。这里在每轮 turn 前轻量检查一次，空则补上。
+    """
+    try:
+        if not getattr(a, "history", None):
+            n = _restore_history(a)
+            if n:
+                print(f"  [兜底] 上下文为空，已从落盘续上 {n} 条对话")
+    except Exception as e:  # noqa: BLE001
+        print(f"  [兜底] 历史补载失败（不影响本轮）: {e}")
 
 
 def _init_agent_async() -> None:
