@@ -49,7 +49,6 @@ _PRIVATE_FILES = [
     "data/self.yaml",
     "data/methodology.json",
     "data/registry.json",
-    "data/registry.json.bak_wordcount",
     "data/snapshots.json",
     "data/env_profile.json",
 ]
