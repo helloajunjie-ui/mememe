@@ -62,3 +62,6 @@ persona/
 webui/uploads/
 *.FBX
 
+
+# 白绫资料库（实例知识，不进公开仓库；走私有备份）
+library/

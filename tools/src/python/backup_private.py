@@ -29,6 +29,11 @@ _PRIVATE_FILES = [
 # 复活必需的非实例文件（配置/密钥——仅进私有备份，不进公开仓库）
 _CORE_FILES = ["config.yaml", ".env"]
 
+# 私有目录（递归打包）——2026-09-13 补：资料库与凭据库原为备份盲区
+# library/：白绫的分类资料库（参考/研究/环境/自我）
+# data/credentials/：多账户加密凭据库（仅密文；密钥 data/cloud_key.txt 有意不备份，防密文+密钥同处）
+_PRIVATE_DIRS = ["library", "data/credentials"]
+
 # 备份状态文件：每次备份结果写到这里，让 AI（白绫）能自我感知备份状态（结果/运行通知 AI）
 _STATUS_FILE = Path("data/backup_status.json")
 
@@ -59,6 +64,17 @@ def run(note: str = "") -> dict:
                     added.append(rel)
                 else:
                     missing.append(rel)
+
+            for rel_dir in _PRIVATE_DIRS:
+                d = _PROJECT_ROOT / rel_dir
+                if not d.is_dir():
+                    missing.append(rel_dir)
+                    continue
+                for f in sorted(d.rglob("*")):
+                    if f.is_file() and "__pycache__" not in f.parts:
+                        arc = f.relative_to(_PROJECT_ROOT).as_posix()
+                        zf.write(f, arcname=arc)
+                        added.append(arc)
 
         manifest = {
             "type": "private_backup",
