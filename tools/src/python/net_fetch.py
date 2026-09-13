@@ -6,7 +6,7 @@
 - 原始 HTML 默认不返回（省 token），需要时 include_raw=True。
 - 超时/重定向/错误统一处理。
 
-来源：https://github.com/lazyhuman-ai/websearch（MIT），clone 于 workspace/tools_external/websearch。
+来源：https://github.com/lazyhuman-ai/websearch（MIT），clone 于 library/depot/vendor/websearch。
 """
 from __future__ import annotations
 
@@ -14,7 +14,14 @@ import os
 import sys
 
 _ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
-_WS_DIR = os.path.join(_ROOT, "workspace", "tools_external", "websearch")
+# 外部搜索/正文组件（lazyhuman-ai/websearch, MIT）——2026-09-13 从 workspace 迁出：
+# workspace 是临时区、不进备份也不进公开仓库，活依赖放那里 = 迁移/复活后工具瘫痪。
+# 新址随私有备份（library/）存活；旧址保留作回退兼容，两边都没有才报缺失。
+_WS_CANDIDATES = [
+    os.path.join(_ROOT, "library", "depot", "vendor", "websearch"),
+    os.path.join(_ROOT, "workspace", "tools_external", "websearch"),
+]
+_WS_DIR = next((p for p in _WS_CANDIDATES if os.path.isdir(p)), _WS_CANDIDATES[0])
 if _WS_DIR not in sys.path:
     sys.path.insert(0, _WS_DIR)
 
@@ -48,7 +55,7 @@ def run(url: str, max_chars: int = 10000, include_raw: bool = False) -> dict:
         return {"ok": False, "error": "url 不能为空"}
     if not _WS_READY:
         return {"ok": False,
-                "error": f"正文提取组件不可用: {_WS_ERR}（需安装 workspace/tools_external/websearch 依赖）"}
+                "error": f"正文提取组件不可用: {_WS_ERR}（需安装 library/depot/vendor/websearch 依赖）"}
     try:
         r = _ws_fetch(str(url).strip())
         if isinstance(r, dict) and r.get("error"):
