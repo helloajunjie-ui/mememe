@@ -459,8 +459,8 @@ aside#persona{width:320px;flex-shrink:0;background:#FAF6EE;border-left:1px solid
   <aside id="persona" data-state="idle">
     <div class="p-card p-portrait">
       <canvas id="pfx"></canvas>
-      <img id="pImg" src="assets/persona/state_idle.png" alt="白绫">
-    <div class="p-emo" id="pEmoBadge" title="此刻心情"><img id="pEmo" src="assets/persona/head_calm.png" alt="心情"></div>
+      <img id="pImg" src="assets/persona/emo_neutral.png" alt="白绫">
+    <div class="p-emo" id="pEmoBadge" title="此刻心情"><img id="pEmo" src="assets/persona/head_neutral.png" alt="心情"></div>
     </div>
 
     <div class="p-card p-status">
@@ -1372,16 +1372,16 @@ setParticles("idle", "fx-calm"); stepParts();
 
 var pImg = document.getElementById("pImg");
 var POSE_MAP = {
-  idle:"assets/persona/state_idle.png", thinking:"assets/persona/state_thinking.png",
+  idle:"assets/persona/emo_neutral.png", thinking:"assets/persona/state_thinking.png",
   busy:"assets/persona/state_busy.png", query:"assets/persona/state_query.png"
 };
 var EMO_IMG = {
-  calm:"assets/persona/emo_calm.png", pleased:"assets/persona/emo_pleased.png",
-  curious:"assets/persona/emo_curious.png", low:"assets/persona/emo_low.png",
-  angry:"assets/persona/emo_angry.png"
+  neutral:"assets/persona/emo_neutral.png", calm:"assets/persona/emo_neutral.png",
+  pleased:"assets/persona/emo_pleased.png", curious:"assets/persona/emo_curious.png",
+  low:"assets/persona/emo_low.png", angry:"assets/persona/emo_angry.png"
 };
 var EMO_MAP = {
-  calm:"calm", pleased:"pleased", excited:"pleased", relieved:"pleased", touched:"pleased",
+  calm:"neutral", pleased:"pleased", excited:"pleased", relieved:"pleased", touched:"pleased",
   proud:"pleased", grateful:"pleased", curious:"curious", low:"low",
   frustrated:"angry", angry:"angry", afraid:"angry", cautious:"angry", alert:"angry"
 };
@@ -1410,9 +1410,9 @@ function setPortrait(mode, emo){
 }
 var pEmo = document.getElementById("pEmo");
 var HEAD_IMG = {
-  calm:"assets/persona/head_calm.png", pleased:"assets/persona/head_pleased.png",
-  curious:"assets/persona/head_curious.png", low:"assets/persona/head_low.png",
-  angry:"assets/persona/head_angry.png"
+  neutral:"assets/persona/head_neutral.png", calm:"assets/persona/head_neutral.png",
+  pleased:"assets/persona/head_pleased.png", curious:"assets/persona/head_curious.png",
+  low:"assets/persona/head_low.png", angry:"assets/persona/head_angry.png"
 };
 function setEmoHead(emo){
   var src = HEAD_IMG[EMO_MAP[emo] || "calm"];
