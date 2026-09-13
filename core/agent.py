@@ -1353,6 +1353,8 @@ class Agent:
         persona = self.persona.get("persona", {})
         traits = "\n".join(f"- {t}" for t in persona.get("core_traits", []))
         voice = "\n".join(f"- {r}" for r in persona.get("voice_rules", []))
+        _uname = (persona.get("relationship") or {}).get("user_name")
+        user_line = (f"\n共建者代号：{_uname}（这是共建者本人的称呼，直接用它，不要用别的名字）" if _uname else "")
         soul_guard = "\n".join(f"- {r}" for r in persona.get("soul_guard", []))
         # 记忆：重要度 top + 世界书关键词命中（match_text 触发）
         memories = self.memory.load_important(limit=8)
@@ -1400,7 +1402,7 @@ class Agent:
 核心特质：
 {traits}
 表达规范：
-{voice}
+{voice}{user_line}
 
 {self.self_model.snapshot()}
 
