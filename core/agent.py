@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import re
 import time
 from typing import Dict, List, Optional
 
@@ -728,7 +729,7 @@ class Agent:
             base_temp = getattr(self.llm, "temperature", 0.7)
             temp = max(0.2, min(1.3, base_temp + self.emotion.expression()["temp_offset"]))
             self._set_activity("thinking")
-            resp = self.llm.chat(messages, tools=active_schemas, tool_choice="auto", temperature=temp)
+            resp = self.llm.chat(self._attach_images(messages), tools=active_schemas, tool_choice="auto", temperature=temp)
             if resp.get("error"):
                 _emit({"type": "error", "error": resp["error"]})
                 llm_error = resp["error"]
@@ -784,7 +785,7 @@ class Agent:
                         messages.append({"role": "assistant", "content": resp.get("content") or "",
                                          "reasoning_content": resp["reasoning_content"]})
                     resp = self.llm.chat(
-                        messages, tools=active_schemas, tool_choice="required"
+                        self._attach_images(messages), tools=active_schemas, tool_choice="required"
                     )
                     if resp.get("error"):
                         _emit({"type": "error", "error": resp["error"]})
@@ -1339,6 +1340,96 @@ class Agent:
         return getattr(self, "_fail_count", {}).get(name, 0)
 
     # ---------- 上下文组装 ----------
+    # ---------- 图像直通：让主模型"当场看见"（而非经 vision_look 转述） ----------
+    _IMG_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+    _IMG_PATH_RE = re.compile(
+        r"[A-Za-z]:\\[^\s，。；：！？、）)】\]}]+?\.(?:png|jpg|jpeg|webp|gif|bmp)", re.I)
+    _MAX_INJECT_IMAGES = 4
+
+    def _attach_images(self, messages: List[Dict]) -> List[Dict]:
+        """把当前轮 user 消息里的项目内图片路径就地换成多模态图像块，让主模型
+        直接看到图（而非接收 vision_look 的文字转述）。
+
+        只作用于发给 LLM 的临时副本：不动 self.history / 主 messages，因此
+        存档（messages.jsonl）与输入窗口化（_compress_messages）都不受影响。
+        """
+        if getattr(self, "_img_cache", None) is None:
+            self._img_cache = {}
+        idx = None
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i].get("role") == "user":
+                idx = i
+                break
+        if idx is None:
+            return messages
+        content = messages[idx].get("content")
+        if not isinstance(content, str):
+            return messages
+        blocks = self._extract_image_blocks(content)
+        if not blocks:
+            return messages
+        out = list(messages)
+        out[idx] = {**messages[idx],
+                    "content": [{"type": "text", "text": content}] + blocks}
+        self._log(f"[vision] 本轮直通 {len(blocks)} 张图给主模型（非转述）")
+        return out
+
+    def _extract_image_blocks(self, text: str) -> List[Dict]:
+        """从文本里提取项目根内的图片路径 → 编码成 image_url 块（最多 4 张）。"""
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[1]
+        blocks: List[Dict] = []
+        seen = set()
+        for m in self._IMG_PATH_RE.finditer(text):
+            raw = m.group(0)
+            try:
+                p = Path(raw).resolve()
+            except Exception:  # noqa: BLE001
+                continue
+            if p in seen or not p.is_file():
+                continue
+            if p.suffix.lower() not in self._IMG_EXTS:
+                continue
+            if root != p and root not in p.parents:
+                continue
+            key = str(p)
+            b64 = self._img_cache.get(key)
+            if b64 is None:
+                try:
+                    b64 = self._encode_image(p)
+                except Exception:  # noqa: BLE001
+                    continue
+                self._img_cache[key] = b64
+            seen.add(p)
+            blocks.append({"type": "image_url",
+                           "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
+            if len(blocks) >= self._MAX_INJECT_IMAGES:
+                break
+        return blocks
+
+    @staticmethod
+    def _encode_image(path, max_side: int = 1280) -> str:
+        """读图 → 转 RGB → 限长边 → JPEG → base64（与 vision_look 同口径）。"""
+        import base64
+        import io
+        from PIL import Image
+        im = Image.open(path)
+        if im.mode in ("RGBA", "LA", "P"):
+            im = im.convert("RGBA")
+            bg = Image.new("RGB", im.size, (255, 255, 255))
+            bg.paste(im, mask=im.split()[-1])
+            im = bg
+        else:
+            im = im.convert("RGB")
+        w, h = im.size
+        scale = max_side / max(w, h)
+        if scale < 1:
+            im = im.resize((max(1, int(w * scale)), max(1, int(h * scale))),
+                           Image.LANCZOS)
+        buf = io.BytesIO()
+        im.save(buf, format="JPEG", quality=88)
+        return base64.b64encode(buf.getvalue()).decode("utf-8")
+
     def _build_messages(self, resume_ctx: str = "", match_text: str = "") -> List[Dict]:
         system = self._build_system_prompt(match_text=match_text)
         msgs: List[Dict] = [{"role": "system", "content": system}]
