@@ -33,9 +33,9 @@ _BASELINE_FILE = _PROJECT_ROOT / "data" / "integrity_baseline.json"
 _STATUS_FILE = _PROJECT_ROOT / "data" / "integrity_status.json"
 
 # 静态本体扫描范围（篡改检测重点）：入口 + 核心 + 工具源码 + 模板
-_SCAN_FILES = ["main.py", "config.yaml"]
-_SCAN_DIRS = ["core", "tools"]
-_EXTENSIONS = {".py", ".go", ".yaml", ".yml"}
+_SCAN_FILES = ["main.py", "config.yaml", ".gitignore"]  # 含防泄露守门文件
+_SCAN_DIRS = ["core", "tools", "webui"]  # 含最暴露的 HTTP 接口面
+_EXTENSIONS = {".py", ".go", ".yaml", ".yml", ".html"}
 _EXCLUDE_DIRS = {".venv", "__pycache__", ".git", "bin", "templates_external"}
 
 
