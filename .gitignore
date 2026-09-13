@@ -52,3 +52,7 @@ _ssh*.py
 
 # 云存档解密密钥（绝不上库）
 data/cloud_key.txt
+
+# 归档研究产物（本地留存，不入库）
+workspace/archive/
+data/memory.db.bak*

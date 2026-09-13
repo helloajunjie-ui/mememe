@@ -446,6 +446,10 @@ class Agent:
             if action == "baseline_created":
                 self._log("[integrity] 首次运行：本体完整性基线已建立")
                 return
+            if action == "baseline_rebuilt":
+                files = result.get("rebuilt_files") or []
+                self._log(f"[integrity] 迭代已提交，基线自动重建（{len(files)} 项变更：{files[:5]}）")
+                return
             if result.get("ok"):
                 self._log(f"[integrity] 本体完整（{result.get('checked_count', 0)} 文件校验通过）")
             else:
@@ -455,14 +459,18 @@ class Agent:
                 detail = f"被篡改 {len(changed)}、缺失 {len(missing)}、新增 {len(added)}"
                 self._log(f"[integrity] 警告：本体完整性异常！{detail}")
                 self._log(f"[integrity] 变更文件：{changed[:5]}{'…' if len(changed) > 5 else ''}")
-                try:
-                    self.memory.add_fact(
-                        f"本体完整性异常（可能被篡改/感染）：{detail}。变更文件：{changed[:5]}。"
-                        f"处理：核对变更来源（合法迭代则更新基线，恶意则从 backups/ 或 git 恢复）。"
-                        f"状态文件 data/integrity_status.json",
-                        importance=0.95, tags=["安全", "完整性", "告警"])
-                except Exception:  # noqa: BLE001
-                    pass
+                if not result.get("alert"):
+                    # 指纹未变 = 同一异常已告警过，只留日志，不重复写记忆（2026-09-13 去重）
+                    self._log("[integrity] 同一异常已告警过（指纹未变），跳过重复写入记忆")
+                else:
+                    try:
+                        self.memory.add_fact(
+                            f"本体完整性异常（可能被篡改/感染）：{detail}。变更文件：{changed[:5]}。"
+                            f"处理：核对变更来源（合法迭代则更新基线，恶意则从 backups/ 或 git 恢复）。"
+                            f"状态文件 data/integrity_status.json",
+                            importance=0.9, tags=["安全", "完整性", "告警"])
+                    except Exception:  # noqa: BLE001
+                        pass
         except Exception as e:  # noqa: BLE001
             self._log(f"[integrity] 完整性自检失败: {e}（不影响启动）")
 
