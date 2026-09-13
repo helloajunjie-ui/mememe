@@ -56,3 +56,9 @@ data/cloud_key.txt
 # 归档研究产物（本地留存，不入库）
 workspace/archive/
 data/memory.db.bak*
+
+# 个人形象资产与用户上传（本地留存，不入公开仓库）
+persona/
+webui/uploads/
+*.FBX
+

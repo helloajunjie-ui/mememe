@@ -493,12 +493,9 @@ class Agent:
             self._log(f"[backup] {'任务结束' if force else '启动兜底'}备份完成（{r.get('size_readable', '?')}）")
             # 备份结果通知 AI（自我感知）：成功记低权重轨迹，失败记高权重告警
             try:
-                if r.get("ok"):
-                    self.memory.add_fact(
-                        f"自我备份完成：{r.get('backup_zip', '?')}（{r.get('size_readable', '?')}，"
-                        f"原因：{r.get('note', '')}）。状态文件 data/backup_status.json",
-                        importance=0.25, tags=["备份", "自我感知"])
-                else:
+                # 成功备份不写记忆：每次任务结束都会备份，线性写入只会淹没记忆库；
+                # 最新复活点状态以 data/backup_status.json 为准。仅"失败"（异常事件）写高权重告警。
+                if not r.get("ok"):
                     self.memory.add_fact(
                         f"自我备份失败：{r.get('error', '未知错误')}（原因：{r.get('note', '')}）。"
                         f"需排查 backups/ 与 data/backup_status.json",
