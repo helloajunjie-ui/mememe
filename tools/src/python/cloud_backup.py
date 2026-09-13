@@ -63,7 +63,8 @@ _PRIVATE_FILES = [
 ]
 # 私有目录（递归打包）——2026-09-13 与 backup_private 同步：
 # library/ 资料库、data/credentials/ 凭据库，此前是云端灾备的盲区
-_PRIVATE_DIRS = ["library", "data/credentials"]
+_PRIVATE_DIRS = ["library", "data/credentials", "data/session"]
+# data/session：对话可见层（2026-09-13 与 backup_private 同步）
 _CORE_FILES = ["config.yaml", ".env"]
 
 # 加密文件头：BLENC1 + key_id + nonce + tag + ciphertext

@@ -36,7 +36,9 @@ _CORE_FILES = ["config.yaml", ".env"]
 # 注：原设计"密钥不备份以防密文+密钥同处"已作废——该隔离只靠"zip 不外流"维持，
 #     而 zip 里本就有 .env 与凭据库密钥，隔离名存实亡；代价却是密钥一丢、云存档永久作废。
 #     真正需要分离的是**云端**：cloud_backup.py 的打包守卫确保密钥永不进云端包。
-_PRIVATE_DIRS = ["library", "data/credentials", "data/keys"]
+_PRIVATE_DIRS = ["library", "data/credentials", "data/keys", "data/session"]
+# data/session：对话可见层（chat_history.jsonl）——刷新页面/重启服务后不丢历史，
+#             属私有实例数据，绝不放公开仓库（2026-09-13 补）
 
 # 备份状态文件：每次备份结果写到这里，让 AI（白绫）能自我感知备份状态（结果/运行通知 AI）
 _STATUS_FILE = Path("data/backup_status.json")
