@@ -1056,7 +1056,7 @@ function uploadFile() {
     }
     var msg, tip;
     if (d.kind === "image") {
-      msg = "我传了一张图片给你：「" + d.name + "」。图片已保存至：" + d.path + "。请用 vision_look 看一下。";
+      msg = "我传了一张图片给你：「" + d.name + "」。图片已保存至：" + d.path + "。";
       tip = "已收到「" + d.name + "」，正请白绫看图";
     } else {
       var tail = d.truncated ? "\n\n……（内容较长已截断，完整内容请用读取文件工具查看保存路径）" : "";
