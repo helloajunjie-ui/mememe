@@ -107,6 +107,76 @@
   .thinking .dot:nth-child(2){ animation-delay: 0.2s; }
   .thinking .dot:nth-child(3){ animation-delay: 0.4s; }
   @keyframes blink { 0%,80%,100%{opacity:.25;} 40%{opacity:1;} }
+  /* 任务执行卡片：状态条 + 进度 + 计划 + 折叠流水 */
+  .task-card { font-size: 13px; line-height: 1.6; min-width: 300px; max-width: 640px; }
+  .task-head { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: #6B7280; margin-bottom: 5px; }
+  .task-type {
+    color: #3B5BDB; background: #EEF2FF; border: 1px solid #DCE4FF;
+    border-radius: 20px; padding: 1px 9px; font-size: 10.5px; white-space: nowrap;
+  }
+  .task-status { margin-left: auto; font-size: 10.5px; white-space: nowrap; }
+  .task-status.err { color: #DC2626; }
+  .task-status.done { color: #059669; }
+  .task-goal {
+    font-size: 12px; color: #374151; background: #FAFAF8;
+    border: 1px solid #E4E3DD; border-radius: 8px; padding: 5px 10px;
+    margin: 2px 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .task-now { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #0369A1; padding: 3px 0; }
+  .task-now .spinner {
+    width: 11px; height: 11px; flex-shrink: 0; border: 2px solid #BFDBFE;
+    border-top-color: #3B82F6; border-radius: 50%; animation: spin .8s linear infinite;
+  }
+  .task-now .stepno { font-weight: 400; color: #9CA3AF; font-size: 11px; }
+  .task-now .actv { font-weight: 700; color: #2563EB; font-family: Consolas, 'Courier New', monospace; }
+  .task-now .task-arg {
+    color: #6B7280; font-family: Consolas, 'Courier New', monospace; font-size: 11.5px;
+    max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    display: inline-block; vertical-align: bottom;
+  }
+  .task-think {
+    display: none; font-size: 11.5px; color: #6D5BB5; background: #F7F5FF;
+    border: 1px solid #EAE4FA; border-radius: 6px; padding: 3px 9px;
+    margin: 2px 0 4px; line-height: 1.55; max-height: 44px; overflow: hidden;
+  }
+  .task-think::before { content: '在想：'; font-weight: 600; color: #8B7BC8; }
+  .task-now.err { color: #DC2626; }
+  .task-now.done { color: #059669; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .task-progress { display: flex; align-items: center; gap: 8px; margin: 6px 0 4px; }
+  .task-progress .bar { flex: 1; height: 6px; background: #EEF0F3; border-radius: 3px; overflow: hidden; }
+  .task-progress .bar > i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg,#60A5FA,#3B82F6); border-radius: 3px; transition: width .4s ease; }
+  .task-progress .bar.indeterminate > i { width: 36% !important; animation: slide 1.2s ease-in-out infinite; }
+  .task-progress .txt { font-size: 11px; color: #6B7280; flex-shrink: 0; }
+  @keyframes slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+  .task-plan { position: relative; margin: 4px 0 6px; max-height: 168px; overflow-y: auto; }
+  .task-plan .pg { font-size: 10.5px; color: #8A8F98; font-weight: 600; margin: 4px 0 1px; }
+  .task-plan .ps {
+    font-size: 12px; color: #6B7280; padding: 1px 5px; border-radius: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .task-plan .ps.cur { background: #EFF6FF; color: #1D4ED8; font-weight: 500; }
+  .task-plan .ps.done { color: #059669; text-decoration: line-through; }
+  .task-plan .ps.fail { color: #DC2626; }
+  .task-plan .ps.todo { color: #9CA3AF; }
+  .task-flow-head {
+    display: flex; align-items: center; gap: 6px; font-size: 11px; color: #6B7280;
+    margin: 6px 0 2px; cursor: pointer; user-select: none; display: none;
+  }
+  .task-flow-head:hover { color: #1F2937; }
+  .task-flow-head .count { background: #F3F4F6; border-radius: 10px; padding: 0 7px; font-size: 10.5px; }
+  .task-flow-head .toggle { margin-left: auto; }
+  .task-flow { display: flex; flex-direction: column; }
+  .task-flow .tl { display: flex; gap: 7px; font-size: 11.5px; color: #4B5563; padding: 1px 0; align-items: baseline; }
+  .task-flow .tl .st { flex-shrink: 0; width: 12px; text-align: center; }
+  .task-flow .tl .ts { color: #9CA3AF; flex-shrink: 0; font-family: Consolas, "Courier New", monospace; }
+  .task-flow .tl .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .task-flow .tl .actv { font-weight: 600; color: #3B5BDB; font-family: Consolas, 'Courier New', monospace; }
+  .task-flow .tl .flow-obj { color: #9CA3AF; font-family: Consolas, 'Courier New', monospace; }
+  .task-flow .tl.run .nm { color: #0369A1; font-weight: 600; }
+  .task-flow .tl.err .nm { color: #DC2626; }
+  .task-review { margin-left: 8px; font-size: 10.5px; color: #3B82F6; cursor: pointer; white-space: nowrap; }
+  .task-review:hover { text-decoration: underline; }
   /* 输入区 */
   footer {
     background: var(--panel);
@@ -396,7 +466,7 @@ function addMsg(role, html) {
   wrap.appendChild(av);
   wrap.appendChild(b);
   chat.appendChild(wrap);
-  chat.scrollTop = chat.scrollHeight;
+  maybeScroll();
   return b;
 }
 
@@ -411,132 +481,371 @@ function showThinking() {
   b.innerHTML = '<span>白绫思考中</span><span class="dot"></span><span class="dot"></span><span class="dot"></span>';
   wrap.appendChild(av); wrap.appendChild(b);
   chat.appendChild(wrap);
-  chat.scrollTop = chat.scrollHeight;
+  maybeScroll();
   thinkingEl = b;
 }
 function hideThinking() { if (thinkingEl){ thinkingEl.closest(".msg-wrap").remove(); thinkingEl=null; } }
 
 /* ---------- 异步任务：提交 → 轮询 → 实时阶段流 ---------- */
-var taskSeq = 0;
-function addTaskPanel() {
+/* ---------- 异步任务：提交 → 轮询 → 实时阶段流 ---------- */
+/* 工具名 → 友好中文动作（来自 registry name_zh + 前缀兜底） */
+var TOOL_LABELS = {
+  net_search:"网络搜索", net_fetch:"抓取网页", net_download:"下载文件",
+  fs_read:"读取文件", fs_write:"写文件", fs_list:"列目录", fs_search:"搜索文件",
+  fs_stat:"查看文件信息", fs_copy:"复制文件", fs_move:"移动文件", fs_delete:"删除文件",
+  cmd_run:"执行系统命令", proc_list:"查看进程", proc_kill:"结束进程",
+  memory_search:"查记忆", memory_write:"写记忆", method_learn:"沉淀方法论", ctx_search:"检索上下文",
+  ws_mkdir:"建工作目录", ws_write:"写工作文件", word_count:"文本统计",
+  sys_probe:"综合探查", lan_scan:"局域网扫描", lan_portscan:"端口探测",
+  self_backup:"自我备份", self_restore:"自我恢复", self_clone:"自我复制",
+  tool_create:"自建工具", tool_acquire:"获取工具", tool_import:"导入工具", tool_scan:"扫描工具",
+  plan_submit:"提交计划", plan_update:"更新计划",
+  workflow_create:"创建工作流", workflow_load:"加载工作流", workflow_status:"查看工作流",
+  workflow_list:"列出工作流", workflow_update_node:"更新节点", workflow_add_node:"追加节点",
+  mcp_connect:"连接 MCP", mcp_scan:"同步 MCP 工具", mcp_list:"MCP 服务器列表", mcp_disconnect:"断开 MCP",
+  feishu_send_text:"发飞书文本", feishu_send_post:"发飞书消息", feishu_docx_create:"建飞书文档",
+  feishu_docx_read:"读飞书文档", feishu_bitable_create:"飞书表格加记录", feishu_bitable_list:"飞书表格读记录",
+  feishu_list_chat:"飞书列群聊", feishu_whoami:"校验飞书凭据",
+  cloud_webdav_list:"云盘列目录", cloud_webdav_read:"云盘读文件", cloud_webdav_write:"云盘写文件",
+  cloud_webdav_mkdir:"云盘建目录", cloud_webdav_delete:"云盘删文件",
+  account_add:"添加账户凭据", account_list:"账户列表", account_remove:"删除账户", account_test:"校验账户",
+  dropbox_list:"Dropbox 列目录", dropbox_read:"Dropbox 读文件", dropbox_write:"Dropbox 写文件",
+  dropbox_mkdir:"Dropbox 建目录", dropbox_delete:"Dropbox 删文件", dropbox_whoami:"Dropbox 校验",
+  gdrive_list:"Google Drive 列目录", gdrive_read:"Google Drive 读文件", gdrive_write:"Google Drive 写文件",
+  gdrive_mkdir:"Google Drive 建目录", gdrive_delete:"Google Drive 删文件", gdrive_whoami:"Google Drive 校验"
+};
+/* 动作词表：命令风格动作 + 中文动作，如 DIR 列目录、RUN 执行命令 */
+var TOOL_VERBS = {
+  fs_list:{v:"DIR",zh:"列目录"}, fs_read:{v:"TYPE",zh:"读取文件"},
+  fs_write:{v:"WRITE",zh:"写文件"}, fs_search:{v:"FIND",zh:"搜索文件"},
+  fs_stat:{v:"STAT",zh:"查看信息"}, fs_copy:{v:"COPY",zh:"复制文件"},
+  fs_move:{v:"MOVE",zh:"移动文件"}, fs_delete:{v:"DEL",zh:"删除文件"},
+  cmd_run:{v:"RUN",zh:"执行命令"}, proc_list:{v:"PS",zh:"查看进程"},
+  proc_kill:{v:"KILL",zh:"结束进程"}, net_search:{v:"SEARCH",zh:"网络搜索"},
+  net_fetch:{v:"GET",zh:"抓取网页"}, net_download:{v:"DOWNLOAD",zh:"下载文件"},
+  memory_search:{v:"MEM",zh:"查记忆"}, memory_write:{v:"MEMO",zh:"写记忆"},
+  method_learn:{v:"LEARN",zh:"沉淀方法论"}, ctx_search:{v:"CTX",zh:"检索上下文"},
+  ws_mkdir:{v:"MKDIR",zh:"建工作目录"}, ws_write:{v:"WRITE",zh:"写工作文件"},
+  word_count:{v:"WC",zh:"文本统计"}, sys_probe:{v:"PROBE",zh:"综合探查"},
+  lan_scan:{v:"SCAN",zh:"局域网扫描"}, lan_portscan:{v:"PORT",zh:"端口探测"},
+  self_backup:{v:"BACKUP",zh:"自我备份"}, self_restore:{v:"RESTORE",zh:"自我恢复"},
+  tool_create:{v:"CREATE",zh:"自建工具"}, plan_submit:{v:"PLAN",zh:"提交计划"},
+  plan_update:{v:"PLAN",zh:"更新计划"}, mcp_connect:{v:"MCP",zh:"连接"},
+  mcp_scan:{v:"MCP",zh:"同步工具"}, feishu_send_text:{v:"SEND",zh:"发飞书文本"},
+  feishu_send_post:{v:"SEND",zh:"发飞书消息"}, feishu_docx_create:{v:"DOC",zh:"建飞书文档"},
+  feishu_docx_read:{v:"DOC",zh:"读飞书文档"}, feishu_list_chat:{v:"LIST",zh:"列群聊"},
+  account_add:{v:"ADD",zh:"添加凭据"}, account_list:{v:"LIST",zh:"账户列表"},
+  account_remove:{v:"DEL",zh:"删除账户"}, account_test:{v:"TEST",zh:"校验账户"},
+  dropbox_list:{v:"DBX",zh:"列目录"}, dropbox_read:{v:"DBX",zh:"读文件"},
+  gdrive_list:{v:"GDRV",zh:"列目录"}, gdrive_read:{v:"GDRV",zh:"读文件"}
+};
+function toolAction(name) {
+  var m = TOOL_VERBS[name];
+  if (m) return m;
+  return {v: (name.split("_")[0] || name).toUpperCase(), zh: toolLabel(name)};
+}
+function toolLabel(name) {
+  if (TOOL_LABELS[name]) return TOOL_LABELS[name];
+  if (name.indexOf("mcp_blender_") === 0) return "Blender·" + name.slice(12).replace(/_/g, " ");
+  if (name.indexOf("mcp_godot_") === 0) return "Godot·" + name.slice(10).replace(/_/g, " ");
+  if (name.indexOf("mcp_") === 0) return "MCP·" + name.slice(4).replace(/_/g, " ");
+  if (name.indexOf("fs_") === 0) return "文件·" + name.slice(3).replace(/_/g, " ");
+  if (name.indexOf("net_") === 0) return "网络·" + name.slice(4).replace(/_/g, " ");
+  if (name.indexOf("feishu_") === 0) return "飞书·" + name.slice(7).replace(/_/g, " ");
+  return name.replace(/_/g, " ");
+}
+/* 参数摘要：从工具参数里挑最像目标字段的值，让人一眼看懂在做什么 */
+function argsSummary(args) {
+  if (!args) return "";
+  if (typeof args === "string") { try { args = JSON.parse(args); } catch (e) { return args.slice(0, 80); } }
+  if (typeof args === "string") return args.slice(0, 80);
+  if (typeof args === "number") return String(args);
+  if (!args || typeof args !== "object") return "";
+  var keys = ["command", "path", "file", "query", "message", "url", "name",
+              "target", "prompt", "text", "keyword", "dir", "goal", "args", "content"];
+  for (var i = 0; i < keys.length; i++) {
+    var v = args[keys[i]];
+    if (v === undefined || v === null) continue;
+    if (typeof v === "string") return v.slice(0, 90);
+    if (typeof v === "number") return String(v);
+    if (Array.isArray(v)) return v.slice(0, 3).join(", ").slice(0, 90);
+    if (typeof v === "object") { try { return JSON.stringify(v).slice(0, 90); } catch (e) {} }
+  }
+  return "";
+}
+function fmtClock(ts) {
+  var d = ts ? new Date(ts) : new Date();
+  function p(n){ return (n<10?"0":"")+n; }
+  return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds());
+}
+/* 自动滚动：仅在用户停留在底部附近时跟随，向上翻阅历史不打扰 */
+function maybeScroll() {
+  if (chat.scrollHeight - chat.scrollTop - chat.clientHeight < 120) {
+    chat.scrollTop = chat.scrollHeight;
+  }
+}
+function taskTypeName(t) {
+  var map = {C0:"对话", C1:"即时任务", C2:"规划任务", C3:"任务集合"};
+  return map[t] || (t || "任务");
+}
+
+function addTaskPanel(goal) {
   var wrap = document.createElement("div");
   wrap.className = "msg-wrap bailing";
   var av = document.createElement("div");
   av.className = "avatar"; av.textContent = "绫";
   var b = document.createElement("div");
-  b.className = "bubble";
-  b.style.minWidth = "220px";
-  var t0 = fmtTime(new Date());
-  b.innerHTML = '<div style="font-size:12px;color:#6B7280;margin-bottom:6px;">任务进行中 <span class="task-type"></span> <span style="float:right;font-size:10.5px;opacity:.85;">'+t0+'</span></div><div class="task-plan"></div><div class="task-flow"></div>';
+  b.className = "bubble task-card";
+  b.innerHTML =
+    '<div class="task-head">' +
+      '<span class="task-type">任务</span>' +
+      '<span class="task-status">进行中</span>' +
+    '</div>' +
+    '<div class="task-goal" title="' + escapeHtml(goal) + '">' + escapeHtml(goal) + '</div>' +
+    '<div class="task-now"><span class="spinner"></span><span class="now-text">思考中...</span></div>' +
+    '<div class="task-think"></div>' +
+    '<div class="task-progress"><div class="bar indeterminate"><i></i></div><span class="txt">准备中</span></div>' +
+    '<div class="task-plan"></div>' +
+    '<div class="task-flow-head">执行流水 <span class="count">0</span><span class="toggle"></span></div>' +
+    '<div class="task-flow"></div>';
   wrap.appendChild(av); wrap.appendChild(b);
   chat.appendChild(wrap);
-  chat.scrollTop = chat.scrollHeight;
+  b._tools = {};      // step -> {name, ts, status}
+  b._toolSeq = [];    // 有序 step 列表
+  b._planSteps = 0;   // 计划步骤总数
+  b._planDone = 0;    // 已完成（含失败）步骤数
+  b._t0 = Date.now();
+  b._flowExpanded = false;
+  b._reviewing = false;
+  b.querySelector(".task-flow-head").addEventListener("click", function(e){
+    e.stopPropagation();
+    b._flowExpanded = !b._flowExpanded;
+    refreshFlowVisibility(b);
+  });
+  maybeScroll();
   return b;
 }
 
-function taskLine(panel, name, status) {
-  /* status: "run"(进行中) / "ok" / "err" / "text" */
-  var flow = panel.querySelector(".task-flow");
-  var line = document.createElement("div");
-  line.className = "task-line";
-  line.style.cssText = "font-size:12px;color:#4B5563;padding:1px 0;";
-  if (status === "run") {
-    line.innerHTML = '<span style="color:#0369A1;">▶</span> 正在 ' + escapeHtml(name) + ' ...';
-  } else if (status === "ok") {
-    line.innerHTML = '<span style="color:#059669;">✓</span> ' + escapeHtml(name);
-  } else if (status === "err") {
-    line.innerHTML = '<span style="color:#DC2626;">✗</span> ' + escapeHtml(name) + '（失败）';
-  } else {
-    line.innerHTML = escapeHtml(name);
+/* 状态条：显示当前正在执行的工具（或思考中） */
+function updateNow(panel) {
+  var now = panel.querySelector(".task-now");
+  if (!now) return;
+  var cur = null;
+  for (var i = panel._toolSeq.length - 1; i >= 0; i--) {
+    var t = panel._tools[panel._toolSeq[i]];
+    if (t.status === "run") { cur = t; cur.step = panel._toolSeq[i]; break; }
   }
-  flow.appendChild(line);
-  chat.scrollTop = chat.scrollHeight;
-  return line;
+  if (cur) {
+    now.classList.remove("err", "done");
+    var act = toolAction(cur.name);
+    now.innerHTML = '<span class="spinner"></span><span class="now-text">正在：' +
+      '<span class="actv">' + escapeHtml(act.v) + '</span> ' + escapeHtml(act.zh) +
+      (cur.arg ? ' <span class="task-arg">（' + escapeHtml(cur.arg) + '）</span>' : '') +
+      ' <span class="stepno">第 ' + cur.step + ' 步</span></span>';
+  } else {
+    now.classList.remove("err", "done");
+    now.innerHTML = '<span class="spinner"></span><span class="now-text">思考中...</span>';
+  }
+}
+
+/* 进度条：有计划按步骤数，无计划显示已执行步数 + 流动动画 */
+function updateProgress(panel) {
+  var bar = panel.querySelector(".task-progress .bar");
+  var txt = panel.querySelector(".task-progress .txt");
+  if (!bar || !txt) return;
+  if (panel._planSteps > 0) {
+    bar.classList.remove("indeterminate");
+    var pct = Math.min(100, Math.round(panel._planDone / panel._planSteps * 100));
+    bar.querySelector("i").style.width = pct + "%";
+    txt.textContent = panel._planDone + "/" + panel._planSteps + " 步";
+  } else {
+    bar.classList.add("indeterminate");
+    txt.textContent = "已执行 " + panel._toolSeq.length + " 步";
+  }
+}
+
+/* 执行流水：默认只显示最近 3 条 + 进行中，可展开全部 */
+function refreshFlowVisibility(panel) {
+  var flow = panel.querySelector(".task-flow");
+  var head = panel.querySelector(".task-flow-head");
+  var count = panel.querySelector(".task-flow-head .count");
+  var toggle = panel.querySelector(".task-flow-head .toggle");
+  if (!flow || !head) return;
+  var rows = flow.querySelectorAll(".tl");
+  var total = rows.length;
+  count.textContent = total;
+  if (!total) { head.style.display = "none"; return; }
+  head.style.display = "flex";
+  var showAll = panel._flowExpanded || total <= 4;
+  var visible = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var isRun = rows[i].classList.contains("run");
+    if (showAll || isRun || i >= rows.length - 3) { rows[i].style.display = "flex"; visible++; }
+    else rows[i].style.display = "none";
+  }
+  toggle.textContent = showAll ? (total > 4 ? "收起" : "") : ("展开 " + (total - visible) + " 条");
+}
+
+function addFlowLine(panel, step) {
+  var t = panel._tools[step];
+  if (!t) return;
+  var flow = panel.querySelector(".task-flow");
+  var row = flow.querySelector('[data-step="' + step + '"]');
+  if (!row) {
+    row = document.createElement("div");
+    row.className = "tl";
+    row.dataset.step = step;
+    row.innerHTML = '<span class="st"></span><span class="ts"></span><span class="nm"></span>';
+    flow.appendChild(row);
+  }
+  var icon = t.status === "ok" ? "✓" : (t.status === "err" ? "✗" : "▶");
+  row.querySelector(".st").textContent = icon;
+  row.querySelector(".ts").textContent = fmtClock(t.ts);
+  if (t.arg === undefined) t.arg = argsSummary(t.args);
+  var act = toolAction(t.name);
+  row.querySelector(".nm").innerHTML = '<span class="actv">' + escapeHtml(act.v) + '</span> ' +
+    escapeHtml(act.zh) +
+    (t.arg ? ' <span class="flow-obj">（' + escapeHtml(t.arg) + '）</span>' : '');
+  row.className = "tl " + t.status;
+  refreshFlowVisibility(panel);
 }
 
 function renderPlan(panel, plan) {
   var box = panel.querySelector(".task-plan");
   if (!box || !plan || !plan.steps) return;
-  box.innerHTML = "";
-  box.style.cssText = "border:1px solid #E4E3DD;border-radius:8px;padding:6px 10px;margin:4px 0 8px;background:#FAFAF8;";
   var t = panel.querySelector(".task-type");
-  if (t && plan.type) t.textContent = (plan.type === "C3" ? "· 任务集合" : "· 规划任务");
+  if (t && plan.type) t.textContent = taskTypeName(plan.type);
   var gmap = {};
   (plan.groups || []).forEach(function(g){ gmap[g.id] = g.title; });
-  var shown = {};
-  var firstTodo = null;
-  (plan.steps || []).forEach(function(s){
-    if (s.status === "todo" && !firstTodo) firstTodo = s;
+  var steps = plan.steps || [];
+  var done = 0, fail = 0, firstTodo = null;
+  steps.forEach(function(s){
+    if (s.status === "done") done++;
+    else if (s.status === "fail") fail++;
+    else if (!firstTodo) firstTodo = s;
   });
-  var isRun = function(s){ return s === firstTodo && firstTodo.status === "todo"; };
-  (plan.steps || []).forEach(function(s){
+  panel._planSteps = steps.length;
+  panel._planDone = done + fail;
+  var curId = firstTodo ? firstTodo.id : null;
+  var html = "", shown = {};
+  steps.forEach(function(s){
     var g = s.group;
-    if (g && !shown[g]) {
-      shown[g] = true;
-      var gt = document.createElement("div");
-      gt.style.cssText = "font-size:11px;color:#8A8F98;font-weight:600;margin:3px 0 1px;";
-      gt.textContent = "▸ " + (gmap[g] || g);
-      box.appendChild(gt);
-    }
-    var line = document.createElement("div");
-    line.style.cssText = "font-size:12px;color:#6B7280;padding:1px 0;";
-    var icon, color, deco;
-    if (s.status === "done") { icon = '<span style="color:#059669;">✓</span>'; color = "#059669"; deco = "line-through"; }
-    else if (s.status === "fail") { icon = '<span style="color:#DC2626;">✗</span>'; color = "#DC2626"; deco = "none"; }
-    else if (isRun(s)) { icon = '<span style="color:#0369A1;">▶</span>'; color = "#0369A1"; deco = "none"; }
-    else { icon = '<span style="color:#9CA3AF;">○</span>'; color = "#9CA3AF"; deco = "none"; }
-    line.innerHTML = icon + ' <span style="color:' + color + ';text-decoration:' + deco + ';">' + escapeHtml(s.title) + '</span>';
-    box.appendChild(line);
+    if (g && !shown[g]) { shown[g] = true; html += '<div class="pg">▸ ' + escapeHtml(gmap[g]||g) + '</div>'; }
+    var cls = "ps " + (s.status || "todo");
+    if (s.id === curId) cls += " cur";
+    var icon = s.status === "done" ? "✓" : (s.status === "fail" ? "✗" : (s.id === curId ? "▶" : "○"));
+    html += '<div class="' + cls + '">' + icon + ' ' + escapeHtml(s.title) + '</div>';
   });
-  chat.scrollTop = chat.scrollHeight;
+  box.innerHTML = html;
+  // 计划区内部滚动到当前步骤可见
+  if (curId) {
+    var curEl = box.querySelector(".ps.cur");
+    if (curEl) box.scrollTop = Math.max(0, curEl.offsetTop - box.clientHeight / 2);
+  }
+  updateProgress(panel);
+  maybeScroll();
 }
 
 function renderEvent(panel, ev) {
   if (!ev || !ev.type) return;
   if (ev.type === "type") {
-    var map = {C0:"· 对话", C1:"· 即时任务", C2:"· 规划任务", C3:"· 任务集合"};
     var t = panel.querySelector(".task-type");
-    if (t && map[ev.task_type]) t.textContent = map[ev.task_type];
+    if (t) t.textContent = taskTypeName(ev.task_type);
   } else if (ev.type === "plan") {
     renderPlan(panel, ev.plan);
   } else if (ev.type === "think") {
-    // 合并连续的思考提示，不刷屏
-    var last = panel.querySelector(".task-flow").lastElementChild;
-    if (!last || last.dataset.k !== "think") {
-      last = taskLine(panel, "思考中...", "text");
-      last.dataset.k = "think";
+    updateNow(panel);  // 无运行中工具时状态条显示思考中
+    var th = panel.querySelector(".task-think");
+    if (th) {
+      if (ev.reasoning) {
+        th.textContent = ev.reasoning.replace(/\s+/g, " ").slice(0, 160);
+        th.style.display = "block";
+      } else {
+        th.style.display = "none";
+      }
     }
   } else if (ev.type === "tool") {
-    var line = taskLine(panel, ev.name, "run");
-    line.dataset.k = "tool"; line.dataset.idx = ev.step;
+    panel._tools[ev.step] = {name: ev.name, args: ev.args, ts: Date.now(), status: "run"};
+    if (panel._toolSeq.indexOf(ev.step) < 0) panel._toolSeq.push(ev.step);
+    addFlowLine(panel, ev.step);
+    updateNow(panel);
+    updateProgress(panel);
+    maybeScroll();
   } else if (ev.type === "stage") {
-    var flow = panel.querySelector(".task-flow");
-    var nodes = flow.querySelectorAll('[data-k="tool"]');
-    var target = null;
-    for (var i = 0; i < nodes.length; i++) {
-      if (nodes[i].dataset.idx === String(ev.step)) { target = nodes[i]; break; }
-    }
-    if (target) {
-      target.innerHTML = (ev.ok ? '<span style="color:#059669;">✓</span> ' : '<span style="color:#DC2626;">✗</span> ') + escapeHtml(ev.name);
-      target.dataset.k = "stage";
-    }
+    var t2 = panel._tools[ev.step];
+    if (t2) { t2.status = ev.ok ? "ok" : "err"; addFlowLine(panel, ev.step); }
+    updateNow(panel);
+    updateProgress(panel);
   }
-  chat.scrollTop = chat.scrollHeight;
+}
+
+function fmtElapsed(ms) {
+  var s = Math.round(ms / 1000);
+  if (s < 60) return s + "s";
+  var m = Math.floor(s / 60); s = s % 60;
+  return m + "m" + (s < 10 ? "0" : "") + s + "s";
+}
+
+/* 任务完成/失败：卡片转摘要态（保留执行轨迹，可点"回顾"展开），下方追加最终回复 */
+function finishTaskPanel(panel, ok) {
+  var statusEl = panel.querySelector(".task-status");
+  statusEl.textContent = ok ? "✓ 已完成" : "✗ 失败";
+  statusEl.className = "task-status" + (ok ? " done" : " err");
+  var now = panel.querySelector(".task-now");
+  now.classList.remove("err");
+  now.classList.add(ok ? "done" : "err");
+  var elapsed = fmtElapsed(Date.now() - panel._t0);
+  var th = panel.querySelector(".task-think");
+  if (th) th.style.display = "none";
+  now.innerHTML = (ok ? "✓ 任务完成" : "✗ 任务失败") + " · 用时 " + elapsed +
+    " · " + panel._toolSeq.length + " 步工具调用";
+  var bar = panel.querySelector(".task-progress .bar");
+  if (bar) {
+    bar.classList.remove("indeterminate");
+    var pct = panel._planSteps > 0 ? Math.round(panel._planDone / panel._planSteps * 100) : 100;
+    bar.querySelector("i").style.width = (ok ? 100 : Math.min(pct, 100)) + "%";
+  }
+  var txt = panel.querySelector(".task-progress .txt");
+  if (txt) txt.textContent = ok ? "完成" : "失败";
+  // 默认收起计划与流水（保持清爽），提供"回顾"展开
+  panel.querySelector(".task-plan").style.display = "none";
+  var head = panel.querySelector(".task-flow-head");
+  head.style.display = "none";
+  panel._flowExpanded = false;
+  refreshFlowVisibility(panel);
+  var review = document.createElement("span");
+  review.className = "task-review";
+  review.textContent = "回顾";
+  review.addEventListener("click", function(e){
+    e.stopPropagation();
+    var planBox = panel.querySelector(".task-plan");
+    panel._reviewing = !panel._reviewing;
+    if (panel._reviewing) {
+      planBox.style.display = "block";
+      head.style.display = "flex";
+      refreshFlowVisibility(panel);
+      review.textContent = "收起";
+      maybeScroll();
+    } else {
+      planBox.style.display = "none";
+      head.style.display = "none";
+      review.textContent = "回顾";
+    }
+  });
+  head.appendChild(review);
+  panel._done = ok;
+  maybeScroll();
 }
 
 function renderTaskDone(panel, reply) {
-  var wrap = panel.closest(".msg-wrap");
-  panel.remove();
-  wrap.remove();
+  finishTaskPanel(panel, true);
   addMsg("bailing", renderMd(reply || "（完成）"));
   sendBtn.disabled = false;  // 任务完成 → 恢复发送
   input.focus();
 }
 
 function renderTaskError(panel, error) {
-  var wrap = panel.closest(".msg-wrap");
-  panel.remove();
-  wrap.remove();
+  finishTaskPanel(panel, false);
   addMsg("bailing", '<span style="color:#DC2626;">出错了：'+escapeHtml(error||"未知错误")+"</span>");
   sendBtn.disabled = false;  // 任务出错 → 恢复发送
   input.focus();
@@ -562,7 +871,7 @@ function send() {
   input.value = "";
   input.style.height = "auto";
   sendBtn.disabled = true;
-  var panel = addTaskPanel();
+  var panel = addTaskPanel(msg);
   fetch("/api/chat", {
     method: "POST",
     headers: {"Content-Type":"application/json"},

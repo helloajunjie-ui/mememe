@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import time
 from typing import Dict, List, Optional
 
 import yaml
@@ -210,6 +211,8 @@ class Agent:
         # 人性层
         self.emotion = EmotionState()
         self.motivation = Motivation()
+        # 运行时活动状态（托盘/状态展示用）：idle=空闲 / thinking=思考 / tool=执行工具
+        self.activity = {"state": "idle", "detail": "", "ts": 0.0}
         # 方法论库（自我评估沉淀）
         self.methods = MethodStore(os.path.join(self.data_dir, "methodology.json"))
         # 工作记忆（会话消息；按上下文节点隔离，闲聊与任务不混流）
@@ -595,6 +598,14 @@ class Agent:
         return " / ".join(parts)
 
     # ================= 对话 =================
+    def _set_activity(self, state: str, detail: str = "") -> None:
+        """记录当前活动状态（供托盘/状态展示）。state: idle / thinking / tool"""
+        try:
+            self.activity = {"state": state, "detail": detail, "ts": time.time()}
+            self._log(f"[activity] {state} {detail}")
+        except Exception:  # noqa: BLE001
+            pass
+
     def turn(self, user_input: str, stage_callback=None) -> str:
         """处理一轮用户输入，返回白绫回复。
 
@@ -711,6 +722,7 @@ class Agent:
             # 动态温度：感受只调语气的温度，不改变事实与判断（表达层）
             base_temp = getattr(self.llm, "temperature", 0.7)
             temp = max(0.2, min(1.3, base_temp + self.emotion.expression()["temp_offset"]))
+            self._set_activity("thinking")
             resp = self.llm.chat(messages, tools=active_schemas, tool_choice="auto", temperature=temp)
             if resp.get("error"):
                 _emit({"type": "error", "error": resp["error"]})
@@ -737,7 +749,8 @@ class Agent:
                     self._log("[task] 工作流模式：预算 64 步/回合，自动续接 8 次")
                 else:
                     _emit({"type": "type", "task_type": "C1"})
-            _emit({"type": "think", "step": step})
+            _emit({"type": "think", "step": step,
+                   "reasoning": (resp.get("reasoning_content") or "")[:400]})
             # 纯思考死循环检测（连续无工具 + 输出高度相似）
             llm_sig = guard.observe_llm(bool(resp.get("tool_calls")), resp.get("content") or "")
             if llm_sig and llm_sig["level"] == "hard":
@@ -816,7 +829,9 @@ class Agent:
                 name, args = tc["name"], self._safe_args(tc["arguments"])
                 used_tools.append(name)
                 self._log_decision(name, args)
-                _emit({"type": "tool", "name": name, "ok": True, "step": step})
+                _emit({"type": "tool", "name": name, "ok": True, "step": step,
+                       "args": args})
+                self._set_activity("tool", name)
                 # 计划线内置工具：本地处理（不落 registry，更新计划状态并广播）
                 if name == "plan_submit":
                     result, plan = self._handle_plan_submit(args, plan)
@@ -849,7 +864,8 @@ class Agent:
                     result = self.registry.execute(name, args)
                 ok = result.get("ok")
                 # 阶段反馈：工具执行完（含成功/失败）
-                _emit({"type": "stage", "name": name, "ok": ok, "step": step})
+                _emit({"type": "stage", "name": name, "ok": ok, "step": step,
+                       "args": args})
                 self._log(f"[tool] {name} → {'ok' if ok else 'error'}")
                 self._log_op(name, args, result, ok)
                 # 死循环检测：同参数重复 / 同工具连续失败
@@ -977,6 +993,7 @@ class Agent:
             self.ctx_task_id = ""
             self._log("[ctx] 任务完成：节点已存档，上下文摘除任务轮次，回闲聊模式")
         self.history.append({"role": "assistant", "content": content})
+        self._set_activity("idle")
         _emit({"type": "done", "reply": content})
         return content
 

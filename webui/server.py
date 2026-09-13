@@ -37,6 +37,7 @@ sys.path.insert(0, ROOT)
 
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("BAILING_WEBUI_PORT", "8765"))
+_started_at = None  # 服务启动时刻（托盘悬停气泡显示运行时长用）
 
 # ---------- Agent 后台异步初始化 ----------
 _agent = None
@@ -442,6 +443,7 @@ class Handler(BaseHTTPRequestHandler):
                 "motivation": a.motivation.snapshot(),
                 "memory_count": memory_count(),
                 "method_count": method_count(),
+                "activity": getattr(a, "activity", {"state": "idle", "detail": ""})
             })
             self._send_json(200, base)
         except Exception as e:  # noqa: BLE001
@@ -726,7 +728,33 @@ def main() -> None:
     print("  网页已就绪（Agent 后台初始化中，完成后即可对话）")
     print("  Ctrl+C 退出。")
 
+    global _started_at
+    _started_at = time.time()
+
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
+
+    # ---- 托盘化：常驻系统托盘（悬停气泡 + 左键开网页 + 右键退出） ----
+    # 主线程跑托盘事件循环，HTTP 服务放子线程；托盘"退出白绫" → 关闭服务收尾。
+    # 托盘依赖（pystray/Pillow）缺失时自动降级为前台运行（关终端 = 停止）。
+    try:
+        from webui.tray import available, run_tray
+        if available():
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            print("  已驻留系统托盘：悬停看状态 / 左键打开网页 / 右键退出（退出 = 停止服务）")
+            try:
+                run_tray(url=f"http://{HOST}:{PORT}", on_quit=srv.shutdown)
+            finally:
+                srv.shutdown()  # 保险：确保 serve_forever 已停止（幂等）
+                srv.server_close()
+                if _ready:
+                    try:
+                        _agent.close()
+                    except Exception:  # noqa: BLE001
+                        pass
+            return
+    except Exception as e:  # noqa: BLE001
+        print(f"  托盘启动失败（降级为前台运行）: {e}")
+
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
