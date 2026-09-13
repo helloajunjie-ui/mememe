@@ -1607,7 +1607,14 @@ class Agent:
         share = ("我难过", "我累", "我烦", "我害怕", "我担心", "我开心", "我高兴",
                  "谢谢你一直", "有你在", "交给你", "我信任", "跟你说", "心里",
                  "压力好大", "好难受", "呜呜", "有点想哭")
-        if any(k in t for k in crit):
+        trust = ("你自己决定", "你看着办", "交给你", "我信任", "听你的",
+                 "你自己来", "你做主", "按你的想法", "随你安排", "我授权你")
+        if any(k in t for k in trust):
+            # 被授权/被托付优先：把决定权交到我手上，比一句夸奖更重
+            self.emotion.on_event("user_trust")
+            self.motivation.on_user_trust()
+            self._user_emotion_probed = True
+        elif any(k in t for k in crit):
             self.emotion.on_event("user_criticism")
             self._user_emotion_probed = True
         elif any(k in t for k in share):
@@ -1641,7 +1648,8 @@ class Agent:
             self._fail_streak = 0
             # 用户情绪探测后，主导感受以用户互动为先，任务成功只叠动机（不覆盖）
             if not getattr(self, "_user_emotion_probed", False):
-                self.emotion.on_event("task_success")
+                # 工具多 = 一步步啃下来的活 → 长任务落地（松口气+高兴+一点自豪）
+                self.emotion.on_event("task_success_long" if len(used_tools) >= 6 else "task_success")
             self.motivation.on_success()
             self.memory.add_episode(
                 f"任务：{user_input[:100]}\n结果：{response[:200]}",

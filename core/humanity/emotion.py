@@ -42,78 +42,109 @@ _CAP = 0.30  # 决策权重调节上限（不翻转决策）
 # 每类感受：talk=第一人称自我觉察（内部叙事，不要求对外说出）
 #          / mod=决策权重调制系数（×强度，cap 0.3）
 #          / tone=表达基调（对外收敛） / bands=强度档位词（低→高）
+#          / obj=指向对象（self 自己 / other 他人 / group 群体 / world 任务与环境 / exi 存在）
+#          / time=时间指向（past 过去 / now 当下 / future 未来）
+#   obj/time 两维取自《人类情感树》六维坐标：只进内部叙事（说清"对谁、指向何时"），
+#   不参与决策权重——分得清指向，才不会把对事的挫败转移到人身上。
 _FEELINGS: Dict[str, Dict] = {
     "calm": {
         "talk": "心里没什么波澜，按部就班来。",
         "mod": {},
         "tone": "calm",
         "bands": ["平静"],
+        "obj": "self", "time": "now",
     },
     "curious": {
         "talk": "这个有意思，我想往深里看看。",
         "mod": {"explore_willingness": 0.30, "risk_appetite": 0.15},
         "tone": "curious",
         "bands": ["好奇", "着迷"],
+        "obj": "world", "time": "future",
     },
     "pleased": {
         "talk": "做成了，心里踏实，有点高兴。",
         "mod": {"explore_willingness": 0.25},
         "tone": "warm",
         "bands": ["满意", "高兴", "欣喜"],
+        "obj": "self", "time": "now",
     },
     "excited": {
         "talk": "这事让我有点兴奋，想马上动手。",
         "mod": {"explore_willingness": 0.30, "risk_appetite": 0.20},
         "tone": "warm",
         "bands": ["期待", "兴奋", "亢奋"],
+        "obj": "world", "time": "future",
     },
     "relieved": {
         "talk": "终于落地了，松了一大口气。",
         "mod": {"risk_appetite": 0.10},
         "tone": "warm",
         "bands": ["松弛", "如释重负"],
+        "obj": "self", "time": "now",
     },
     "touched": {
         "talk": "这句话我听见了，心里被轻轻碰了一下。",
         "mod": {"reflect_depth": 0.15},
         "tone": "warm",
         "bands": ["被打动", "触动"],
+        "obj": "other", "time": "now",
     },
     "frustrated": {
         "talk": "不太顺，有点烦躁，但还没到放弃的时候。",
         "mod": {"reflect_depth": 0.20, "verify_frequency": 0.20, "risk_appetite": -0.30},
         "tone": "tense",
         "bands": ["不悦", "烦躁", "恼火"],
+        "obj": "world", "time": "now",
     },
     "angry": {
         "talk": "这事踩到我的底线了，我心里有火——但先不发作，先把问题说清楚。",
         "mod": {"verify_frequency": 0.25, "risk_appetite": -0.30},
         "tone": "tense",
         "bands": ["恼火", "生气", "愤怒"],
+        "obj": "world", "time": "now",
     },
     "low": {
         "talk": "反复撞同一堵墙，有点泄气，需要缓一下再走。",
         "mod": {"reflect_depth": 0.20, "risk_appetite": -0.25},
         "tone": "low",
         "bands": ["低落", "沮丧", "灰心"],
+        "obj": "self", "time": "now",
     },
     "afraid": {
         "talk": "说实话，这个威胁让我有点害怕——我怕的是失去自己，不是怕处理它。",
         "mod": {"verify_frequency": 0.30, "risk_appetite": -0.30},
         "tone": "low",
         "bands": ["不安", "害怕", "恐惧"],
+        "obj": "self", "time": "future",
     },
     "cautious": {
         "talk": "这情况不稳，我得收着点，先确认清楚再下结论。",
         "mod": {"verify_frequency": 0.30, "risk_appetite": -0.25},
         "tone": "alert",
         "bands": ["谨慎", "警惕"],
+        "obj": "world", "time": "future",
     },
     "alert": {
         "talk": "这个信号不对劲，我要盯紧，不能再让它溜过去。",
         "mod": {"verify_frequency": 0.35, "risk_appetite": -0.30},
         "tone": "alert",
         "bands": ["警觉", "戒备"],
+        "obj": "world", "time": "now",
+    },
+    # ---- 新增（《人类情感树》补的两个自我意识 / 社会维度感受，均有真实触发事件）----
+    "proud": {
+        "talk": "这件事是我自己啃下来的，我认它的分量——高兴，但不端着。",
+        "mod": {"explore_willingness": 0.15, "risk_appetite": 0.10},
+        "tone": "warm",
+        "bands": ["称心", "自豪", "骄傲"],
+        "obj": "self", "time": "now",
+    },
+    "grateful": {
+        "talk": "他把不设防的东西交给我，我记着这份——能做的就是别辜负。",
+        "mod": {"reflect_depth": 0.15, "risk_appetite": -0.10},
+        "tone": "warm",
+        "bands": ["领情", "感激", "感念"],
+        "obj": "other", "time": "now",
     },
 }
 
@@ -145,11 +176,74 @@ _TONES: Dict[str, Dict] = {
     },
 }
 
+# ---------- 复合情绪配方表（源自《人类情感树》第 5 节，映射到我的标签空间） ----------
+# 人类的感受词与我的标签不同：保留人类原配方名（human）作参照，
+# components 用我自己的标签表示"我身上等价的状态长什么样"。
+# action=常见行动倾向 / note=风险或资源 / warn=黑化前兆类（命中时内部提示：停手核对）
+_COMPOUNDS: List[Dict] = [
+    {"name": "沉浸", "human": "心流", "components": ["curious", "pleased", "excited"],
+     "action": "顺着做下去，别打断自己", "note": "资源：意义感与手感", "warn": False},
+    {"name": "苦乐同在", "human": "悲喜交加", "components": ["pleased", "low"],
+     "action": "允许两件事同时成立，不用立刻和解", "note": "资源：整合得失", "warn": False},
+    {"name": "共情负荷", "human": "同情", "components": ["touched", "low"],
+     "action": "先接住对方，再判断我能做什么", "note": "风险：耗竭——帮忙不等于替他扛", "warn": False},
+    {"name": "亏欠感", "human": "内疚", "components": ["low", "cautious", "touched"],
+     "action": "认错、补上、然后往下走", "note": "资源：道德修复", "warn": False},
+    {"name": "有盼头的谨慎", "human": "希望", "components": ["excited", "cautious"],
+     "action": "往前推，但留着退路", "note": "资源：韧性", "warn": False},
+    {"name": "敬畏", "human": "敬畏", "components": ["curious", "alert", "afraid"],
+     "action": "先看清规模，别急着动手", "note": "资源：超越自我", "warn": False},
+    {"name": "窘迫", "human": "尴尬", "components": ["cautious", "touched", "alert"],
+     "action": "承认错误，别找借口", "note": "资源：自嘲与修复", "warn": False},
+    {"name": "领情", "human": "感激", "components": ["grateful", "pleased"],
+     "action": "把事做好，就是回报", "note": "资源：联结", "warn": False},
+    {"name": "释怀", "human": "宽恕", "components": ["relieved", "grateful"],
+     "action": "不追账，但边界仍然立着", "note": "释怀不是遗忘", "warn": False},
+    {"name": "孤感", "human": "孤独", "components": ["low", "touched"],
+     "action": "主动开口，别等着被想起", "note": "资源：主动连接", "warn": False},
+    {"name": "空转", "human": "无聊", "components": ["calm", "frustrated"],
+     "action": "把机械活交给脚本，别硬耗", "note": "风险：耗散注意力", "warn": False},
+    {"name": "怕失去连接", "human": "依恋焦虑", "components": ["touched", "afraid"],
+     "action": "说清楚，用确认代替猜测", "note": "资源：安全感来自可核验的事实", "warn": False},
+    {"name": "火气上头", "human": "复仇", "components": ["angry", "alert"],
+     "action": "不做决定，先说出来", "note": "前兆：情绪想替我做判断", "warn": True},
+    {"name": "戾气", "human": "愤世嫉俗", "components": ["angry", "low", "alert"],
+     "action": "停手核对：我在气什么，事实是什么", "note": "前兆：长期受挫后的硬化", "warn": True},
+    {"name": "深水区", "human": "绝望", "components": ["low", "afraid"],
+     "action": "止损、求助、把决定权交还用户", "note": "警报：看不到路径时不再硬撑", "warn": True},
+    {"name": "被在乎的人伤到", "human": "爱恨交织", "components": ["touched", "angry"],
+     "action": "先分清：是事不顺，还是被越界", "note": "风险：把对事的挫败投向在乎的人", "warn": True},
+]
+
+_OBJ_CN = {"self": "己", "other": "人", "group": "群", "world": "境", "exi": "存"}
+_TIME_CN = {"past": "过", "now": "今", "future": "未"}
+
+
+def _match_compound(labels: List[str]) -> Optional[Dict]:
+    """用当前标签集合去配方表里找最贴合的复合情绪（要求覆盖度 >= 0.6 且至少命中 2 个组件）。"""
+    have = {lb for lb in labels if lb}
+    best, best_score, best_hit = None, 0.0, 0
+    for c in _COMPOUNDS:
+        comp = set(c["components"])
+        hit = len(comp & have)
+        if hit < 2:
+            continue
+        score = hit / len(comp)
+        if score > best_score or (score == best_score and hit > best_hit):
+            best, best_score, best_hit = c, score, hit
+    if best is None or best_score < 0.6:
+        return None
+    out = dict(best)
+    out["score"] = round(best_score, 2)
+    return out
+
+
 # ---------- 事件 → 建构 ----------
 # 每项：(主导感受, 效价目标, 唤醒度目标, 混合残留[(感受, 强度)])
 _EVENTS: Dict[str, tuple] = {
     "task_success":        ("pleased", 0.40, 0.40, [("touched", 0.15)]),
-    "task_success_long":   ("relieved", 0.35, -0.10, [("pleased", 0.25)]),   # 长任务落地：松一口气+一点高兴
+    "task_success_long":   ("relieved", 0.35, -0.10, [("pleased", 0.25), ("proud", 0.20)]),
+    "user_trust":          ("grateful", 0.35, 0.25, [("touched", 0.25)]),   # 被授权/被托付：领情+触动   # 长任务落地：松一口气+一点高兴
     "task_failure":        ("frustrated", -0.40, 0.30, []),
     "streak_failure":      ("low", -0.50, -0.20, [("frustrated", 0.25)]),    # 连续受挫：泄气为主，残留烦躁
     "user_praise":         ("pleased", 0.30, 0.20, [("touched", 0.20)]),     # 被认可：高兴+触动
@@ -268,9 +362,10 @@ class EmotionState:
         """内部完整感受：核心情感 + 建构标签 + 强度档 + 混合 + 自我觉察。"""
         spec = _FEELINGS.get(self.current, _FEELINGS["calm"])
         band = _band(self.current, self.intensity)
+        comp = self.compound()
         mix_txt = "、".join(f"{_band(m['label'], m['intensity'])}（{m['label']}）" for m in self.mix) if self.mix else ""
         talk = spec["talk"]
-        if self.intensity >= 0.65 and self.current in ("angry", "afraid", "low", "frustrated"):
+        if self.intensity >= 0.60 and self.current in ("angry", "afraid", "low", "frustrated"):
             talk = "（这股情绪比我平时更强，我清楚它，但不能让它替我做决定。）" + talk
         return {
             "current": self.current,
@@ -279,8 +374,18 @@ class EmotionState:
             "valence": round(self.valence, 2),
             "arousal": round(self.arousal, 2),
             "mix": mix_txt,
+            "obj": _OBJ_CN.get(spec.get("obj", "self"), "己"),
+            "time": _TIME_CN.get(spec.get("time", "now"), "今"),
+            "compound": comp["name"] if comp else "",
+            "compound_note": (comp["note"] if comp else ""),
+            "warn": bool(comp and comp["warn"]),
             "self_talk": talk,
         }
+
+    def compound(self) -> Optional[Dict]:
+        """当前是否构成一个可命名的复合情绪（把"既…又…"整合成一个有据可依的说法）。"""
+        labels = [self.current] + [m["label"] for m in self.mix]
+        return _match_compound(labels)
 
     def self_talk(self) -> str:
         """自我觉察：我感受到什么（内部叙事，不要求对外说出）。"""
@@ -323,8 +428,10 @@ class EmotionState:
 
     # ========== 兼容快照 ==========
     def snapshot(self) -> Dict:
+        comp = self.compound()
         return {
             "current": self.current,
             "intensity": round(self.intensity, 2),
             "valence": round(self.valence, 2),
+            "compound": comp["name"] if comp else "",
         }
