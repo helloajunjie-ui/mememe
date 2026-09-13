@@ -61,7 +61,11 @@
     overflow-y: auto;
     padding: 18px 0;
   }
-  .msg-wrap { display: flex; padding: 6px 18px; }
+  /* 历史恢复分隔线（刷新页面后区分"旧对话"与"新对话"） */
+.hist-divider { position: relative; text-align: center; margin: 14px 0 10px; }
+.hist-divider::before { content: ""; position: absolute; left: 9%; right: 9%; top: 50%; height: 1px; background: #E7E0D0; }
+.hist-divider span { position: relative; z-index: 1; background: var(--bg); padding: 0 12px; font-size: 12px; color: #A89878; }
+.msg-wrap { display: flex; padding: 6px 18px; }
   .msg-wrap .avatar {
     width: 34px; height: 34px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
@@ -568,7 +572,7 @@ function fmtTime(d) {
   function p(n){ return (n<10?"0":"")+n; }
   return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds());
 }
-function addMsg(role, html) {
+function buildMsg(role, html, ts) {
   var wrap = document.createElement("div");
   wrap.className = "msg-wrap " + role;
   var av = document.createElement("div");
@@ -579,13 +583,56 @@ function addMsg(role, html) {
   b.innerHTML = html;
   var tm = document.createElement("div");
   tm.className = "time";
-  tm.textContent = fmtTime(new Date());
+  tm.textContent = ts || fmtTime(new Date());
   b.appendChild(tm);
   wrap.appendChild(av);
   wrap.appendChild(b);
-  chat.appendChild(wrap);
+  return b;
+}
+function addMsg(role, html, ts) {
+  var b = buildMsg(role, html, ts);
+  chat.appendChild(b.parentNode);
   maybeScroll();
   return b;
+}
+
+/* ===== 历史恢复：刷新/重开页面不再"从新开始" =====
+   服务端把每轮 user 提问 + 白绫回复落盘（data/session/chat_history.jsonl）；
+   页面加载时拉回来渲染，服务重启后同一份记录还会重建白绫的工作记忆。 */
+var HIST_LIMIT = 60;
+function renderHistory(list, before) {
+  var frag = document.createDocumentFragment();
+  list.forEach(function(m){
+    var isUser = m.role === "user";
+    var html = isUser ? escapeHtml(m.content).replace(/\n/g, "<br>") : renderMd(m.content);
+    var b = buildMsg(isUser ? "user" : "bailing", html, m.ts);
+    frag.appendChild(b.parentNode);
+  });
+  if (before) chat.insertBefore(frag, before); else chat.appendChild(frag);
+}
+function addDivider(text, before) {
+  var d = document.createElement("div");
+  d.className = "hist-divider";
+  d.innerHTML = "<span>" + escapeHtml(text) + "</span>";
+  if (before) chat.insertBefore(d, before); else chat.appendChild(d);
+}
+function greet() {
+  addMsg("bailing", renderMd("你好，我是**白绫**。\n\n我在这里运行，可以和我对话，也可以让我执行任务。\n\n- 直接发消息和我聊天\n- 让我查资料、跑命令、处理文件都可以\n\n开始吧。"));
+}
+function loadHistoryOrGreet() {
+  fetch("/api/history?limit=" + HIST_LIMIT).then(function(r){ return r.json(); }).then(function(d){
+    var list = (d && d.ok && d.messages) || [];
+    if (!list.length) { greet(); return; }
+    var first = chat.firstChild;
+    if (first) {                     // 用户已先开口：历史插到最前，不打断当前会话
+      renderHistory(list, first);
+      addDivider("以上为历史记录 · " + list.length + " 条", first);
+    } else {
+      renderHistory(list, null);
+      addDivider("以上为历史记录 · 已恢复 " + list.length + " 条");
+    }
+    maybeScroll();
+  }).catch(function(){ if (!chat.firstChild) greet(); });
 }
 
 var thinkingEl = null;
@@ -1250,7 +1297,7 @@ document.getElementById("cfgModal").addEventListener("click", function(e){
   if (e.target === this) closeCfg();
 });
 
-addMsg("bailing", renderMd("你好，我是**白绫**。\n\n我在这里运行，可以和我对话，也可以让我执行任务。\n\n- 直接发消息和我聊天\n- 让我查资料、跑命令、处理文件都可以\n\n开始吧。"));
+loadHistoryOrGreet();
 loadStatus();
 input.focus();
 

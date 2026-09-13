@@ -35,9 +35,17 @@ import yaml
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+from core.session import SessionStore  # noqa: E402  会话对话层持久化
+
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("BAILING_WEBUI_PORT", "8765"))
 _started_at = None  # 服务启动时刻（托盘悬停气泡显示运行时长用）
+
+# ---------- 会话对话层（刷新页面 / 重启服务后不"从头开始"） ----------
+# 落盘 user 提问 + 最终回复：前端刷新恢复显示，服务重启重建 agent.history。
+_session = SessionStore(os.path.join(ROOT, "data"))
+_HISTORY_RESTORE_KEEP = 40   # 重启后重建 agent.history 的条数上限（约 20 回合）
+_HISTORY_API_MAX = 200       # /api/history 单次返回上限
 
 # ---------- 文本文件上传（传文件给白绫） ----------
 _TEXT_EXTS = {
@@ -110,10 +118,16 @@ _tasks = TaskManager()
 def _run_task(tid: str, message: str) -> None:
     """后台线程执行一轮 turn，阶段事件实时入列。"""
     try:
-        a = get_agent()
+        a = get_agent()          # 未就绪 → 直接失败，不落半条对话
+    except Exception as e:  # noqa: BLE001
+        _tasks.fail(tid, f"白绫处理失败: {e}")
+        return
+    _session.append("user", message)  # 提问先落盘：执行中刷新/崩溃也不丢
+    try:
         with _turn_lock:  # 本地单用户，串行化 turn，避免历史交错
             reply = a.turn(message, stage_callback=lambda ev: _tasks.append_event(tid, ev))
         _tasks.finish(tid, reply)
+        _session.append("assistant", str(reply or ""))  # 回复落盘 → 刷新可恢复
     except Exception as e:  # noqa: BLE001
         _tasks.fail(tid, f"白绫处理失败: {e}")
 
@@ -319,6 +333,26 @@ def _workflow_scheduler() -> None:
         time.sleep(60)  # 每分钟检查一次
 
 
+def _restore_history(a, keep: int = _HISTORY_RESTORE_KEEP) -> int:
+    """启动时用落盘的对话层重建 agent.history —— 服务重启后不再断片。
+
+    只回填 role/content 文本（不含 tool_calls / 阶段流水），当闲聊历史继续；
+    超出窗口的更早内容仍走 ctx_search / 落盘文件检索。
+    """
+    try:
+        recent = _session.load(limit=keep)
+        if not recent:
+            return 0
+        a.history = [{"role": r["role"], "content": r["content"]} for r in recent]
+        a.ctx_start_idx = 0     # 恢复的历史属既有对话，不被任务隔离逻辑误摘
+        a.ctx_mode = "chat"
+        print(f"  已恢复最近 {len(recent)} 条对话到上下文（重启不断片）")
+        return len(recent)
+    except Exception as e:  # noqa: BLE001
+        print(f"  对话历史恢复失败（不影响启动）: {e}")
+        return 0
+
+
 def _init_agent_async() -> None:
     """后台线程：初始化 Agent 并 boot。失败记原因。"""
     global _agent, _ready, _init_error
@@ -327,6 +361,8 @@ def _init_agent_async() -> None:
 
         a = Agent(os.path.join(ROOT, "config.yaml"))
         a.boot()
+        _session.trim()        # 落盘瘦身：超上限裁最旧
+        _restore_history(a)    # 重启后续上上次的对话
         _agent = a
         _ready = True
         print(f"  Agent 就绪（启动模式: {getattr(a, 'boot_mode', '?')}）")
@@ -411,6 +447,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_models_get()
         elif path == "/api/study":
             self._handle_study()
+        elif path == "/api/history":
+            self._handle_history()
         elif m:
             self._handle_task(m.group(1))
         else:
@@ -467,6 +505,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")  # 前端改动即时生效，不吃浏览器缓存
         self.end_headers()
         self.wfile.write(body)
 
@@ -491,6 +530,16 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, base)
         except Exception as e:  # noqa: BLE001
             self._send_json(500, {"ok": False, "error": f"状态读取失败: {e}"})
+
+    # ---------- 对话历史（页面刷新/重开时恢复显示；只读落盘，不依赖 agent 就绪） ----------
+    def _handle_history(self) -> None:
+        raw = urlparse(self.path).query or ""
+        limit = 60
+        m = re.search(r"(?:^|&)limit=(\d+)", raw)
+        if m:
+            limit = max(1, min(_HISTORY_API_MAX, int(m.group(1))))
+        msgs = _session.load(limit=limit)
+        self._send_json(200, {"ok": True, "count": len(msgs), "messages": msgs})
 
     # ---------- 聊天 API（异步：提交即返回 task_id，前端轮询 /api/task/<id>） ----------
     def _handle_chat(self) -> None:
