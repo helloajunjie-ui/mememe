@@ -964,9 +964,15 @@ class Agent:
                         walk(x)
                 elif isinstance(v, str):
                     p = v.strip().strip('"').strip("'")
-                    if not p or not os.path.isabs(p):
+                    if not p:
                         return
                     norm = os.path.normpath(p)
+                    if not os.path.isabs(norm):
+                        # 相对路径：按项目根解析（工具输出常给 workspace 相对路径）
+                        cand = os.path.normpath(os.path.join(proj, p))
+                        if not os.path.isfile(cand):
+                            return
+                        norm = cand
                     ext = os.path.splitext(norm)[1].lower()
                     if ext not in self._ART_EXTS:
                         return
