@@ -184,6 +184,26 @@ _WF_UPDATE_SCHEMA = {
 }
 
 
+# ---------- 任务失败判定（单一真源） ----------
+# 只认 agent 自身生成的控制类前缀（熔断/超限/LLM失败/止损/空响应）。
+# 不用宽口径 startswith("（")：LLM 正常回复也常以"（备注）"开头，会被误判成失败。
+# 2026-09-15 修复：任务收尾判定与 _reflect_light 曾各用一套口径，
+# 产生过 "success=false 但 complete=true" 的自相矛盾档案。
+_CONTROL_FAILURE_PREFIXES = (
+    "[任务未完成]",
+    "[任务成本",
+    "（LLM 调用失败",
+    "（检测到",
+    "（工具调用步数超限",
+    "（本轮模型没有返回任何内容",
+)
+
+
+def is_control_failure(text: str) -> bool:
+    """回复是否为 agent 自身生成的失败/未完成控制信息。"""
+    return (text or "").startswith(_CONTROL_FAILURE_PREFIXES)
+
+
 class TaskCancelled(Exception):
     """用户主动打断当前任务（webui 停止按钮）。在 turn 的工具循环检查点抛出，
     已封存任务断点，可续接恢复。"""
@@ -1682,9 +1702,10 @@ class Agent:
         self._reflect_light(user_input, content, used_tools)
         # 任务结束：生成阶段总结并存档 + 节点化（存档 task 节点，摘除任务轮次，回闲聊模式）
         if tracker is not None and self.ongoing_task is None:
-            success = not content.startswith("（") and not content.startswith("[任务未完成]")
+            success = not is_control_failure(content)
             tracker.plan = plan
-            archive = tracker.finish_task(content, success=success)
+            # complete 与 success 一致：未成功即未完成（消除"失败但完成"矛盾档案）
+            archive = tracker.finish_task(content, success=success, complete=success)
             self._log(f"[task] 任务结束，档案：{archive}")
             self._backup(force=True)  # 任务结束先备份（用户止损原则：状态变更立即保护）
             try:
@@ -2548,11 +2569,8 @@ net_fetch 抓取网页会同时提取正文（噪音已过滤）和正文图片�
     def _reflect_light(self, user_input: str, response: str, used_tools: List[str] = None) -> None:
         """分轻重反思：重要事件深度记录，例行事件轻量带过，避免记忆噪声与一次性堆叠。"""
         used_tools = used_tools or []
-        # 失败判定：只认 agent 自身生成的控制失败前缀（熔断/超限/LLM失败/止损），
-        # 不误伤正常回复（LLM 常以"（备注）…"开头，旧逻辑会把它们判成失败触发负面情绪）
-        unfinished = response.startswith("[任务未完成]") or response.startswith("[任务成本") \
-            or response.startswith("（LLM 调用失败") or response.startswith("（检测到") \
-            or response.startswith("（工具调用步数超限")
+        # 失败判定：统一走 is_control_failure（单一真源，与任务收尾口径一致，避免两处漂移）
+        unfinished = is_control_failure(response)
         if unfinished:
             # 高优先级：任务受阻/失败 → 深度反思（写失败教训，重要性更高）
             # 连续失败计数：烦躁→泄气的量变到质变（Plutchik 强度梯度）
