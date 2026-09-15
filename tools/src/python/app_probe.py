@@ -18,6 +18,7 @@ glob 用于版本号目录（Blender/WPS/Chrome）。macOS/Linux 靠 which 兜�
 from __future__ import annotations
 
 import glob
+import io
 import os
 import re
 import shutil
@@ -95,8 +96,103 @@ def _read_version(path: str, args: list) -> str:
     return m.group(1) if m else ""
 
 
-def _find_one(exe: str, candidates: list, globs: list) -> str:
-    """定位可执行文件：固定路径 → glob → PATH。找不到返回空串（如实）。"""
+def _from_registry(exe: str, name: str = "") -> str:
+    """注册表权威定位（抗升级/换盘/换目录）：①App Paths 的默认值即官方注册的全路径；
+    ②卸载项 InstallLocation 兜底：DisplayName 含软件名时，在安装目录内递归找 exe。
+    仅 Windows 生效；读不到返回空串（如实）。"""
+    if os.name != "nt":
+        return ""
+    try:
+        import winreg
+    except ImportError:
+        return ""
+    exe_file = exe if exe.lower().endswith(".exe") else exe + ".exe"
+    app_paths = ("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\",
+                 "SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\App Paths\\")
+    for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+        for base in app_paths:
+            try:
+                with winreg.OpenKey(hive, base + exe_file) as k:
+                    p = winreg.QueryValue(k, "")
+                if p and os.path.exists(p):
+                    return p
+            except OSError:
+                continue
+    if not name:
+        return ""
+    tokens = [t for t in re.split(r"[^0-9A-Za-z]+", name.lower()) if len(t) >= 4]
+    if not tokens:
+        return ""
+    uninst = ("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+              "SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall")
+    for hive, view in ((winreg.HKEY_LOCAL_MACHINE, uninst[0]), (winreg.HKEY_LOCAL_MACHINE, uninst[1]),
+                       (winreg.HKEY_CURRENT_USER, uninst[0])):
+        try:
+            root = winreg.OpenKey(hive, view)
+        except OSError:
+            continue
+        for i in range(300):
+            try:
+                sub = winreg.EnumKey(root, i)
+            except OSError:
+                break
+            try:
+                with winreg.OpenKey(root, sub) as sk:
+                    dn, _ = winreg.QueryValueEx(sk, "DisplayName")
+                    if not any(t in dn.lower() for t in tokens):
+                        continue
+                    loc, _ = winreg.QueryValueEx(sk, "InstallLocation")
+            except OSError:
+                continue
+            if not loc or not os.path.isdir(loc):
+                continue
+            try:
+                hits = glob.glob(os.path.join(loc, "**", exe_file), recursive=True)
+            except (OSError, ValueError):
+                continue
+            if hits:
+                return hits[0]
+    return ""
+
+
+# 软件名关键词 → (可执行文件同目录下的 ini, 取值键)
+# 为什么需要：这类 GUI 启动器不带 --headless 会常驻不退，跑 --version 只会超时
+# （实测 soffice.exe --version 挂死 >25s），版本必须从安装文件读。
+_VER_FROM_FILE: dict = {"LibreOffice": ("bootstrap.ini", "ProductKey")}
+
+
+def _file_hint(name: str):
+    low = (name or "").lower()
+    for k, v in _VER_FROM_FILE.items():
+        if k.lower() in low:
+            return v
+    return None
+
+
+def _read_version_file(path: str, name: str) -> str:
+    """从 exe 同目录的 ini 读版本号（避开发起 GUI 进程）。读不到返回空串。"""
+    hint = _file_hint(name)
+    if not hint or not path:
+        return ""
+    ini, key = hint
+    f = os.path.join(os.path.dirname(path), ini)
+    try:
+        for line in io.open(f, encoding="utf-8", errors="replace"):
+            if "=" in line:
+                k, v = line.split("=", 1)
+                if k.strip().lower() == key.lower():
+                    m = _VER_RE.search(v)
+                    return m.group(1) if m else v.strip()
+    except OSError:
+        return ""
+    return ""
+
+
+def _find_one(exe: str, candidates: list, globs: list, name: str = "") -> str:
+    """定位可执行文件：注册表（权威/抗升级）→ 固定路径 → glob → PATH。找不到返回空串（如实）。"""
+    reg = _from_registry(exe, name)
+    if reg:
+        return reg
     for p in candidates:
         if p and os.path.exists(p):
             return p
@@ -117,8 +213,10 @@ def _probe_all(apps: list | None = None) -> list:
     for name, cat, exe, cands, globs, ver_args in _SOFTWARE:
         if apps and not any(a.lower() in name.lower() for a in apps):
             continue
-        path = _find_one(exe, cands, globs)
-        ver = _read_version(path, ver_args) if path else ""
+        path = _find_one(exe, cands, globs, name)
+        ver = ""
+        if path:
+            ver = _read_version_file(path, name) if _file_hint(name) else _read_version(path, ver_args)
         out.append({"name": name, "category": cat, "installed": bool(path),
                     "path": path, "version": ver})
     return out
