@@ -94,6 +94,18 @@ class Memory:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def load_recent(self, limit: int = 3) -> List[Dict]:
+        """按写入时间取最近若干条。
+
+        2026-09-15：保证新写的经历能进上下文视野。仅按 importance 排序时，
+        低重要度的新记忆永远排在老记忆之后，写了也看不见，沉淀没有回报。
+        """
+        rows = self.conn.execute(
+            "SELECT * FROM memories WHERE archived=0 ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def _touch(self, mem_id: int) -> None:
         self.conn.execute(
             "UPDATE memories SET access_count = access_count + 1, last_access = ? WHERE id = ?",
