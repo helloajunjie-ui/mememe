@@ -25,6 +25,9 @@ def main() -> None:
     if args.check:
         _run_check(agent)
         agent.close()
+    if getattr(agent, "exit_reload", False):
+        print("（白绫代码已更新，后台自动重启...）")
+        sys.exit(77)
         return
 
     mode = agent.boot()
@@ -32,6 +35,9 @@ def main() -> None:
     if args.task:
         print("\n白绫 >", agent.turn(args.task))
         agent.close()
+        if getattr(agent, "exit_reload", False):
+            print("（白绫代码已更新，后台自动重启...）")
+            sys.exit(77)
         return
 
     # 交互模式

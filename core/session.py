@@ -24,7 +24,7 @@ import json
 import os
 import threading
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 DEFAULT_KEEP = 5000  # 落盘保留上限（行）：超出后裁剪最旧的，避免无限膨胀
 
@@ -42,8 +42,9 @@ class SessionStore:
         self._lock = threading.Lock()
 
     # ---------- 写 ----------
-    def append(self, role: str, content: str, ts: str = "") -> bool:
-        """追加一条对话。role 仅接受 user/assistant；空内容忽略。"""
+    def append(self, role: str, content: str, ts: str = "", attachments: Optional[List[Dict]] = None) -> bool:
+        """追加一条对话。role 仅接受 user/assistant；空内容忽略。
+        attachments：可选，用户附件 [{kind, name, path, content}]，持久化供前端恢复显示。"""
         if role not in ("user", "assistant"):
             return False
         content = (content or "").strip()
@@ -51,6 +52,8 @@ class SessionStore:
             return False
         rec = {"ts": ts or time.strftime("%Y-%m-%d %H:%M:%S"),
                "role": role, "content": content}
+        if attachments:
+            rec["attachments"] = attachments
         try:
             with self._lock:
                 with open(self.path, "a", encoding="utf-8") as f:
@@ -77,7 +80,8 @@ class SessionStore:
                         continue
                     if rec.get("role") in ("user", "assistant") and rec.get("content"):
                         out.append({"ts": rec.get("ts", ""), "role": rec["role"],
-                                    "content": rec["content"]})
+                                    "content": rec["content"],
+                                    "attachments": rec.get("attachments") or []})
         except OSError:
             return []
         return out[-limit:] if limit and limit > 0 else out

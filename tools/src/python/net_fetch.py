@@ -1,9 +1,11 @@
 """内置工具：net_fetch —— 抓取 URL 并提取可读正文（trafilatura 成熟方案）。
 
-从"返回原始 HTML、文本提取需另行处理"升级为"返回可读正文 + 元数据"：
+从"返回原始 HTML、文本提取需另行处理"升级为"返回可读正文 + 元数据 + 正文图片"：
 - 复用 lazyhuman-ai/websearch 的 web_fetch 原语（trafilatura 提取正文，自动处理
-  标题/规范 URL/正文/摘要），不重复造轮子。
+  标题/规范 URL/正文/摘要/图片列表），不重复造轮子。
 - 原始 HTML 默认不返回（省 token），需要时 include_raw=True。
+- include_images=True（默认）时返回正文图片列表（URL+alt，已过滤图标/占位/小图噪音），
+  可配合 net_download 下载到 workspace 供对话展示。
 - 超时/重定向/错误统一处理。
 
 来源：https://github.com/lazyhuman-ai/websearch（MIT），clone 于 library/depot/vendor/websearch。
@@ -38,26 +40,27 @@ except Exception as _e:  # noqa: BLE001
 
 @tool(
     "net_fetch",
-    "抓取 URL 并提取可读正文（自动提取标题/正文/摘要，含重定向与超时处理），返回文本+元数据，适合读文章内容。"
-    "需要原始 HTML 时设 include_raw=True。",
+    "抓取 URL 并提取可读正文（自动提取标题/正文/摘要/正文图片，含重定向与超时处理），返回文本+元数据，适合读文章内容。"
+    "需要原始 HTML 时设 include_raw=True；不需要提取图片时设 include_images=False。",
     {
         "type": "object",
         "properties": {
             "url": {"type": "string", "description": "目标 URL"},
             "max_chars": {"type": "number", "description": "返回文本上限字符数，默认 10000"},
             "include_raw": {"type": "boolean", "description": "是否附带原始 HTML，默认 false"},
+            "include_images": {"type": "boolean", "description": "是否提取正文图片列表（URL+alt，已滤噪音），默认 true"},
         },
         "required": ["url"],
     },
 )
-def run(url: str, max_chars: int = 10000, include_raw: bool = False) -> dict:
+def run(url: str, max_chars: int = 10000, include_raw: bool = False, include_images: bool = True) -> dict:
     if not url or not str(url).strip():
         return {"ok": False, "error": "url 不能为空"}
     if not _WS_READY:
         return {"ok": False,
                 "error": f"正文提取组件不可用: {_WS_ERR}（需安装 library/depot/vendor/websearch 依赖）"}
     try:
-        r = _ws_fetch(str(url).strip())
+        r = _ws_fetch(str(url).strip(), include_images=bool(include_images))
         if isinstance(r, dict) and r.get("error"):
             return {"ok": False, "error": str(r["error"])}
         text = (r.get("text") or "") if isinstance(r, dict) else str(r)
@@ -76,6 +79,10 @@ def run(url: str, max_chars: int = 10000, include_raw: bool = False) -> dict:
             out["domain"] = m.get("domain")
             out["http_status"] = m.get("http_status")
             out["extractor"] = m.get("extractor")
+        if isinstance(r, dict) and include_images:
+            imgs = r.get("images") or []
+            out["images"] = imgs[:20]
+            out["image_count"] = len(imgs)
         if include_raw:
             out["raw"] = text
         return out

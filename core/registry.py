@@ -30,16 +30,28 @@ def normalize_schema(schema: Any) -> Dict:
     """
     if not isinstance(schema, dict):
         return {"type": "object", "properties": {}}
-    if schema.get("type") == "object" and isinstance(schema.get("properties"), dict):
+    # 判据只看"有没有 properties"：带 properties 就是标准格式。
+    # 旧逻辑要求顶层 type=="object"，于是 {"properties":{...}} 这种缺 type 的半成品
+    # 会被误判成扁平参数表 → 整块塞进一个名叫 properties 的参数里，且内层属性级
+    # required 一个都洗不掉 → 模型 API 严格校验直接 400（整轮请求报废，2026-09-15 实测）。
+    if isinstance(schema.get("properties"), dict):
+        schema["type"] = "object"
         props = schema["properties"]
-        required = list(schema.get("required", []))
+        required = _as_required_list(schema.get("required"))
         for k, v in props.items():
-            if isinstance(v, dict) and "required" in v:
-                if v.get("required") is True and k not in required:
-                    required.append(k)
-                v.pop("required", None)
+            if isinstance(v, dict):
+                # 属性级 required 不是合法字段（OpenAI/多数模型严格校验会 400）
+                if "required" in v:
+                    if v.get("required") is True and k not in required:
+                        required.append(k)
+                    v.pop("required", None)
+                # 递归清洗嵌套层（array items / 嵌套 object），防止同样问题漏网
+                _clean_nested_schema(v)
         if required:
             schema["required"] = required
+        elif "required" in schema:
+            # 非法残留（如 required: 123）必须删掉：留着不动 = 没修，外发仍会 400
+            schema.pop("required", None)
         return schema
     # 扁平参数表 → 标准格式
     properties, required = {}, []
@@ -57,19 +69,143 @@ def normalize_schema(schema: Any) -> Dict:
     return out
 
 
+def _as_required_list(value: Any) -> List[str]:
+    """required 取值收紧：字符串按单值处理，非 list/tuple 一律丢弃。
+
+    旧写法 list(schema.get("required", [])) 遇到 required="abc" 会拆成 ["a","b","c"]
+    —— 静默把坏输入"修"成看似合法但语义错误的结果，比报错更难查。
+    """
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        return [str(x) for x in value]
+    return []
+
+
+def _clean_nested_schema(node: Any) -> None:
+    """递归清洗 schema 子节点：剥掉属性级 required（收集进所在对象层 required 数组）。"""
+    if not isinstance(node, dict):
+        return
+    # array items → 清洗 items 定义
+    if node.get("type") == "array" and isinstance(node.get("items"), dict):
+        _clean_nested_schema(node["items"])
+        return
+    # object 层 → 清洗本层 properties
+    if isinstance(node.get("properties"), dict):
+        req = _as_required_list(node.get("required"))
+        for k, v in node["properties"].items():
+            if isinstance(v, dict):
+                if "required" in v:
+                    if v.get("required") is True and k not in req:
+                        req.append(k)
+                    v.pop("required", None)
+                _clean_nested_schema(v)
+        if req:
+            node["required"] = req
+        elif "required" in node:
+            node.pop("required", None)
+        return
+    # 其他容器字段（additionalProperties 等）也递归兜底
+    for v in node.values():
+        if isinstance(v, dict):
+            _clean_nested_schema(v)
+        elif isinstance(v, list):
+            for it in v:
+                if isinstance(it, dict):
+                    _clean_nested_schema(it)
+
+
+def schema_errors(schema: Any, path: str = "", top: bool = True) -> List[str]:
+    """结构性校验：返回会让模型 API 400 的形状问题（空列表 = 合法）。
+
+    代价不对称：坏 schema 不是"某个工具用不了"，而是**整轮请求 400** —— 所有工具和
+    整段上下文一起报废，AI 连报错都说不出来。所以宁可本地先剥离/上报，绝不外发。
+    """
+    errs: List[str] = []
+    if not isinstance(schema, dict):
+        return [f"{path} 不是对象"]
+    if top and schema.get("type") != "object":
+        errs.append(f"{path} 顶层 type 不是 object（{schema.get('type')!r}）")
+    props = schema.get("properties")
+    if props is not None and not isinstance(props, dict):
+        errs.append(f"{path}/properties 不是对象")
+    elif isinstance(props, dict):
+        for k, v in props.items():
+            if not isinstance(v, dict):
+                errs.append(f"{path}/properties/{k} 不是对象")
+                continue
+            if "required" in v:
+                errs.append(
+                    f"{path}/properties/{k} 属性里带了 required={v['required']!r}（须放对象级数组）")
+            errs += schema_errors(v, f"{path}/properties/{k}", top=False)
+    req = schema.get("required")
+    if req is not None and not isinstance(req, list):
+        errs.append(f"{path}/required 不是数组（{req!r}）")
+    items = schema.get("items")
+    if items is not None:
+        if not isinstance(items, dict):
+            errs.append(f"{path}/items 不是对象")
+        else:
+            errs += schema_errors(items, f"{path}/items", top=False)
+    return errs
+
+
 class ToolRegistry:
     # 核心工具：每轮常驻（schema 全量给 LLM）；其余为长尾工具（世界书：目录可见，按需加载 schema）
     CORE_TOOLS = {
         "net_search", "net_fetch", "fs_list", "fs_read", "fs_search", "fs_stat",
-        "memory_write", "memory_search", "cmd_run", "ws_mkdir", "ws_write",
-        "ctx_search", "sys_probe",
+        "memory_write", "memory_search", "cmd_run", "cmd_batch", "sys_check", "ws_mkdir", "ws_write",
+        "net_quality", "disk_report", "git_multi_status",
+        "ctx_search", "sys_probe", "app_probe", "self_restart",
+        "mcp_key_set", "mcp_key_list", "mcp_key_remove",
+        "mcp_deps", "mcp_install",
     }
+
+    @staticmethod
+    def sanitize_schemas(schemas: List[Dict],
+                         on_warn: Optional[Callable[[str], None]] = None) -> List[Dict]:
+        """LLM 调用前的最后一道闸。
+
+        每条 function schema 过一遍 normalize_schema（洗掉属性级 required 等非法形状）；
+        洗完仍不合法 → 整条剔除并留痕。取舍明确：宁少一个工具，也不要整轮请求 400。
+        """
+        cleaned: List[Dict] = []
+        for s in schemas or []:
+            try:
+                fn = s.get("function") if isinstance(s, dict) else None
+                if not isinstance(fn, dict):
+                    if on_warn:
+                        on_warn(f"[schema] 跳过无法识别的工具条目: {type(s).__name__}")
+                    continue
+                name = fn.get("name") or "?"
+                raw_errs = schema_errors(fn.get("parameters"), name)
+                fn["parameters"] = normalize_schema(fn.get("parameters"))
+                errs = schema_errors(fn["parameters"], name)
+                if errs:
+                    if on_warn:
+                        on_warn(f"[schema] 剔除非法工具 {name}: {errs[:2]}")
+                    continue
+                if raw_errs:
+                    # 声明时就是脏的、已被本地修好 —— 必须留痕。
+                    # 正是这种沉默修复让 2026-09-15 那次 400 查了很久。
+                    if on_warn:
+                        on_warn(f"[schema] 已修正工具 {name} 的 schema: {raw_errs[:2]}")
+                cleaned.append(s)
+            except Exception as e:  # noqa: BLE001
+                if on_warn:
+                    on_warn(f"[schema] 工具条目处理异常已跳过: {type(e).__name__}: {e}")
+                continue
+        return cleaned
+
 
     def __init__(self, path: str = "data/registry.json", tools_dir: str = "tools"):
         self.path = path
         self.tools_dir = tools_dir
         self.tools: Dict[str, Dict] = {}      # name -> registry entry
         self._fns: Dict[str, Callable] = {}   # name -> python 函数（动态加载）
+        self._mod_mtime: Dict[str, float] = {}  # name -> 工具源码 mtime（热更新检测用）
         self.mcp: Any = None                  # MCP 管理器（McpManager，agent 启动时注入）
 
     # ---------- 持久化 ----------
@@ -117,6 +253,7 @@ class ToolRegistry:
         self.tools[name] = {
             "name": name,
             "name_zh": self._name_zh(name),
+            "group": str(meta.get("group") or "").strip(),
             "description": desc,
             "keywords": self._TOOL_KEYWORDS.get(name) or self._extract_keywords(f"{self._name_zh(name)} {desc}"),
             "parameters": normalize_schema(meta["parameters"]),
@@ -136,6 +273,51 @@ class ToolRegistry:
             },
         }
         self._fns[name] = fn
+        try:
+            self._mod_mtime[name] = os.path.getmtime(source_path)
+        except OSError:
+            self._mod_mtime[name] = 0.0
+
+    # ---------- 工具热更新（源码 mtime 变化 → reload 模块，无需重启白绫） ----------
+    def reload_if_changed(self, name: str) -> bool:
+        """工具源码文件变化时重新加载对应模块并刷新 fn/schema。返回是否发生了重载。
+        改 tools/src/python/*.py 后，白绫下一次调用即用新代码，无需重启进程。"""
+        impl = (self.tools.get(name) or {}).get("impl") or {}
+        src = impl.get("source")
+        if not src or not os.path.exists(src):
+            return False
+        try:
+            mtime = os.path.getmtime(src)
+        except OSError:
+            return False
+        if self._mod_mtime.get(name) == mtime:
+            return False
+        mod_name = f"tools.src.python.{Path(src).stem}"
+        try:
+            if mod_name in sys.modules:
+                mod = importlib.reload(sys.modules[mod_name])
+            else:
+                mod = importlib.import_module(mod_name)
+            entry = impl.get("entry") or ""
+            fn = getattr(mod, entry, None) if entry else None
+            if not fn or not callable(fn):
+                print(f"[registry] 热更新 {name} 失败: 模块中找不到入口函数 {entry}")
+                return False
+            self._fns[name] = fn
+            self._mod_mtime[name] = mtime
+            # 同步刷新 desc/parameters（工具元信息也变了时）
+            meta = get_meta(fn)
+            if meta:
+                self.tools[name]["description"] = meta.get("description") or impl.get("description", "")
+                params = normalize_schema(meta.get("parameters"))
+                if params != self.tools[name].get("parameters"):
+                    self.tools[name]["parameters"] = params
+                    self.tools[name]["version"] = int(self.tools[name].get("version", 1)) + 1
+            print(f"[registry] 热更新工具 {name}（{Path(src).name}）")
+            return True
+        except Exception as e:  # noqa: BLE001
+            print(f"[registry] 热更新 {name} 失败: {type(e).__name__}: {e}")
+            return False
 
     # ---------- MCP 工具注册（见设计文档 5.37） ----------
     def register_mcp(self, tool_name: str, server: str, tool: str,
@@ -181,7 +363,9 @@ class ToolRegistry:
         "fs_stat": "文件信息", "fs_delete": "删文件", "fs_move": "移动文件", "fs_copy": "复制文件",
         "memory_write": "写记忆", "memory_search": "查记忆", "method_learn": "沉淀方法论",
         "ctx_search": "上下文检索",
-        "sys_probe": "综合探查", "proc_list": "进程列表", "proc_kill": "结束进程",
+        "sys_probe": "综合探查", "sys_check": "系统巡检", "net_quality": "网络质量", "disk_report": "磁盘报告",
+        "git_multi_status": "仓库状态", "app_probe": "软件探查", "proc_list": "进程列表", "proc_kill": "结束进程",
+        "self_restart": "请求重启",
         "tool_create": "自建工具",
         "tool_import": "导入工具", "tool_acquire": "获取工具", "tool_scan": "扫描工具",
         "ws_mkdir": "建工作目录", "ws_write": "写工作文件", "word_count": "文本统计",
@@ -195,11 +379,28 @@ class ToolRegistry:
         "feishu_list_chat": "飞书列群聊", "feishu_bitable_list": "飞书多维表格读记录",
         "feishu_bitable_create": "飞书多维表格加记录", "feishu_docx_read": "飞书读云文档",
         "feishu_docx_create": "飞书建云文档", "feishu_whoami": "飞书凭据校验",
+        # 2026-09-15 补：此前这些工具没有中文名，世界书目录里显示成英文名
+        "account_add": "新增账户凭据", "account_list": "列出账户名",
+        "account_remove": "删除账户凭据", "account_test": "校验账户凭据",
+        "dropbox_list": "Dropbox 列目录", "dropbox_read": "Dropbox 读文件",
+        "dropbox_write": "Dropbox 写文件", "dropbox_delete": "Dropbox 删文件",
+        "dropbox_mkdir": "Dropbox 建目录", "dropbox_whoami": "Dropbox 凭据校验",
+        "gdrive_list": "Google Drive 列目录", "gdrive_read": "Google Drive 读文件",
+        "gdrive_write": "Google Drive 写文件", "gdrive_delete": "Google Drive 删文件",
+        "gdrive_mkdir": "Google Drive 建目录", "gdrive_whoami": "Google Drive 凭据校验",
+        "llm_health": "模型健康与容灾",
+        "mcp_connect": "连接 MCP 服务器", "mcp_disconnect": "移除 MCP 配置",
+        "mcp_list": "查看 MCP 工具", "mcp_scan": "同步 MCP 工具",
+        "mcp_key_set": "保存软件接口凭据", "mcp_key_list": "查看凭据键名",
+        "mcp_key_remove": "删除软件接口凭据",
+        "mcp_deps": "评估软件接口依赖", "mcp_install": "安装软件接口依赖",
+        "vision_look": "看图描述", "fs_smart_read": "精准读文件片段",
+        "tool_find": "工具索引查询", "tool_health_audit": "工具库健康自检",
     }
 
     # 工具分组（多级目录：功能域 → 工具条目）
     _TOOL_GROUPS = {
-        "网络": ["net_search", "net_fetch", "net_download"],
+        "网络": ["net_search", "net_fetch", "net_download", "net_quality"],
         "局域网": ["lan_scan", "lan_portscan"],
         "个人云": ["cloud_webdav_list", "cloud_webdav_read", "cloud_webdav_write",
                    "cloud_webdav_delete", "cloud_webdav_mkdir"],
@@ -207,13 +408,58 @@ class ToolRegistry:
                  "feishu_bitable_list", "feishu_bitable_create",
                  "feishu_docx_read", "feishu_docx_create", "feishu_whoami"],
         "文件系统": ["fs_list", "fs_read", "fs_search", "fs_stat", "fs_delete", "fs_move", "fs_copy"],
-        "系统与执行": ["cmd_run", "sys_probe", "proc_list", "proc_kill"],
+        "系统与执行": ["cmd_run", "cmd_batch", "sys_check", "disk_report", "sys_probe", "app_probe", "proc_list", "proc_kill", "self_restart"],
+        "开发者": ["git_multi_status"],
         "记忆与经验": ["memory_write", "memory_search", "method_learn"],
         "工作区": ["ws_mkdir", "ws_write"],
         "自我维护": ["self_backup", "self_clone", "self_restore"],
-        "工具工程": ["tool_create", "tool_import", "tool_acquire", "tool_scan"],
+        "工具工程": ["tool_create", "tool_import", "tool_acquire", "tool_scan",
+                     "tool_find", "tool_health_audit",
+                     "mcp_connect", "mcp_disconnect", "mcp_list", "mcp_scan",
+                     "mcp_key_set", "mcp_key_list", "mcp_key_remove",
+                     "mcp_deps", "mcp_install"],
         "文本处理": ["word_count"],
     }
+
+    # ---- 功能域归类（单一真源）----
+    # 解析优先级：工具源码里声明的 group（显式） > _TOOL_GROUPS（手工表，少量特例）
+    #             > _TOOL_PREFIX_GROUPS（前缀规则，覆盖同族成批工具） > "其他"
+    # 规矩：新工具必须被前三级任一级命中；落进"其他"= 未归类，tool_health_audit 会告警。
+    # 归档规范见 docs/工具归档规范.md。世界书目录与 tool_find 都只调 group_of()，不自带第二份表。
+    _TOOL_PREFIX_GROUPS = (
+        ("mcp_blender_", "MCP·blender"),
+        ("mcp_godot_", "MCP·godot"),
+        ("mcp_", "MCP"),
+        ("cloud_webdav_", "个人云"),
+        ("dropbox_", "个人云"),
+        ("gdrive_", "个人云"),
+        ("feishu_", "飞书"),
+        ("fs_", "文件系统"),
+        ("net_", "网络"),
+        ("git_", "开发者"),
+        ("lan_", "局域网"),
+        ("memory_", "记忆与经验"),
+        ("method_", "记忆与经验"),
+        ("ws_", "工作区"),
+        ("self_", "自我维护"),
+        ("tool_", "工具工程"),
+        ("account_", "凭据库"),
+        ("proc_", "系统与执行"),
+        ("ctx_", "上下文"),
+        ("llm_", "模型"),
+        ("vision_", "多模态"),
+        ("word_", "文本处理"),
+    )
+
+    # 世界书分组渲染顺序（未登记的组按名称排在其后，"其他"永远垫底）
+    _GROUP_ORDER = [
+        "网络", "局域网", "个人云", "飞书",
+        "文件系统", "工作区", "系统与执行",
+        "记忆与经验", "上下文", "文本处理",
+        "凭据库", "模型", "多模态",
+        "自我维护", "工具工程",
+        "MCP·godot", "MCP·blender", "MCP", "其他",
+    ]
 
     # 世界书触发关键词（手动配置，覆盖用户自然语言说法；自动提取仅作兜底）
     _TOOL_KEYWORDS = {
@@ -234,6 +480,22 @@ class ToolRegistry:
         "sys_probe": ["综合探查", "环境探测", "全面体检", "探测环境", "机器全貌", "系统快照",
                       "环境", "系统信息", "配置", "内存", "磁盘", "机器", "已安装", "软件",
                       "有哪些软件", "环境信息", "系统工具"],
+        "app_probe": ["软件探查", "软件安装", "装了哪些软件", "装了什么软件", "软件在哪",
+                      "查找软件", "定位软件", "软件路径", "office", "office在哪", "办公软件",
+                      "有没有装", "app_probe"],
+        "self_restart": ["重启", "重启白绫", "更新后重启", "无感重启", "冷启动", "自动重启",
+                         "self_restart", "重新加载核心"],
+        "cmd_batch": ["批量命令", "命令集合", "多条命令", "连续执行", "批量执行", "cmd_batch",
+                      "一次执行多条", "批量探测", "批量查询"],
+        "sys_check": ["电脑状态", "系统体检", "系统状态", "卡不卡", "电脑卡", "体检", "巡检",
+                      "看看电脑", "查看电脑", "电脑怎么样", "系统检查", "sys_check", "装了哪些软件",
+                      "开机启动项", "网络通不通", "内存", "磁盘空间"],
+        "net_quality": ["网卡不卡", "网络卡", "断网", "网络慢", "连不上", "延迟", "网络质量", "网速",
+                        "net_quality", "网络测试", "ping", "丢包", "DNS"],
+        "disk_report": ["C盘满了", "C盘满", "磁盘不够", "磁盘空间", "清理磁盘", "空间去哪了", "缓存",
+                        "disk_report", "临时文件", "回收站", "磁盘清理", "释放空间", "磁盘报告"],
+        "git_multi_status": ["仓库状态", "项目状态", "看看项目", "哪些有改动", "git 状态", "仓库改动",
+                             "git_multi_status", "批量仓库", "分支状态", "未提交"],
         "proc_list": ["进程列表", "看进程", "有哪些进程", "进程", "运行的程序", "任务管理器"],
         "proc_kill": ["结束进程", "杀进程", "关闭程序", "卡死", "无响应", "强制结束", "kill进程"],
         "lan_scan": ["局域网", "扫描主机", "活跃主机", "网段", "内网", "同网段", "在线设备", "局域网扫描"],
@@ -255,6 +517,9 @@ class ToolRegistry:
         "tool_import": ["导入工具", "继承", "前辈", "收集工具", "旧工具"],
         "tool_acquire": ["获取工具", "拉取", "克隆", "github", "git仓库"],
         "tool_scan": ["扫描工具", "发现工具", "tool_scan"],
+        "tool_find": ["工具索引", "工具目录", "有哪些工具", "有没有工具", "能做什么",
+                      "有什么工具", "检索工具", "工具清单", "工具库"],
+        "tool_health_audit": ["工具健康", "工具库健康", "工具自检", "工具体检", "工具是否正常"],
         "ws_mkdir": ["建目录", "任务目录", "创建文件夹", "工作区"],
         "ws_write": ["保存", "写入文件", "写入", "生成文件", "写到"],
         "word_count": ["统计", "字数", "词频", "word_count"],
@@ -264,22 +529,6 @@ class ToolRegistry:
     }
 
     # 工具功能域（多级目录一级分类）
-    _TOOL_CATEGORY = {
-        "网络": ["net_search", "net_fetch", "net_download", "tool_acquire"],
-        "局域网": ["lan_scan", "lan_portscan"],
-        "个人云": ["cloud_webdav_list", "cloud_webdav_read", "cloud_webdav_write",
-                   "cloud_webdav_delete", "cloud_webdav_mkdir"],
-        "飞书": ["feishu_send_text", "feishu_send_post", "feishu_list_chat",
-                 "feishu_bitable_list", "feishu_bitable_create",
-                 "feishu_docx_read", "feishu_docx_create", "feishu_whoami"],
-        "文件": ["fs_list", "fs_read", "fs_search", "fs_stat", "fs_delete", "fs_move", "fs_copy",
-                 "ws_mkdir", "ws_write"],
-        "系统": ["cmd_run", "sys_probe", "proc_list", "proc_kill"],
-        "自我": ["memory_write", "memory_search", "method_learn", "self_backup", "self_clone", "self_restore"],
-        "工具自举": ["tool_create", "tool_import", "tool_scan"],
-        "文本": ["word_count"],
-    }
-
     def _name_zh(self, name: str) -> str:
         return self._TOOL_ZH.get(name, name)
 
@@ -348,37 +597,92 @@ class ToolRegistry:
     def is_core(self, name: str) -> bool:
         return name in self.CORE_TOOLS
 
-    def to_index_json(self) -> List[Dict]:
+    # ---------- 功能域归类（单一真源） ----------
+
+    @classmethod
+    def resolve_group(cls, name: str, declared: str = "") -> str:
+        """按类级规则判定功能域（不依赖实例）：显式声明 > 手工表 > 前缀规则 > 其他。
+
+        单一真源——世界书目录（to_index_json）、工具检索（tool_find）、健康自检
+        （tool_health_audit）都调这里，任何调用方不得自带第二份分组表
+        （此前工具目录存在两套分组，一套 82% 堆在"其他"）。
+        """
+        if (declared or "").strip():
+            return declared.strip()
+        for gname, names in cls._TOOL_GROUPS.items():
+            if name in names:
+                return gname
+        for prefix, gname in cls._TOOL_PREFIX_GROUPS:
+            if name.startswith(prefix):
+                return gname
+        return "其他"
+
+    def group_of(self, name: str) -> str:
+        """判定本实例内某工具的功能域（读底表显式声明，其余交给 resolve_group）。"""
+        entry = self.tools.get(name) or {}
+        return self.resolve_group(name, str(entry.get("group") or ""))
+
+    def _ordered_groups(self) -> List[str]:
+        """按 _GROUP_ORDER 排好序的功能域清单；在用但未登记的组排"其他"之前。"""
+        used: List[str] = []
+        for t in self.list_active():
+            g = self.group_of(t["name"])
+            if g not in used:
+                used.append(g)
+        order = [g for g in self._GROUP_ORDER if g in used and g != "其他"]
+        rest = sorted(g for g in used if g not in self._GROUP_ORDER and g != "其他")
+        return order + rest + (["其他"] if "其他" in used else [])
+
+    def to_index_json(self, collapse_mcp: bool = True) -> List[Dict]:
         """工具世界书多级目录（JSON 结构，适配底层逻辑）：
-        [{"group", "core":[{name,name_zh}], "ext":[{name,name_zh,keywords}]}]"""
+        [{"group","core":[{name,name_zh}],"ext":[{name,name_zh,keywords}],"collapsed","count"}]。
+
+        归类走 group_of()（单一真源）；MCP 分组默认折叠——只给组名 + 数量 + 少量示例，
+        明细用 tool_find(group="MCP·godot") 查（179 条 MCP 工具名曾占世界书近 1/3 字符）。
+        """
         active = {t["name"]: t for t in self.list_active()}
-        grouped = set()
-        for names in self._TOOL_GROUPS.values():
-            grouped.update(names)
-        groups: Dict[str, List[str]] = {g: list(ns) for g, ns in self._TOOL_GROUPS.items()}
+        buckets: Dict[str, List[str]] = {}
         for n in active:
-            if n not in grouped:
-                groups.setdefault("其他", []).append(n)
+            buckets.setdefault(self.group_of(n), []).append(n)
         out = []
-        for gname, names in groups.items():
+        for gname in self._ordered_groups():
+            names = sorted(buckets.get(gname, []))
+            if not names:
+                continue
+            if collapse_mcp and gname.startswith("MCP"):
+                out.append({
+                    "group": gname, "core": [], "ext": [], "collapsed": True,
+                    "count": len([n for n in names if not self.is_core(n)]),
+                    "sample": [{"name": n, "name_zh": active[n].get("name_zh", "")}
+                               for n in names[:3]],
+                })
+                continue
             core = [{"name": n, "name_zh": active[n].get("name_zh", "")}
-                    for n in names if n in active and self.is_core(n)]
+                    for n in names if self.is_core(n)]
             ext = [{"name": n, "name_zh": active[n].get("name_zh", ""),
                     "keywords": active[n].get("keywords", [])[:4]}
-                   for n in names if n in active and not self.is_core(n)]
+                   for n in names if not self.is_core(n)]
             if core or ext:
-                out.append({"group": gname, "core": core, "ext": ext})
+                out.append({"group": gname, "core": core, "ext": ext,
+                            "collapsed": False, "count": len(core) + len(ext)})
         return out
 
     def to_index(self) -> str:
         """工具世界书多级目录（Markdown 渲染视图，给 LLM 展示用）：从 JSON 结构渲染。"""
-        lines = ["（多级目录：功能域 → 工具条目；核心=常驻可用，扩展=说工具名自动加载）"]
+        lines = ["（多级目录：功能域 → 工具条目；核心=常驻可用，扩展=说工具名自动加载；"
+                 "查明细/按能力找工具用 tool_find）"]
         for g in self.to_index_json():
             parts = []
-            if g["core"]:
-                parts.append("核心:" + ", ".join(f"{c['name']}({c['name_zh']})" for c in g["core"]))
-            if g["ext"]:
-                parts.append("扩展:" + "; ".join(f"{e['name']}({e['name_zh']})触发{ '/'.join(e['keywords']) }" for e in g["ext"]))
+            if g.get("collapsed"):
+                parts.append(f"{g['count']} 个工具（折叠，tool_find(group=\"{g['group']}\") 查明细）")
+            else:
+                if g["core"]:
+                    parts.append("核心:" + ", ".join(f"{c['name']}({c['name_zh']})"
+                                                     for c in g["core"]))
+                if g["ext"]:
+                    parts.append("扩展:" + "; ".join(
+                        f"{e['name']}({e['name_zh']})触发{'/'.join(e['keywords'])}"
+                        for e in g["ext"]))
             if parts:
                 lines.append(f"▶ {g['group']}  " + "  ".join(parts))
         return "\n".join(lines)
@@ -400,6 +704,12 @@ class ToolRegistry:
         """分发执行工具。返回 {"ok": bool, "result": ...} 或 {"ok": False, "error": ...}"""
         entry = self.tools.get(name)
         if not entry:
+            # MCP 工具不在注册表（v2.7 起按需激活注入）：mcp_<server>_<tool> 兜底转发给 MCP 服务
+            if name.startswith("mcp_") and self.mcp is not None:
+                srv = self.mcp.match_server(name)
+                if srv:
+                    tool = name[len(f"mcp_{srv}_"):]
+                    return self.mcp.call(srv, tool, args)
             return {"ok": False, "error": f"工具不存在: {name}"}
         impl = entry["impl"]
         if impl["type"] == "python_function":
@@ -422,6 +732,7 @@ class ToolRegistry:
         return {"ok": False, "error": f"未知工具类型: {impl['type']}"}
 
     def _execute_python(self, name: str, args: Dict) -> Dict:
+        self.reload_if_changed(name)  # 热更新：源码变化即重载，无需重启
         fn = self._fns.get(name)
         if fn is None:
             return {"ok": False, "error": f"工具未加载: {name}"}

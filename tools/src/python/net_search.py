@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """内置工具：net_search —— 多引擎网络搜索（成熟方案：lazyhuman-ai/websearch）。
 
 替代旧的单引擎方案（抓 Bing HTML 用正则抠 b_algo 块，脆弱、反爬一改就废、单点失败）：
@@ -6,6 +7,7 @@
 - 模型无关：不依赖任何 LLM 厂商的专属接口，任何接入的模型都能用。
 - 零外部搜索 API key：默认 HTML/RSS 引擎即可工作。
 - 返回规范化结果：标题 + 链接 + 摘要 + 来源引擎。
+- 图片模式（image=True）：走 Bing Images，返回原图 URL + 缩略图 + 来源页，可配合 net_download 取图。
 
 来源：https://github.com/lazyhuman-ai/websearch（MIT），已 clone 到 library/depot/vendor/websearch。
 """
@@ -40,24 +42,33 @@ except Exception as _e:  # noqa: BLE001
 @tool(
     "net_search",
     "多引擎网络搜索（Bing/DuckDuckGo/Brave/Wikipedia 等聚合容错，单个引擎失败自动换源，透明报告），"
-    "返回规范化结果：标题+链接+摘要+来源引擎。时效性内容（新闻/赛程/价格/动态）用它最合适。",
+    "返回规范化结果：标题+链接+摘要+来源引擎。时效性内容（新闻/赛程/价格/动态）用它最合适。"
+    "image=True 时走图片搜索（Bing Images）：返回原图 URL/缩略图/来源页，适合找图/配图/视觉素材。",
     {
         "type": "object",
         "properties": {
             "query": {"type": "string", "description": "搜索关键词"},
             "max_results": {"type": "number", "description": "返回结果数，默认 5"},
+            "image": {"type": "boolean", "description": "图片搜索模式，默认 false"},
         },
         "required": ["query"],
     },
 )
-def run(query: str, max_results: int = 5) -> dict:
+def run(query: str, max_results: int = 5, image: bool = False) -> dict:
     if not _WS_READY:
         return {"ok": False,
                 "error": f"多引擎搜索组件不可用: {_WS_ERR}（需安装 library/depot/vendor/websearch 依赖）"}
     if not query or not str(query).strip():
         return {"ok": False, "error": "query 不能为空"}
     try:
-        payload = _ws_payload(str(query).strip(), count=int(max_results or 5), language="zh-CN")
+        providers = ["bing_images"] if image else None
+        payload = _ws_payload(
+            str(query).strip(),
+            count=int(max_results or 5),
+            language="zh-CN",
+            providers=providers,
+            category="image" if image else "auto",
+        )
         results = payload.get("results") or []
         used = payload.get("used_engines") or []
         failed = payload.get("engine_failures") or {}
@@ -67,6 +78,8 @@ def run(query: str, max_results: int = 5) -> dict:
             "snippet": r.get("snippet", ""),
             "engine": r.get("engine"),
             "published_at": r.get("published_at"),
+            "image_url": r.get("image_url", ""),
+            "image_meta": r.get("image_meta") or {},
         } for r in results]
         return {
             "ok": True,
@@ -74,7 +87,8 @@ def run(query: str, max_results: int = 5) -> dict:
             "count": len(out),
             "engines": used,
             "engine_failures": failed,
+            "image_mode": bool(image),
             "results": out,
         }
     except Exception as e:  # noqa: BLE001
-        return {"ok": False, "error": f"搜索失败: {type(e).__name__}: {e}"}
+        return {"ok": False, "error": f"搜索失败: {e}"}

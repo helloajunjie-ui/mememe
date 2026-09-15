@@ -15,8 +15,13 @@ META_ATTR = "_bailing_tool_meta"
 
 
 def tool(name: str, description: str, parameters: Dict, deps: Optional[list] = None,
-         language: str = "python"):
-    """工具注册装饰器：把普通函数标记为白绫工具。"""
+         language: str = "python", group: str = ""):
+    """工具注册装饰器：把普通函数标记为白绫工具。
+
+    group: 功能域（工具目录/检索里的归类）。新工具请显式声明，如 group="网络"；
+           不声明则按 core/registry.py 的前缀规则兜底，落进"其他"=未归类，
+           tool_health_audit 会告警。功能域词表见 docs/工具归档规范.md。
+    """
 
     def decorator(fn: Callable) -> Callable:
         setattr(fn, META_ATTR, {
@@ -25,6 +30,7 @@ def tool(name: str, description: str, parameters: Dict, deps: Optional[list] = N
             "parameters": parameters,
             "deps": deps or [],
             "language": language,
+            "group": group or "",
         })
         return fn
 

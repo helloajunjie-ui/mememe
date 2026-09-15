@@ -46,7 +46,12 @@ if not exist "%~dp0.venv\.deps_ok" (
 
 REM ---- 2. 启动（start 分离，pythonw 后台无窗口，本窗口自动关闭） ----
 echo [3/3] 启动白绫...
-start "" "%PYW%" "%~dp0webui\server.py"
+REM ---- gateway: start Go LLM gateway (hidden) before BaiLing ----
+if exist "%~dp0llm-gateway\bailing-gateway.exe" (
+  wscript.exe "%~dp0llm-gateway\start-gateway-hidden.vbs"
+)
+
+start "" "%PYW%" "%~dp0launcher.py" --entry "webui/server.py"
 ping -n 4 127.0.0.1 >nul
 start "" "http://127.0.0.1:8765"
 echo 白绫已启动：http://127.0.0.1:8765

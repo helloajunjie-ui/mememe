@@ -111,6 +111,42 @@
   .bubble tr:nth-child(even) td { background: rgba(0,0,0,.015); }
   .bubble li { margin: 2px 0; }
   .bubble .time { font-size: 10.5px; color: var(--text-2); text-align: right; margin-top: 6px; }
+  /* 产物卡片：图片预览 / 文件下载 */
+  .artifact-box { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+  .artifact { border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+    background: #fff; width: 170px; }
+  .artifact a.artifact-img { display: block; }
+  .artifact a.artifact-img img { width: 100%; height: 120px; object-fit: cover;
+    display: block; border-bottom: 1px solid var(--border); }
+  .artifact .artifact-name { font-size: 11.5px; color: var(--text-1); padding: 6px 8px;
+    word-break: break-all; line-height: 1.35; }
+  .artifact .artifact-file { display: flex; align-items: center; gap: 6px; padding: 10px 8px 2px; }
+  .artifact .artifact-icon { font-size: 16px; }
+  .artifact .artifact-actions { display: flex; gap: 10px; padding: 4px 8px 8px; }
+  .artifact .artifact-actions a { font-size: 12px; color: var(--accent); text-decoration: none; cursor: pointer; }
+  .artifact .artifact-actions a:hover { text-decoration: underline; }
+  /* 文件折叠条（文件多时不吵） */
+  .artifact-files-toggle { display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-2); background: #F7F6F2; border: 1px solid var(--border);
+    border-radius: 16px; padding: 4px 12px; cursor: pointer; user-select: none; }
+  .artifact-files-toggle:hover { background: #F0EEE8; }
+  .artifact-files-toggle .caret { transition: transform .15s; font-size: 9px; }
+  .artifact-files-toggle.open .caret { transform: rotate(90deg); }
+  .artifact-files { display: none; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+  .artifact-files.open { display: flex; }
+  /* 对话内预览展开区 */
+  .artifact-preview { border-top: 1px dashed var(--border); background: #FBFAF7;
+    font-size: 12px; color: var(--text-1); max-height: 320px; overflow: auto; }
+  .artifact-preview pre { margin: 0; padding: 8px 10px; white-space: pre-wrap;
+    word-break: break-all; font-family: inherit; line-height: 1.6; }
+  .artifact-preview .preview-more { display: block; text-align: center; padding: 4px;
+    font-size: 11.5px; color: var(--accent); cursor: pointer; background: #F5F3EC; }
+  .artifact-preview iframe { width: 100%; height: 320px; border: 0; }
+  /* 大图查看遮罩 */
+  .artifact-modal { position: fixed; inset: 0; background: rgba(20,20,16,.72); z-index: 999;
+    display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
+  .artifact-modal img { max-width: 92vw; max-height: 92vh; border-radius: 6px;
+    box-shadow: 0 10px 40px rgba(0,0,0,.5); }
   /* 思考中 */
   .thinking { display: flex; align-items: center; gap: 8px; }
   .thinking .dot { width: 6px; height: 6px; border-radius: 50%;
@@ -128,6 +164,15 @@
   .task-status { margin-left: auto; font-size: 10.5px; white-space: nowrap; }
   .task-status.err { color: #DC2626; }
   .task-status.done { color: #5B8A6E; }
+  .task-status.cancelled { color: #B98A2E; }
+  /* 停止按钮：运行中任务可见，点击请求打断 */
+  .task-cancel {
+    border: 1px solid #E2C9C9; background: #FDF5F5; color: #C0392B;
+    border-radius: 20px; padding: 1px 10px; font-size: 10.5px; cursor: pointer;
+    margin-left: 4px; transition: all .15s; white-space: nowrap;
+  }
+  .task-cancel:hover { background: #F8E5E5; }
+  .task-cancel:disabled { opacity: .55; cursor: default; }
   .task-goal {
     font-size: 12px; color: #4A4F5C; background: #FFFDF7;
     border: 1px solid #E4E3DD; border-radius: 8px; padding: 5px 10px;
@@ -192,11 +237,39 @@
   footer {
     background: var(--panel);
     border-top: 1px solid var(--border);
-    padding: 10px 18px 14px;
+    padding: 8px 18px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .input-row {
     display: flex;
     gap: 10px;
     align-items: flex-end;
   }
+  /* 附件待发条：粘贴/拖入/选择的图片与文件先挂这里，发送时一起给白绫 */
+  .attach-bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 0 4px; }
+  .attach-item {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #F5F4EF; border: 1px solid var(--border); border-radius: 10px;
+    padding: 4px 8px 4px 4px; font-size: 12px; color: var(--text-1);
+    max-width: 220px; overflow: hidden;
+  }
+  .attach-item img { width: 34px; height: 34px; object-fit: cover; border-radius: 6px; }
+  .attach-item .att-icon { font-size: 15px; padding-left: 3px; }
+  .attach-item .att-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .attach-item .att-rm { cursor: pointer; color: var(--text-2); font-size: 13px; padding: 0 2px; }
+  .attach-item .att-rm:hover { color: #C0392B; }
+  .attach-item.uploading { opacity: .6; }
+  /* 用户消息里的附件（已发送） */
+  .user-attach { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .user-attach img { width: 120px; height: 120px; object-fit: cover;
+    border: 1px solid var(--border); border-radius: 8px; cursor: zoom-in; }
+  .user-attach .uaf { display: inline-flex; align-items: center; gap: 5px;
+    background: #F7F6F2; border: 1px solid var(--border); border-radius: 8px;
+    padding: 5px 10px; font-size: 12px; color: var(--text-1);
+    max-width: 240px; overflow: hidden; }
+  .user-attach .uaf .att-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   footer textarea {
     flex: 1;
     resize: none;
@@ -291,6 +364,8 @@
   .cfg-mlist .mi { padding: 8px 12px; font-size: 13px; cursor: pointer; word-break: break-all; }
   .cfg-mlist .mi:hover { background: #f0f2ff; }
   .cfg-mlist .mi.empty { color: var(--text-2); cursor: default; background: none; }
+  .cfg-mlist .mi.mi-bad { color: var(--text-2); cursor: not-allowed; opacity: .6; }
+  .cfg-mlist .mi.mi-bad:hover { background: none; }
   .cfg-mask { font-size: 12px; color: var(--text-2); margin-top: 4px; display: block; }
   .cfg-presets { display: flex; flex-wrap: wrap; gap: 8px; }
   .preset {
@@ -329,6 +404,20 @@ aside#persona{width:320px;flex-shrink:0;background:#FAF6EE;border-left:1px solid
 #persona[data-emo="fx-curious"] .p-portrait{background:radial-gradient(ellipse at 42% 28%, rgba(90,130,190,.15), transparent 62%)}
 #persona[data-emo="fx-cool"] .p-portrait{background:radial-gradient(ellipse at 50% 30%, rgba(100,120,150,.14), transparent 62%)}
 #persona[data-emo="fx-anger"] .p-portrait{background:radial-gradient(ellipse at 50% 30%, rgba(150,90,85,.13), transparent 62%)}
+.src-row{display:flex;align-items:center;gap:6px;margin:6px 0;flex-wrap:wrap;}
+.src-row input.src-name{width:110px;}
+.src-row input.src-base{flex:1;min-width:200px;}
+.src-row input.src-key{width:150px;}
+.src-row select.src-model{width:170px;max-width:170px;padding:4px 6px;font-size:12px;border:1px solid #e8e0d6;border-radius:6px;background:#fff;color:#3a332a;}
+.src-row .src-en{display:flex;align-items:center;gap:3px;font-size:12px;color:var(--ink2,#776);white-space:nowrap;}
+.cfg-tabs{display:flex;gap:2px;border-bottom:1px solid #e8e0d6;margin-bottom:12px;}
+.cfg-tab{background:none;border:none;padding:8px 14px;font-size:13px;color:#8a7f6e;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;}
+.cfg-tab:hover{color:#3a332a;}
+.cfg-tab.active{color:#3a332a;border-bottom-color:#a0855c;font-weight:600;}
+.cfg-tabpane{display:block;}
+.src-ops{display:flex;align-items:center;gap:8px;margin-top:4px;}
+.src-ops .cfg-mask{font-size:12px;color:var(--ink2,#776);}
+.src-row .src-masked{font-size:11px;color:var(--ink2,#776);}
 .p-emo{position:absolute;right:12px;bottom:12px;width:76px;height:76px;border-radius:50%;border:2px solid var(--gold-soft);box-shadow:0 4px 14px rgba(90,80,50,.28);overflow:hidden;background:#FFFDF7;z-index:5}
 .p-emo img{width:100%;height:100%;object-fit:cover;display:block;transition:opacity .5s ease}
 @keyframes breathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
@@ -392,6 +481,12 @@ aside#persona{width:320px;flex-shrink:0;background:#FAF6EE;border-left:1px solid
       <span class="modal-x" onclick="closeCfg()">×</span>
     </div>
     <div class="modal-body">
+      <div class="cfg-tabs">
+        <button class="cfg-tab active" id="tabBtnLlm" onclick="switchCfgTab('llm')">接入配置</button>
+        <button class="cfg-tab" id="tabBtnSrc" onclick="switchCfgTab('src')">渠道源</button>
+      </div>
+      <div id="tabLlm" class="cfg-tabpane">
+      <div id="cfgNow" class="cfg-mask" style="margin-bottom:8px;"></div>
       <div class="cfg-row">
         <label>API 地址（OpenAI 兼容 base_url）</label>
         <input id="cfgBase" type="text" placeholder="https://api.deepseek.com" />
@@ -411,6 +506,7 @@ aside#persona{width:320px;flex-shrink:0;background:#FAF6EE;border-left:1px solid
             <div class="cfg-mlist" id="cfgMList"></div>
           </div>
           <button class="preset" id="cfgFetchModels" onclick="fetchModels()" title="从当前 API 地址自动获取模型列表">获取模型</button>
+          <button class="preset" id="cfgScanHealth" onclick="scanHealth()" title="探测各来源所有模型的联通率，更新健康表与可用模型列表（10-30 秒）">扫描健康</button>
         </div>
         <span class="cfg-mask" id="cfgModelHint"></span>
       </div>
@@ -434,24 +530,47 @@ aside#persona{width:320px;flex-shrink:0;background:#FAF6EE;border-left:1px solid
           <button class="preset" onclick="preset('moonshot')">Moonshot</button>
         </div>
       </div>
+      </div>
+      <div id="tabSrc" class="cfg-tabpane" style="display:none">
+      <div class="cfg-row">
+        <label>渠道源（多源容灾：当前源失败自动切换到下一可用源。添加后先「扫描健康」测联通率）</label>
+        <div id="cfgSrcList"></div>
+        <div class="src-ops">
+          <button class="preset" onclick="addSrcRow()">+ 添加渠道</button>
+          <button class="preset" onclick="saveSources()">保存渠道</button>
+          <span id="srcMsg" class="cfg-mask"></span>
+        </div>
+      </div>
+      <div id="cfgHealth" class="cfg-msg" style="display:none;margin-top:8px;"></div>
+      </div>
       <div id="cfgMsg" class="cfg-msg"></div>
     </div>
     <div class="modal-foot">
-      <button class="btn-ghost" onclick="testCfg()">测试连接</button>
-      <span style="flex:1"></span>
-      <button class="btn-ghost" onclick="closeCfg()">取消</button>
-      <button class="btn-primary" onclick="saveCfg()">保存并重载</button>
+      <div id="footLlm" style="display:flex;flex:1;align-items:center;gap:10px">
+        <button class="btn-ghost" onclick="testCfg()">测试连接</button>
+        <span style="flex:1"></span>
+        <button class="btn-ghost" onclick="closeCfg()">取消</button>
+        <button class="btn-primary" onclick="saveCfg()">保存并重载</button>
+      </div>
+      <div id="footSrc" style="display:none;flex:1;align-items:center;gap:10px">
+        <button class="btn-ghost" onclick="closeCfg()">取消</button>
+        <span style="flex:1"></span>
+        <button class="btn-primary" onclick="saveSources()">保存渠道</button>
+      </div>
     </div>
   </div>
 </div>
 
 <footer>
-  <button id="fileBtn" class="file-btn" title="传一份文本文件给白绫" onclick="document.getElementById('fileInput').click()">
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20"/><path d="M9 7.5h6"/><path d="M9 11h6"/></svg>
-  </button>
-  <textarea id="input" placeholder="和白绫说点什么...（Enter 发送 / Shift+Enter 换行）"></textarea>
-  <button id="send" onclick="send()">发送</button>
-  <span class="hint">Esc 清空</span>
+  <div id="attachBar" class="attach-bar" style="display:none"></div>
+  <div class="input-row">
+    <button id="fileBtn" class="file-btn" title="传一份文本文件给白绫" onclick="document.getElementById('fileInput').click()">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20"/><path d="M9 7.5h6"/><path d="M9 11h6"/></svg>
+    </button>
+    <textarea id="input" placeholder="和白绫说点什么...（Enter 发送 / Shift+Enter 换行，可直接粘贴图片/拖入文件）"></textarea>
+    <button id="send" onclick="send()">发送</button>
+    <span class="hint">Esc 清空</span>
+  </div>
 </footer>
 <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.webp,.gif,.bmp,.txt,.md,.markdown,.log,.csv,.json,.jsonl,.yaml,.yml,.ini,.conf,.toml,.xml,.html,.css,.js,.mjs,.ts,.py,.sh,.bat,.cmd,.ps1,.sql,.rst,.tex" style="display:none" onchange="uploadFile()">
 <div class="toast" id="toast"></div>
@@ -609,6 +728,7 @@ function renderHistory(list, before) {
     var isUser = m.role === "user";
     var html = isUser ? escapeHtml(m.content).replace(/\n/g, "<br>") : renderMd(m.content);
     var b = buildMsg(isUser ? "user" : "bailing", html, m.ts);
+    if (isUser && m.attachments && m.attachments.length) renderUserAttach(b, m.attachments);
     frag.appendChild(b.parentNode);
   });
   if (before) chat.insertBefore(frag, before); else chat.appendChild(frag);
@@ -634,7 +754,7 @@ function loadHistoryOrGreet() {
       renderHistory(list, null);
       addDivider("以上为历史记录 · 已恢复 " + list.length + " 条");
     }
-    maybeScroll();
+    forceScroll();
   }).catch(function(){ if (!chat.firstChild) greet(); });
 }
 
@@ -746,6 +866,12 @@ function fmtClock(ts) {
   function p(n){ return (n<10?"0":"")+n; }
   return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds());
 }
+/* 初始加载/刷新：无条件定位到底部最新消息（此时 scrollTop=0，maybeScroll 判定"不在底部"不会滚） */
+function forceScroll() {
+  chat.scrollTop = chat.scrollHeight;
+  requestAnimationFrame(function(){ chat.scrollTop = chat.scrollHeight; });
+  setTimeout(function(){ chat.scrollTop = chat.scrollHeight; }, 200);  // 图片异步加载后二次校准
+}
 /* 自动滚动：仅在用户停留在底部附近时跟随，向上翻阅历史不打扰 */
 function maybeScroll() {
   if (chat.scrollHeight - chat.scrollTop - chat.clientHeight < 120) {
@@ -768,6 +894,7 @@ function addTaskPanel(goal) {
     '<div class="task-head">' +
       '<span class="task-type">任务</span>' +
       '<span class="task-status">进行中</span>' +
+      '<button class="task-cancel" title="停止当前任务">停止</button>' +
     '</div>' +
     '<div class="task-goal" title="' + escapeHtml(goal) + '">' + escapeHtml(goal) + '</div>' +
     '<div class="task-now"><span class="spinner"></span><span class="now-text">思考中...</span></div>' +
@@ -939,6 +1066,9 @@ function renderEvent(panel, ev) {
     updateNow(panel);
     updateProgress(panel);
     maybeScroll();
+  } else if (ev.type === "note") {
+    var th3 = panel.querySelector(".task-think");
+    if (th3) { th3.textContent = ev.note; th3.style.display = "block"; }
   } else if (ev.type === "stage") {
     var t2 = panel._tools[ev.step];
     if (t2) { t2.status = ev.ok ? "ok" : "err"; addFlowLine(panel, ev.step); }
@@ -1005,11 +1135,122 @@ function finishTaskPanel(panel, ok) {
   maybeScroll();
 }
 
-function renderTaskDone(panel, reply) {
+function renderTaskDone(panel, reply, artifacts) {
   finishTaskPanel(panel, true);
   addMsg("bailing", renderMd(reply || "（完成）"));
+  renderArtifacts(artifacts || []);
   sendBtn.disabled = false;  // 任务完成 → 恢复发送
   input.focus();
+}
+
+/* 产物卡片：图片内联预览；文件/PDF 提供下载与预览 */
+/* 大图查看（对话内遮罩，不跳新页） */
+function openArtifactModal(src) {
+  var m = document.createElement("div");
+  m.className = "artifact-modal";
+  m.innerHTML = '<img src="'+src+'" alt="">';
+  m.onclick = function(){ m.remove(); };
+  document.body.appendChild(m);
+}
+
+/* 对话内联预览：文本直接展开、PDF iframe 内嵌 */
+function toggleArtifactPreview(btn, url, name) {
+  var card = btn.closest(".artifact");
+  var exist = card.querySelector(".artifact-preview");
+  if (exist) { exist.remove(); btn.textContent = "预览"; return; }
+  var body = document.createElement("div");
+  body.className = "artifact-preview";
+  var isPdf = /\.pdf(\?|$)/i.test(url);
+  if (isPdf) {
+    body.innerHTML = '<iframe src="'+url+'"></iframe>';
+  } else {
+    body.innerHTML = '<pre class="preview-loading">加载中…</pre>';
+    fetch(url).then(function(r){ return r.ok ? r.text() : Promise.reject(r.status); })
+      .then(function(txt){
+        var shown = txt.slice(0, 3000);
+        body.innerHTML = '<pre>'+escapeHtml(shown)+'</pre>';
+        if (txt.length > 3000) {
+          var more = document.createElement("div");
+          more.className = "preview-more";
+          more.textContent = "展开全文（共 " + txt.length + " 字）";
+          more.onclick = function(){
+            body.innerHTML = '<pre>'+escapeHtml(txt)+'</pre>';
+            body.scrollTop = 0;
+          };
+          body.appendChild(more);
+        }
+      })
+      .catch(function(){ body.innerHTML = '<pre style="color:#B45309;">该文件类型无法在对话内预览，请下载后查看。</pre>'; });
+  }
+  card.appendChild(body);
+  btn.textContent = "收起";
+}
+
+/* 产物渲染：图片直接显示（点击看大图）；文件按需展开预览、可下载 */
+function renderArtifacts(artifacts) {
+  if (!artifacts || !artifacts.length) return;
+  var wraps = document.querySelectorAll(".msg-wrap.bailing .bubble");
+  var host = wraps[wraps.length - 1];
+  if (!host) return;
+  var box = document.createElement("div");
+  box.className = "artifact-box";
+
+  var imgs = artifacts.filter(function(a){ return a.kind === "image"; });
+  var files = artifacts.filter(function(a){ return a.kind !== "image"; });
+
+  if (imgs.length) {
+    var imgRow = document.createElement("div");
+    imgRow.className = "artifact-imgs";
+    imgs.forEach(function(art){
+      var card = document.createElement("div");
+      card.className = "artifact";
+      var nm = escapeHtml(art.name || "图片");
+      card.innerHTML = '<a class="artifact-img" title="点击查看大图">'
+        + '<img src="'+art.url+'" alt="'+nm+'" loading="lazy"></a>'
+        + '<div class="artifact-name">'+nm+'</div>'
+        + '<div class="artifact-actions"><a href="'+art.url+'" download="'+nm+'">下载</a></div>';
+      card.querySelector(".artifact-img").onclick = function(){ openArtifactModal(art.url); };
+      imgRow.appendChild(card);
+    });
+    box.appendChild(imgRow);
+  }
+
+  if (files.length) {
+    var filesWrap = document.createElement("div");
+    if (files.length > 2) {
+      var toggle = document.createElement("div");
+      toggle.className = "artifact-files-toggle";
+      toggle.innerHTML = '<span class="caret">▶</span>文件 · '+files.length+' 项（点击展开）';
+      toggle.onclick = function(){
+        toggle.classList.toggle("open");
+        filesWrap.classList.toggle("open");
+      };
+      filesWrap.className = "artifact-files";
+      box.appendChild(toggle);
+      box.appendChild(filesWrap);
+    } else {
+      filesWrap.className = "artifact-files open";
+      box.appendChild(filesWrap);
+    }
+    files.forEach(function(art){
+      var card = document.createElement("div");
+      card.className = "artifact";
+      var nm = escapeHtml(art.name || "产物");
+      var isPdf = /\.pdf(\?|$)/i.test(art.url);
+      var icon = isPdf ? "📕" : "📄";
+      card.innerHTML = '<div class="artifact-file"><span class="artifact-icon">'+icon+'</span>'
+        + '<span class="artifact-name">'+nm+'</span></div>'
+        + '<div class="artifact-actions">'
+        + '<a class="preview-btn">预览</a>'
+        + '<a href="'+art.url+'" download="'+nm+'">下载</a>'
+        + '</div>';
+      card.querySelector(".preview-btn").onclick = function(ev){ toggleArtifactPreview(ev.currentTarget, art.url, nm); };
+      filesWrap.appendChild(card);
+    });
+  }
+
+  host.appendChild(box);
+  maybeScroll();
 }
 
 function renderTaskError(panel, error) {
@@ -1021,15 +1262,53 @@ function renderTaskError(panel, error) {
 
 function pollTask(panel, tid) {
   var seen = 0;
+  panel.dataset.tid = tid;
+  var cancelBtn = panel.querySelector(".task-cancel");
+  if (cancelBtn) {
+    cancelBtn.onclick = function(){
+      if (cancelBtn.disabled) return;
+      cancelBtn.disabled = true;
+      cancelBtn.textContent = "停止中…";
+      fetch("/api/task/" + tid + "/cancel", {method: "POST"}).then(function(r){ return r.json(); }).then(function(d){
+        if (!d.ok) { cancelBtn.disabled = false; cancelBtn.textContent = "停止"; toast(d.error||"停止失败"); }
+        else toast(d.note || "已请求停止");
+      }).catch(function(){ cancelBtn.disabled = false; cancelBtn.textContent = "停止"; toast("停止请求失败，请确认服务在运行"); });
+    };
+  }
   var timer = setInterval(function(){
     fetch("/api/task/" + tid + "?since=" + seen).then(function(r){ return r.json(); }).then(function(d){
       if (!d.ok) { clearInterval(timer); renderTaskError(panel, d.error||"任务不存在"); return; }
       for (var i = 0; i < (d.events||[]).length; i++) renderEvent(panel, d.events[i]);
       seen = (typeof d.next === "number") ? d.next : seen + (d.events||[]).length;
-      if (d.status === "done") { clearInterval(timer); renderTaskDone(panel, d.reply); }
+      if (d.cancel_requested && cancelBtn && !cancelBtn.disabled) {
+        cancelBtn.disabled = true; cancelBtn.textContent = "停止中…";
+      }
+      if (d.status === "done") { clearInterval(timer); renderTaskDone(panel, d.reply, d.artifacts); }
+      else if (d.status === "cancelled") { clearInterval(timer); renderTaskCancelled(panel, d.reply); }
       else if (d.status === "error") { clearInterval(timer); renderTaskError(panel, d.error); }
     }).catch(function(){});
   }, 800);
+}
+
+function renderTaskCancelled(panel, reply) {
+  var st = panel.querySelector(".task-status");
+  if (st) { st.textContent = "已停止"; st.className = "task-status cancelled"; }
+  var now = panel.querySelector(".task-now");
+  if (now) {
+    now.classList.remove("err");
+    now.innerHTML = '<span class="now-text">⏹ 已停止 · 断点已保存</span>';
+  }
+  var bar = panel.querySelector(".task-progress .bar");
+  if (bar) { bar.className = "bar"; bar.style.width = "100%"; }
+  var txt = panel.querySelector(".task-progress .txt");
+  if (txt) txt.textContent = "已停止";
+  var th = panel.querySelector(".task-think");
+  if (th) th.style.display = "none";
+  var cb = panel.querySelector(".task-cancel");
+  if (cb) cb.remove();
+  sendBtn.disabled = false;
+  if (reply) addMsg("bailing", renderMd(reply));
+  input.focus();
 }
 
 function toast(msg) {
@@ -1037,73 +1316,180 @@ function toast(msg) {
   t.textContent = msg; t.classList.add("show");
   clearTimeout(toast._tm); toast._tm = setTimeout(function(){ t.classList.remove("show"); }, 2600);
 }
+/* ===== 附件：粘贴图片 / 拖入文件 / 选择文件 → 待发条 → 随消息发给白绫 ===== */
+var _pendingAtts = [];   // 已上传待发 [{kind,name,path,content,file}]
+var _uploading = [];     // 上传中的 Promise
+
+function attachFileUrl(a) {
+  var base = String(a.path || "").split(/[\\/]/).pop();
+  return "/files/up/" + encodeURIComponent(base);
+}
+
+function addPendingAtt(a) {
+  _pendingAtts.push(a);
+  var bar = document.getElementById("attachBar");
+  bar.style.display = "flex";
+  var it = document.createElement("div");
+  it.className = "attach-item" + (a._uploading ? " uploading" : "");
+  var icon = a.kind === "image" ? "" : '<span class="att-icon">📄</span>';
+  var thumb = a.kind === "image" ? '<img src="' + (a._preview || attachFileUrl(a)) + '">' : "";
+  it.innerHTML = thumb + icon + '<span class="att-name" title="' + escapeHtml(a.name) + '">' + escapeHtml(a.name) + '</span>'
+    + '<span class="att-rm" title="移除">✕</span>';
+  it.querySelector(".att-rm").onclick = function(){
+    _pendingAtts = _pendingAtts.filter(function(x){ return x !== a; });
+    it.remove();
+    if (!_pendingAtts.length) bar.style.display = "none";
+  };
+  bar.appendChild(it);
+  return it;
+}
+
+function uploadFileList(files) {
+  if (!files || !files.length) return Promise.resolve();
+  var tasks = [];
+  for (var i = 0; i < files.length; i++) {
+    (function(f){
+      var att = {kind: "file", name: f.name, path: "", content: "", _uploading: true};
+      if (/\.(png|jpe?g|webp|gif|bmp)$/i.test(f.name)) att.kind = "image";
+      var el = addPendingAtt(att);
+      var p = fetch("/api/upload", {
+        method: "POST",
+        headers: {"X-Filename": encodeURIComponent(f.name)},
+        body: f
+      }).then(function(r){ return r.json().then(function(d){ return {status: r.status, d: d}; }); })
+        .then(function(o){
+          att._uploading = false;
+          var d = o.d;
+          if (!d.ok) {
+            toast("上传失败：" + (d.error || "未知错误"));
+            el.remove(); _pendingAtts = _pendingAtts.filter(function(x){ return x !== att; });
+            return;
+          }
+          att.kind = d.kind || att.kind;
+          att.path = d.path;
+          att.content = d.content || "";
+          if (att.kind === "image" && f.type && f.type.indexOf("image/") === 0) {
+            att._preview = URL.createObjectURL(f);   // 本地即时预览（发送后清除）
+          }
+          el.classList.remove("uploading");
+          if (att.kind === "image" && att._preview) {
+            el.querySelector("img").src = att._preview;
+          }
+        })
+        .catch(function(e){
+          att._uploading = false;
+          toast("上传请求失败：" + String(e));
+          el.remove(); _pendingAtts = _pendingAtts.filter(function(x){ return x !== att; });
+        });
+      _uploading.push(p);
+      tasks.push(p);
+    })(files[i]);
+  }
+  return Promise.all(tasks);
+}
+
 function uploadFile() {
   var fi = document.getElementById("fileInput");
-  var f = fi.files && fi.files[0];
-  if (!f) return;
-  var btn = document.getElementById("fileBtn");
-  btn.disabled = true; btn.classList.add("busy");
-  fetch("/api/upload", {
-    method: "POST",
-    headers: {"X-Filename": encodeURIComponent(f.name)},
-    body: f
-  }).then(function(r){ return r.json().then(function(d){ return {status:r.status, d:d}; }); }).then(function(o){
-    btn.disabled = false; btn.classList.remove("busy");
-    var d = o.d;
-    if (!d.ok) {
-      toast((o.status === 503 ? "白绫还在初始化中，请稍候再试。" : "传文件失败：" + (d.error || "未知错误")));
-      fi.value = ""; input.focus(); return;
+  if (!fi.files || !fi.files.length) return;
+  var fs = Array.prototype.slice.call(fi.files);
+  fi.value = "";
+  input.focus();
+  uploadFileList(fs);
+}
+
+/* 粘贴图片（Ctrl+V 截图/复制图片）→ 待发 */
+document.addEventListener("paste", function(e){
+  var items = (e.clipboardData || {}).items;
+  if (!items) return;
+  var files = [];
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].type && items[i].type.indexOf("image/") === 0) {
+      var f = items[i].getAsFile();
+      if (f) files.push(new File([f], "粘贴的图片.png", {type: f.type || "image/png"}));
     }
-    var msg, tip;
-    if (d.kind === "image") {
-      msg = "我传了一张图片给你：「" + d.name + "」。图片已保存至：" + d.path + "。";
-      tip = "已收到「" + d.name + "」，正请白绫看图";
+  }
+  if (files.length) { e.preventDefault(); uploadFileList(files); }
+});
+
+/* 拖拽文件到输入区 → 待发 */
+document.addEventListener("dragover", function(e){
+  if (e.target && e.target.closest && e.target.closest("footer")) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }
+});
+document.addEventListener("drop", function(e){
+  var footerEl = e.target && e.target.closest ? e.target.closest("footer") : null;
+  if (!footerEl) return;
+  e.preventDefault();
+  var fs = e.dataTransfer && e.dataTransfer.files;
+  if (fs && fs.length) uploadFileList(Array.prototype.slice.call(fs));
+});
+
+/* 用户消息气泡：文本 + 附件内联显示（图片缩略图/文件 chip，点图看大图） */
+function renderUserAttach(bubble, atts) {
+  if (!atts || !atts.length) return;
+  var box = document.createElement("div");
+  box.className = "user-attach";
+  atts.forEach(function(a){
+    if (a.kind === "image") {
+      var u = attachFileUrl(a);
+      var im = document.createElement("img");
+      im.src = a._preview || u;   // 本轮用本地预览，历史恢复用服务端 URL
+      im.alt = escapeHtml(a.name);
+      im.onclick = function(){ openArtifactModal(u); };
+      box.appendChild(im);
     } else {
-      var tail = d.truncated ? "\n\n……（内容较长已截断，完整内容请用读取文件工具查看保存路径）" : "";
-      msg = "我传了一份文件给你：「" + d.name + "」（共 " + d.chars + " 字）。文件已保存至：" + d.path + "。请阅读并处理。\n\n===== 文件内容 =====\n" + d.content + tail;
-      tip = "已收到「" + d.name + "」，正请白绫阅读";
+      var chip = document.createElement("span");
+      chip.className = "uaf";
+      chip.innerHTML = '<span>📄</span><span class="att-name" title="' + escapeHtml(a.name) + '">' + escapeHtml(a.name) + '</span>';
+      box.appendChild(chip);
     }
-    fi.value = "";
-    addMsg("user", escapeHtml(msg).replace(/\n/g, "<br>"));
-    input.value = msg; input.style.height = "auto";
-    send();
-    toast(tip);
-  }).catch(function(e){
-    btn.disabled = false; btn.classList.remove("busy");
-    toast("上传请求失败：" + String(e) + "。请确认服务端在运行。");
-    fi.value = ""; input.focus();
   });
+  bubble.appendChild(box);
 }
 
 function send() {
   var msg = input.value.trim();
-  if (!msg || sendBtn.disabled) return;
-  addMsg("user", escapeHtml(msg).replace(/\n/g,"<br>"));
-  input.value = "";
-  input.style.height = "auto";
+  var hasAtt = _pendingAtts.length > 0;
+  if ((!msg && !hasAtt) || sendBtn.disabled) return;
   sendBtn.disabled = true;
-  var panel = addTaskPanel(msg);
-  fetch("/api/chat", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({message: msg})
-  }).then(function(r){ return r.json().then(function(d){ return {status:r.status, d:d}; }); }).then(function(o){
-    var d = o.d;
-    if (d.ok) {
-      pollTask(panel, d.task_id);
-    } else if (o.status === 503) {
-      renderTaskError(panel, "白绫还在初始化中，请稍候再试。");
+  var atts = _pendingAtts.slice();
+  /* 等所有上传完成再发送（粘贴后立刻回车也可靠） */
+  Promise.all(_uploading).then(function(){
+    _uploading = [];
+    var b = addMsg("user", msg ? escapeHtml(msg).replace(/\n/g,"<br>") : "（附件）");
+    renderUserAttach(b, atts);
+    _pendingAtts.forEach(function(a){ if (a._preview) URL.revokeObjectURL(a._preview); });
+    _pendingAtts = [];
+    document.getElementById("attachBar").style.display = "none";
+    document.getElementById("attachBar").innerHTML = "";
+    input.value = "";
+    input.style.height = "auto";
+    var panel = addTaskPanel(msg || "（查看附件）");
+    var payload = {message: msg};
+    if (atts.length) payload.attachments = atts.map(function(a){
+      return {kind: a.kind, name: a.name, path: a.path, content: a.content || ""};
+    });
+    fetch("/api/chat", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(payload)
+    }).then(function(r){ return r.json().then(function(d){ return {status:r.status, d:d}; }); }).then(function(o){
+      var d = o.d;
+      if (d.ok) {
+        pollTask(panel, d.task_id);
+      } else if (o.status === 503) {
+        renderTaskError(panel, "白绫还在初始化中，请稍候再试。");
+        sendBtn.disabled = false;
+        input.focus();
+      } else {
+        renderTaskError(panel, d.error||"未知错误");
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    }).catch(function(e){
+      renderTaskError(panel, "请求失败：" + String(e) + "。请确认服务端在运行。");
       sendBtn.disabled = false;
       input.focus();
-    } else {
-      renderTaskError(panel, d.error||"未知错误");
-      sendBtn.disabled = false;
-      input.focus();
-    }
-  }).catch(function(e){
-    renderTaskError(panel, "请求失败：" + String(e) + "。请确认服务端在运行。");
-    sendBtn.disabled = false;
-    input.focus();
+    });
   });
 }
 
@@ -1205,7 +1591,7 @@ function fetchModels() {
   }).then(function(r){return r.json();}).then(function(d){
     btn.disabled = false;
     if (d.ok && d.models && d.models.length) {
-      fillModelList(d.models, "已获取 " + d.models.length + " 个模型并保存（来自当前 API 地址），点击下拉查看");
+      loadModelCache();
       var cur = document.getElementById("cfgModel").value.trim();
       if (!cur) {
         document.getElementById("cfgModel").value =
@@ -1218,12 +1604,165 @@ function fetchModels() {
     }
   }).catch(function(e){ btn.disabled = false; cfgMsg("获取失败：" + e, true); });
 }
+var _srcDirty = false;
+function escSrc(s){ return escapeHtml(String(s == null ? "" : s)); }
+function renderSrcRow(s) {
+  var el = document.getElementById("cfgSrcList");
+  var row = document.createElement("div");
+  row.className = "src-row";
+  var masked = s && s.api_key_masked ? ' <span class="src-masked">' + escSrc(s.api_key_masked) + '</span>' : "";
+  var models = (s && s.models) || [];
+  var opts = models.length
+      ? models.map(function(x){ return '<option value="' + escSrc(x) + '">' + escSrc(x) + '</option>'; }).join("")
+      : '<option value="">（先扫描健康）</option>';
+  row.innerHTML =
+    '<input class="src-name" placeholder="名称" value="' + escSrc(s && s.name) + '">' +
+    '<input class="src-base" placeholder="https://api.xxx.com（OpenAI 兼容）" value="' + escSrc(s && s.base_url) + '">' +
+    '<input class="src-key" type="password" placeholder="Key（留空=继承主 Key/环境变量）" value="">' +
+    masked +
+    '<select class="src-model" title="切换时使用的模型（取该渠道可用模型）">' + opts + '</select>' +
+    '<button class="btn-ghost src-switch" onclick="switchSource(this)" ' + (models.length ? "" : "disabled") + '>切换</button>' +
+    '<label class="src-en"><input type="checkbox" ' + (s && s.enabled === false ? "" : "checked") + '>启用</label>' +
+    '<button class="btn-ghost" onclick="this.parentNode.remove()">删</button>';
+  el.appendChild(row);
+}
+function addSrcRow() { renderSrcRow(null); }
+function loadSources() {
+  fetch("/api/llm/sources").then(function(r){return r.json();}).then(function(d){
+    if (!d.ok) return;
+    var el = document.getElementById("cfgSrcList");
+    el.innerHTML = "";
+    var list = d.sources || [];
+    list.forEach(renderSrcRow);
+    if (!list.length) addSrcRow();
+    var cur = d.current || {};
+    document.getElementById("srcMsg").textContent = cur.base_url
+        ? "当前生效：" + cur.base_url + " / " + (cur.model || "") : "";
+    if (cur.base_url) {
+      var curBase = String(cur.base_url).replace(/\/+$/, "");
+      document.querySelectorAll("#cfgSrcList .src-row").forEach(function(r){
+        if (r.querySelector(".src-base").value.trim().replace(/\/+$/, "") === curBase) {
+          var b = r.querySelector(".src-switch");
+          if (b) { b.textContent = "当前"; b.disabled = true; }
+        }
+      });
+    }
+  }).catch(function(){});
+}
+function switchSource(btn) {
+  var row = btn.closest(".src-row");
+  var name = row.querySelector(".src-name").value.trim();
+  var model = row.querySelector(".src-model").value;
+  if (!name || !model) { document.getElementById("srcMsg").textContent = "请先选择渠道与模型（无模型请先扫描健康）"; return; }
+  btn.disabled = true;
+  document.getElementById("srcMsg").textContent = "正在切换渠道...";
+  fetch("/api/llm/switch", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({source_name: name, model: model})
+  }).then(function(r){return r.json();}).then(function(d){
+    btn.disabled = false;
+    var m = document.getElementById("srcMsg");
+    if (d.ok) {
+      m.textContent = "已切换到 " + (d.base_url || "") + " / " + d.model + " ✓";
+      loadSources();
+      refreshCfgNow();
+      fetchModels();
+    } else m.textContent = "切换失败：" + (d.error || "未知错误");
+  }).catch(function(e){ btn.disabled = false; document.getElementById("srcMsg").textContent = "切换失败：" + e; });
+}
+function refreshCfgNow() {
+  fetch("/api/config").then(function(r){return r.json();}).then(function(d){
+    if (!d.ok) return;
+    document.getElementById("cfgBase").value = d.base_url || "";
+    document.getElementById("cfgModel").value = d.model || "";
+    renderNowStatus(d);
+  }).catch(function(){});
+}
+function saveSources() {
+  var rows = document.querySelectorAll("#cfgSrcList .src-row");
+  var arr = [];
+  rows.forEach(function(r){
+    var base = r.querySelector(".src-base").value.trim();
+    if (!base) return;
+    arr.push({
+      name: r.querySelector(".src-name").value.trim(),
+      base_url: base,
+      api_key: r.querySelector(".src-key").value.trim(),
+      enabled: r.querySelector(".src-en input").checked
+    });
+  });
+  if (!arr.length) { document.getElementById("srcMsg").textContent = "请至少保留一个有效渠道（填 API 地址）"; return; }
+  fetch("/api/llm/sources", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({sources: arr})
+  }).then(function(r){return r.json();}).then(function(d){
+    var m = document.getElementById("srcMsg");
+    if (d.ok) { m.textContent = "渠道已保存 ✓（共 " + d.count + " 个；运行中的进程自动检测生效）"; loadSources(); }
+    else m.textContent = "保存失败：" + (d.error || "未知错误");
+  }).catch(function(e){ document.getElementById("srcMsg").textContent = "保存失败：" + e; });
+}
+function scanHealth() {
+  var btn = document.getElementById("cfgScanHealth");
+  btn.disabled = true;
+  cfgMsg("正在探测各来源模型联通率（10-30 秒）...", false);
+  fetch("/api/llm/scan", {method: "POST"}).then(function(r){return r.json();}).then(function(d){
+    btn.disabled = false;
+    if (d.ok) {
+      cfgMsg("健康扫描完成 ✓（失败模型已自动过滤，可用模型列表已更新）", false);
+      renderHealth(d.health);
+      loadSources();
+    } else {
+      cfgMsg("扫描失败：" + (d.error || "未知错误"), true);
+    }
+  }).catch(function(e){ btn.disabled = false; cfgMsg("扫描失败：" + e, true); });
+}
+function renderHealth(health) {
+  var el = document.getElementById("cfgHealth");
+  if (!el || !health) return;
+  var srcs = health.sources || {};
+  var keys = Object.keys(srcs);
+  if (!keys.length) { el.style.display = "none"; return; }
+  var html = "<b>模型健康表</b><br>";
+  keys.forEach(function(k){
+    var s = srcs[k];
+    if (s.error) { html += "· " + k + "：<span style=color:#a55>" + s.error + "</span><br>"; return; }
+    html += "· " + k + "：可用 <b>" + s.ok + "/" + s.total + "</b> 个" +
+            (s.ok_models && s.ok_models.length ? "（" + s.ok_models.join("、") + "）" : "") + "<br>";
+  });
+  if (health._updated_at) html += "上次探测：" + new Date(health._updated_at * 1000).toLocaleString();
+  el.innerHTML = html;
+  el.style.display = "block";
+}
+function loadHealth() {
+  fetch("/api/llm/health").then(function(r){return r.json();}).then(function(d){
+    if (d.ok && d.health) renderHealth(d.health);
+  }).catch(function(){});
+}
+function switchCfgTab(name) {
+  var isLlm = name === "llm";
+  document.getElementById("tabLlm").style.display = isLlm ? "block" : "none";
+  document.getElementById("tabSrc").style.display = isLlm ? "none" : "block";
+  document.getElementById("tabBtnLlm").className = "cfg-tab" + (isLlm ? " active" : "");
+  document.getElementById("tabBtnSrc").className = "cfg-tab" + (isLlm ? "" : " active");
+  document.getElementById("footLlm").style.display = isLlm ? "flex" : "none";
+  document.getElementById("footSrc").style.display = isLlm ? "none" : "flex";
+  if (!isLlm) { loadSources(); loadHealth(); }
+}
+function renderNowStatus(d) {
+  var el = document.getElementById("cfgNow");
+  if (!el || !d) return;
+  var cur = (d.base_url || "") + " / " + (d.model || "");
+  var txt = "当前生效：" + cur;
+  if (d.failover) txt += "（容灾临时切换，锚点 " + (d.preferred_model || "") + " 恢复可用自动切回）";
+  el.textContent = txt;
+}
 function openCfg() {
   document.getElementById("cfgModal").style.display = "flex";
   loadModelCache();
-  if (cfgLoaded) return;
+  switchCfgTab("llm");
   fetch("/api/config").then(function(r){return r.json();}).then(function(d){
-    cfgLoaded = true;
     if (!d.ok) { cfgMsg("读取配置失败：" + (d.error || "未知错误"), true); return; }
     document.getElementById("cfgBase").value = d.base_url || "";
     document.getElementById("cfgModel").value = d.model || "";
@@ -1236,6 +1775,7 @@ function openCfg() {
     document.getElementById("cfgKeyMask").textContent = d.has_key
         ? "当前已配置 Key：" + m + "（不修改直接保存 = 保留原值；重新输入 = 更新）"
         : "尚未配置 API Key（填写并保存后生效）";
+    renderNowStatus(d);
   }).catch(function(e){ cfgMsg("读取配置失败：" + e, true); });
 }
 function closeCfg() { document.getElementById("cfgModal").style.display = "none"; }
@@ -1248,12 +1788,14 @@ function cfgPayload() {
   var k = document.getElementById("cfgKey").value;
   // Key 未改动（空 或 仍是打码回填值）→ 传空 = 后端保留原值
   var newKey = (k && k !== _curMask) ? k : "";
+  var mt = document.getElementById("cfgTokens").value;
+  mt = (mt !== "" && Number(mt) > 0) ? mt : "";   // 空/0 不提交 → 后端保留原值
   return {
     base_url: document.getElementById("cfgBase").value.trim(),
     api_key: newKey,
     model: document.getElementById("cfgModel").value.trim(),
     temperature: document.getElementById("cfgTemp").value,
-    max_tokens: document.getElementById("cfgTokens").value
+    max_tokens: mt
   };
 }
 function saveCfg() {
@@ -1274,6 +1816,7 @@ function saveCfg() {
         (d.has_key ? "当前已配置 Key：" + m + "（不修改直接保存 = 保留原值；重新输入 = 更新）"
                    : "尚未配置 API Key（填写并保存后生效）");
     cfgMsg(d.llm_ready ? "已保存并生效 ✓" : "已保存，但 LLM 未就绪：" + (d.error || "缺少 API Key"), !d.llm_ready);
+    renderNowStatus(d);
     loadStatus();
   }).catch(function(e){ btn.disabled = false; cfgMsg("保存失败：" + e, true); });
 }
@@ -1286,7 +1829,7 @@ function testCfg() {
     body: JSON.stringify(cfgPayload())
   }).then(function(r){return r.json();}).then(function(d){
     btn.disabled = false;
-    if (d.ok && d.reply) cfgMsg("连接成功 ✓ 模型回复：" + d.reply, false);
+    if (d.ok) cfgMsg("连接成功 ✓ 延迟 " + (d.latency != null ? d.latency + "s" : "") + "（模型 " + d.model + "）", false);
     else cfgMsg("连接失败：" + (d.error || "未知错误"), true);
   }).catch(function(e){ btn.disabled = false; cfgMsg("测试失败：" + e, true); });
 }

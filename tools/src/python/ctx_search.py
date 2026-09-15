@@ -25,10 +25,10 @@ from tools.base import tool
     " context_rounds 回合的上下文（带回合号与时间戳），据此回想，不要凭空编造缺失信息。"
     "不要因为当前窗口没有而重做/重搜——先查存档。",
     {
-        "keyword": {"type": "string", "description": "检索关键词（由你按自己的需求或用户意图提取，如人名/主题/文件/时间相关词）", "required": True},
-        "task_id": {"type": "string", "description": "限定任务ID（留空自动搜最近任务）", "required": False},
-        "context_rounds": {"type": "integer", "description": "命中回合前后各取多少回合（默认5）", "required": False},
-        "limit": {"type": "integer", "description": "最多返回命中组数（默认3）", "required": False},
+        "keyword": {"type": "string", "description": "检索关键词（由你按自己的需求或用户意图提取，如人名/主题/文件/时间相关词）"},
+        "task_id": {"type": "string", "description": "限定任务ID（留空自动搜最近任务）"},
+        "context_rounds": {"type": "integer", "description": "命中回合前后各取多少回合（默认5）"},
+        "limit": {"type": "integer", "description": "最多返回命中组数（默认3）"},
     },
 )
 def run(keyword: str, task_id: str = "", context_rounds: int = 5, limit: int = 3):

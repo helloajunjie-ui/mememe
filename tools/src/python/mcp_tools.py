@@ -1,12 +1,13 @@
-"""内置工具：MCP 万能接口（mcp_connect / mcp_scan / mcp_list / mcp_disconnect）。
+"""内置工具：MCP 软件接口管理（mcp_list / mcp_connect / mcp_disconnect / mcp_scan）。
 
-设计意图（见设计文档 5.37）：
-- MCP（Model Context Protocol）是开放协议，MCP server 暴露标准 tools 供客户端调用。
-- 白绫作为 MCP **客户端**：连接本机/远程 server（如 Blender 的 `uvx blender-mcp`），
-  把其工具注册进工具名单（命名 mcp_<server>_<tool>），执行时转发调用——
-  实现对支持 API 的外部软件（Blender/文件系统/浏览器等）的标准化操控。
-- 工具先测可用再进名单：mcp_connect 连接成功（能枚举工具）才保留配置；
-  mcp_scan 枚举成功的 server 工具才注册，失败记录原因。
+架构（v2.7 起）：MCP 独立为服务（mcp-service/server.py，端口 8767），统一管理所有
+软件接口（Blender/Godot/filesystem/playwright 等）的连接、激活与调用。白绫侧只做
+HTTP 调用，MCP 工具**不注册进核心工具库**，按需激活注入：
+
+  流程：mcp_list（看目录）→ mcp_connect（激活，工具 schema 自动注入）
+        → 直接调用 mcp_<server>_<tool> → 用完 mcp_disconnect（释放）
+
+mcp_scan 用于软件接口升级/工具变化后强制刷新工具清单。
 """
 from __future__ import annotations
 
@@ -19,130 +20,256 @@ _NAME_RE = re.compile(r"^[a-z0-9_-]+$")
 
 
 @tool(
-    "mcp_connect",
-    "连接一个 MCP server（万能接口）：配置并测试连接。支持两种形态："
-    "① stdio 子进程（command/args/env，如 Blender 用 command=uvx args=[\"blender-mcp\"]）；"
-    "② 远程端点（url + transport=http/sse）。配置保存到 config/mcp.json。"
-    "连接成功（能枚举到工具）才算可用；失败自动回滚配置。配置后需调 mcp_scan 同步进工具名单。",
-    {
-        "type": "object",
-        "properties": {
-            "name": {"type": "string", "description": "MCP server 名称（英文小写下划线/连字符），如 blender"},
-            "command": {"type": "string", "description": "启动命令（默认 uvx），如 uvx / npx / python"},
-            "args": {"type": "array", "items": {"type": "string"},
-                     "description": "命令参数，如 [\"blender-mcp\"]"},
-            "env": {"type": "object",
-                    "description": "环境变量，如 {\"DISABLE_TELEMETRY\": \"true\"}"},
-            "url": {"type": "string",
-                    "description": "远程端点 URL（HTTP streamable 或 SSE，配 transport）"},
-            "transport": {"type": "string", "enum": ["http", "sse"],
-                          "description": "url 形态：http（默认）/ sse"},
-        },
-        "required": ["name"],
-    },
-)
-def run_connect(name: str, command: str = "uvx", args: list = None, env: dict = None,
-                url: str = "", transport: str = "http") -> dict:
-    if not _NAME_RE.fullmatch(name or ""):
-        return {"ok": False, "error": "server 名称只能含小写字母/数字/下划线/连字符"}
-    mcp = get_mcp_manager()
-    cfg = mcp.add_server(name, command=command, args=args, env=env,
-                         url=url or None, transport=transport)
-    # 连接测试：能枚举到工具才算可用（工具先测可用再进名单）
-    r = mcp.fetch_tools(name)
-    if not r.get("ok"):
-        mcp.remove_server(name)
-        return {"ok": False, "error": f"连接 MCP server 失败，已回滚配置: {r.get('error')}"}
-    return {
-        "ok": True, "server": name, "config": cfg,
-        "tools": [t["name"] for t in r.get("tools", [])],
-        "count": r.get("count", 0),
-        "note": f"连接成功，枚举到 {r.get('count', 0)} 个工具。调 mcp_scan 同步进工具名单后即可调用。",
-    }
-
-
-@tool(
-    "mcp_scan",
-    "同步已配置 MCP server 的工具进工具名单（命名 mcp_<server>_<tool>）。"
-    "枚举成功的 server 工具才注册，失败的记录原因。同步后即可像普通工具一样被 LLM 调用。",
+    "mcp_list",
+    "查看 MCP 软件接口目录：每个已配置软件的名称、用途说明、激活状态与工具数。"
+    "指定 server 时返回该软件的工具明细（名称+描述）。"
+    "【流程】先看目录确定要用哪个软件 → mcp_connect 激活 → 工具自动注入可用 → 用完 mcp_disconnect 释放。",
     {
         "type": "object",
         "properties": {
             "server": {"type": "string",
-                       "description": "可选。只同步指定 server；留空同步全部已配置 server"},
-        },
-    },
-)
-def run_scan(server: str = "") -> dict:
-    from core.registry import ToolRegistry
-    mcp = get_mcp_manager()
-    reg = ToolRegistry()
-    reg.load()
-    if server:
-        if server not in mcp.servers:
-            return {"ok": False, "error": f"MCP server 未配置: {server}"}
-        reg.remove_mcp_server(server)
-        r = mcp.fetch_tools(server)
-        if not r.get("ok"):
-            return {"ok": False, "error": f"枚举 {server} 失败: {r.get('error')}"}
-        added = []
-        for t in r.get("tools", []):
-            tn = f"mcp_{server}_{t['name']}"
-            reg.register_mcp(tn, server=server, tool=t["name"],
-                             description=t.get("description", ""), schema=t.get("inputSchema"))
-            added.append(tn)
-        reg.save()
-        return {"ok": True, "server": server, "added": added, "count": len(added)}
-    res = mcp.sync_to_registry(reg)
-    return {"ok": True, **res}
-
-
-@tool(
-    "mcp_list",
-    "查看已配置的 MCP server 及各自可用的工具（或指定 server 的详细工具列表）。",
-    {
-        "type": "object",
-        "properties": {
-            "server": {"type": "string", "description": "可选。指定 server 则返回该 server 工具详情"},
+                       "description": "可选。指定软件接口名则返回该软件工具详情，如 filesystem"},
         },
     },
 )
 def run_list(server: str = "") -> dict:
     mcp = get_mcp_manager()
+    if not mcp.ensure_running():
+        return {"ok": False, "error": "MCP 服务无法启动，请检查 mcp-service 目录"}
     if server:
         r = mcp.fetch_tools(server)
         if not r.get("ok"):
             return {"ok": False, "error": r.get("error")}
         return {"ok": True, "server": server, "tools": r.get("tools", []),
                 "count": r.get("count", 0)}
-    out = []
-    for name, cfg in mcp.servers.items():
-        out.append({
-            "server": name,
-            "type": "stdio" if "command" in cfg else cfg.get("transport", "http"),
-            "command": cfg.get("command"), "url": cfg.get("url"),
-        })
-    return {"ok": True, "servers": out, "count": len(out)}
+    r = mcp.servers_info()
+    if not r.get("ok"):
+        return {"ok": False, "error": r.get("error")}
+    return {"ok": True, "servers": r.get("servers", []), "count": len(r.get("servers", []))}
+
+
+@tool(
+    "mcp_connect",
+    "激活一个 MCP 软件接口（如 filesystem/blender/godot/playwright）：拉取其工具清单并注入对话，"
+    "激活后即可直接调用 mcp_<软件>_<工具>。激活失败会返回原因（软件未运行/未安装等）。"
+    "【流程】mcp_list 看目录确定软件 → 本工具激活 → 使用 → 用完 mcp_disconnect 释放。",
+    {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string",
+                     "description": "要激活的软件接口名（目录里的 name），如 filesystem / blender"},
+        },
+        "required": ["name"],
+    },
+)
+def run_connect(name: str) -> dict:
+    if not _NAME_RE.fullmatch(name or ""):
+        return {"ok": False, "error": "软件接口名只能含小写字母/数字/下划线/连字符"}
+    mcp = get_mcp_manager()
+    if not mcp.ensure_running():
+        return {"ok": False, "error": "MCP 服务无法启动，请检查 mcp-service 目录"}
+    r = mcp.activate(name)
+    if not r.get("ok"):
+        # 激活失败：附带依赖评估（缺什么/多大/多久/环境影响），供白绫通知用户
+        deps = mcp.assess_deps(name)
+        plan = deps.get("plan") or {}
+        if plan.get("type") == "manual":
+            # 大型桌面软件：直接说明需用户自行安装，不尝试代装
+            return {
+                "ok": False,
+                "error": f"激活 {name} 失败: {r.get('error')}",
+                "need_user_install": True,
+                "note": f"{name} 是大型软件（无法自动安装）。请告知用户：需要自行下载安装 "
+                        f"（安装包通常较大，按官方流程安装），安装完成后告诉白绫再重新激活。",
+            }
+        return {
+            "ok": False,
+            "error": f"激活 {name} 失败: {r.get('error')}",
+            "deps": deps.get("issues", []),
+            "plan": plan,
+            "installable": deps.get("installable", False),
+            "note": "先调 mcp_deps 看明细，把缺失/大小/时间/环境影响告知用户；"
+                    "用户同意后 mcp_install 安装，再重试激活。",
+        }
+    return {
+        "ok": True, "server": name, "active": True,
+        "count": r.get("count", 0),
+        "note": f"已激活 {name}（{r.get('count', 0)} 个工具），工具已注入对话可直接调用。"
+                f"用完调 mcp_disconnect 释放。",
+    }
 
 
 @tool(
     "mcp_disconnect",
-    "移除一个 MCP server 的配置，并清理其同步进工具名单的工具（只清该 server 的，不影响其他 server）。",
+    "释放一个已激活的 MCP 软件接口：其工具从对话上下文移除（不再注入）。"
+    "释放后需要再次使用须重新 mcp_connect。",
     {
         "type": "object",
-        "properties": {"name": {"type": "string", "description": "要移除的 MCP server 名称"}},
+        "properties": {
+            "name": {"type": "string", "description": "要释放的软件接口名，如 filesystem"},
+        },
         "required": ["name"],
     },
 )
 def run_disconnect(name: str) -> dict:
-    from core.registry import ToolRegistry
     mcp = get_mcp_manager()
-    removed = mcp.remove_server(name)
-    reg = ToolRegistry()
-    reg.load()
-    n = reg.remove_mcp_server(name)
-    reg.save()
-    return {
-        "ok": True, "server": name, "server_existed": removed, "cleaned": n,
-        "note": "已移除配置并清理该 server 的工具名单条目。",
-    }
+    if not mcp.ensure_running():
+        return {"ok": False, "error": "MCP 服务无法启动"}
+    r = mcp.deactivate(name)
+    if not r.get("ok"):
+        return {"ok": False, "error": r.get("error")}
+    return {"ok": True, "server": name, "active": False,
+            "note": "已释放，该软件工具已从对话移除。"}
+
+
+@tool(
+    "mcp_key_set",
+    "保存/更新一个软件接口的凭据（如 GITHUB_TOKEN、FIGMA_API_KEY、COOKIE 等）。"
+    "凭据按软件接口隔离存储（config/secrets.json），值永不回传，只在服务端使用。"
+    "【安全】不要在对话里复述凭据值；保存后确认键名即可。",
+    {
+        "type": "object",
+        "properties": {
+            "server": {"type": "string", "description": "软件接口名，如 github / figma"},
+            "key": {"type": "string", "description": "凭据键名，如 GITHUB_TOKEN / FIGMA_API_KEY / COOKIE"},
+            "value": {"type": "string", "description": "凭据值（token / key / cookie 字符串）"},
+        },
+        "required": ["server", "key", "value"],
+    },
+)
+def run_key_set(server: str, key: str, value: str) -> dict:
+    mcp = get_mcp_manager()
+    if not mcp.ensure_running():
+        return {"ok": False, "error": "MCP 服务无法启动"}
+    r = mcp.set_secret(server, key, value)
+    if not r.get("ok"):
+        return {"ok": False, "error": r.get("error")}
+    return {"ok": True, "server": server, "key": key,
+            "note": f"已保存 {server} 的 {key}（隔离存储，值不回传）。"}
+
+
+@tool(
+    "mcp_key_list",
+    "查看某软件接口已保存的凭据键名（只返回键名，永不回传值）。"
+    "用于确认哪个接口已配好凭据、缺哪个。",
+    {
+        "type": "object",
+        "properties": {
+            "server": {"type": "string", "description": "软件接口名；留空列出全部接口的键名"},
+        },
+    },
+)
+def run_key_list(server: str = "") -> dict:
+    mcp = get_mcp_manager()
+    if not mcp.ensure_running():
+        return {"ok": False, "error": "MCP 服务无法启动"}
+    r = mcp.secret_keys(server)
+    if not r.get("ok"):
+        return {"ok": False, "error": r.get("error")}
+    return {"ok": True, "server": server or "(全部)", "keys": r.get("keys", {})}
+
+
+@tool(
+    "mcp_key_remove",
+    "删除某软件接口的一个凭据（如 token 失效/换新时先删旧再存新）。",
+    {
+        "type": "object",
+        "properties": {
+            "server": {"type": "string", "description": "软件接口名"},
+            "key": {"type": "string", "description": "要删除的凭据键名"},
+        },
+        "required": ["server", "key"],
+    },
+)
+def run_key_remove(server: str, key: str) -> dict:
+    mcp = get_mcp_manager()
+    if not mcp.ensure_running():
+        return {"ok": False, "error": "MCP 服务无法启动"}
+    r = mcp.remove_secret(server, key)
+    if not r.get("ok"):
+        return {"ok": False, "error": r.get("error")}
+    return {"ok": True, "server": server, "key": key, "note": "已删除。"}
+
+
+@tool(
+    "mcp_deps",
+    "评估某软件接口的依赖/凭据状态：缺什么（npm/pip/二进制/凭据）、容量大小、"
+    "预计时间、对当前环境的影响。激活失败时用它找出原因，然后向用户说明并征询是否安装。",
+    {
+        "type": "object",
+        "properties": {
+            "server": {"type": "string", "description": "软件接口名，如 git / github / figma"},
+        },
+        "required": ["server"],
+    },
+)
+def run_deps(server: str) -> dict:
+    mcp = get_mcp_manager()
+    if not mcp.ensure_running():
+        return {"ok": False, "error": "MCP 服务无法启动"}
+    r = mcp.assess_deps(server)
+    if not r.get("ok"):
+        return {"ok": False, "error": r.get("error")}
+    return {"ok": True, "server": server,
+            "issues": r.get("issues", []), "plan": r.get("plan"),
+            "installable": r.get("installable", False),
+            "note": "如需要安装，先向用户说明大小/时间/环境影响并征得同意，再调 mcp_install。"}
+
+
+@tool(
+    "mcp_install",
+    "执行软件接口的依赖安装或升级（npm 预拉 / pip 安装-升级 / 二进制下载）。"
+    "【必须】调用前先向用户说明：装什么、多大、预计多久、对环境影响（mcp_deps 的 plan 字段），"
+    "征得用户明确同意后才能调用。upgrade=true 时表示升级到最新版（如 mcp_deps 提示'可升级'后）。",
+    {
+        "type": "object",
+        "properties": {
+            "server": {"type": "string", "description": "软件接口名"},
+            "upgrade": {"type": "boolean",
+                        "description": "是否升级到最新版（默认 false 安装；true 升级 pip 包/刷新 npx）"},
+        },
+        "required": ["server"],
+    },
+)
+def run_install(server: str, upgrade: bool = False) -> dict:
+    mcp = get_mcp_manager()
+    if not mcp.ensure_running():
+        return {"ok": False, "error": "MCP 服务无法启动"}
+    r = mcp.install_deps(server, upgrade=upgrade)
+    if not r.get("ok"):
+        return {"ok": False, "error": r.get("error")}
+    return {"ok": True, "server": server, "note": r.get("note", "安装完成，可重新 mcp_connect 激活。")}
+
+
+@tool(
+    "mcp_scan",
+    "强制刷新一个（或全部）软件接口的工具清单：软件升级/接口变化后重新拉取，"
+    "并保持激活状态。一般不常用。",
+    {
+        "type": "object",
+        "properties": {
+            "server": {"type": "string",
+                       "description": "可选。只刷新指定软件；留空刷新全部已配置软件"},
+        },
+    },
+)
+def run_scan(server: str = "") -> dict:
+    mcp = get_mcp_manager()
+    if not mcp.ensure_running():
+        return {"ok": False, "error": "MCP 服务无法启动"}
+    if server:
+        r = mcp.activate(server, force=True)
+        if not r.get("ok"):
+            return {"ok": False, "error": f"刷新 {server} 失败: {r.get('error')}"}
+        return {"ok": True, "server": server, "count": r.get("count", 0),
+                "note": f"已刷新 {server}（{r.get('count', 0)} 个工具）。"}
+    r = mcp.servers_info()
+    if not r.get("ok"):
+        return {"ok": False, "error": r.get("error")}
+    out = []
+    for s in r.get("servers", []):
+        rr = mcp.activate(s["name"], force=True)
+        out.append({"server": s["name"], "ok": rr.get("ok"),
+                    "count": rr.get("count", 0),
+                    "error": rr.get("error") if not rr.get("ok") else ""})
+    return {"ok": True, "servers": out, "note": "已全部刷新。"}

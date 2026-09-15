@@ -1,0 +1,89 @@
+{
+  "idle_timeout_min": 30,
+  "npm_registry": "https://registry.npmmirror.com",
+  "pip_index": "https://pypi.tuna.tsinghua.edu.cn/simple",
+  "playwright_host": "https://registry.npmmirror.com/-/binary/playwright/",
+  "servers": {
+    "blender": {
+      "desc": "Blender 3D 建模与渲染：场景信息、对象操作、视口截图、执行代码、PolyHaven/Sketchfab 资源库",
+      "command": "F:\\me\\self-agent\\.venv\\Scripts\\blender-mcp.exe",
+      "env": {
+        "DISABLE_TELEMETRY": "true"
+      },
+      "app_exe": "blender.exe",
+      "min_version": "3.0",
+      "version_note": "Blender 3.0+（推荐 4.x/5.x）；必须 GUI 会话，blender -b 后台模式连不上",
+      "check_update": true
+    },
+    "godot": {
+      "desc": "Godot 游戏引擎编辑器控制：场景树、节点操作、项目设置、文件搜索、运行游戏",
+      "command": "C:\\Python310\\python.exe",
+      "args": [
+        "E:\\gobot\\gobot-mcp\\mcp_server\\server.py"
+      ],
+      "app_exe": "godot.exe",
+      "min_version": "4.0",
+      "version_note": "Godot 4.x（3.x 不支持）；用稳定版，别装 beta/dev",
+      "check_update": true
+    },
+    "filesystem": {
+      "desc": "本地文件系统（受控于 F:\\me 目录）：读/写/搜索/目录操作，适合白绫处理本地文件",
+      "command": "C:\\Program Files\\nodejs\\npx.cmd",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "F:\\me"
+      ],
+      "version_note": "npm 包随 npx 拉取，无版本门槛"
+    },
+    "playwright": {
+      "desc": "浏览器自动化：打开网页、点击、填表、截图、抓取页面内容",
+      "command": "C:\\Program Files\\nodejs\\npx.cmd",
+      "args": [
+        "-y",
+        "@playwright/mcp"
+      ],
+      "app_exe": "node.exe",
+      "min_version": "18.0",
+      "version_note": "Node 18+；浏览器版本由 Playwright 自动匹配下载（走国内镜像）",
+      "check_update": true
+    },
+    "git": {
+      "desc": "Git 版本控制（本地仓库，无需账户）：仓库状态、提交历史、差异对比、文件读写、分支操作",
+      "command": "F:\\me\\self-agent\\.venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "mcp_server_git"
+      ],
+      "pip": "mcp-server-git",
+      "app_exe": "git.exe",
+      "min_version": "2.0",
+      "version_note": "Git 本体 2.x+；MCP 包 mcp-server-git 走 pip（清华镜像）",
+      "check_update": true
+    },
+    "github": {
+      "desc": "GitHub 平台：issue/PR/仓库/代码搜索与操作（需要配置 GITHUB_TOKEN 环境变量）",
+      "command": "C:\\Program Files\\nodejs\\npx.cmd",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_TOKEN": ""
+      },
+      "version_note": "npm 包随 npx 拉取，无版本门槛；需 GITHUB_TOKEN"
+    },
+    "figma": {
+      "desc": "Figma 设计稿：读取设计文件、图层、组件、样式与导出资源（需要配置 FIGMA_API_KEY）",
+      "command": "C:\\Program Files\\nodejs\\npx.cmd",
+      "args": [
+        "-y",
+        "figma-developer-mcp"
+      ],
+      "env": {
+        "FIGMA_API_KEY": ""
+      },
+      "version_note": "npm 包随 npx 拉取，无版本门槛；需 FIGMA_API_KEY"
+    }
+  }
+}

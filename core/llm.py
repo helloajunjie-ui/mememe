@@ -1,21 +1,81 @@
-"""LLM Gateway：封装任意 OpenAI 兼容端点的通信。
+"""LLM 客户端 —— 白绫对话专用（Go LLM 网关客户端）。
 
-设计意图（见设计文档 4.5）：
-- 唯一职责：屏蔽上游差异。base_url/model 可配置，可切 DeepSeek / Grok / Gemini / 本地 Ollama。
-- 支持 function calling（工具调用）。
+白绫的 LLM 调用统一走独立 Go 网关（llm-gateway）：
+- 网关职责（白绫不再关心）：渠道/模型/key 管理、健康扫描、错误分型、自动容灾切换、锚点回切。
+- 本模块职责：把 /v1/chat 的请求发到网关，把回复转回白绫原有格式；
+  网关不可达时尝试自动拉起网关进程（保证"任何时候 API 稳定提供"）。
+- 不再使用 openai SDK：彻底规避 AttributeError: 'str' object has no attribute 'choices' 类崩溃。
+
+设计见 docs/AI接入与渠道管理-设计文档.md 第 9.2 节。
 """
 from __future__ import annotations
 
+import json
 import os
+import subprocess
+import sys
 import time
+import urllib.error
+import urllib.request
 from typing import Any, Dict, List, Optional
 
-# 瞬时错误提示词：命中才重试（网络/限流/服务端 5xx）；确定性错误（400 参数、401 密钥等）不重试
-_TRANSIENT_HINTS = ("timed out", "timeout", "rate limit", "rate_limit", "429",
-                    "502", "503", "504", "connection", "network", "unavailable")
+GATEWAY_DEFAULT_URL = "http://127.0.0.1:8766"
+
+# DeepSeek 思考预算上限（tokens）：限制每轮 reasoning 输出以控延迟。
+# 2026-09-15 实测：无预算时 deepseek-flash 全量思考 >60s 超时（白绫"变慢"根因）；
+# budget=2048/4096 后每轮 0.9-2.7s 可回，复杂推理（计划线/长任务）预算仍够用。
+_DEEPSEEK_THINKING_BUDGET = 2048
+
+
+def _resolve_gateway_config() -> Dict[str, str]:
+    """解析网关地址 / exe 路径 / 配置目录：环境变量优先，默认推断 self-agent 布局。"""
+    url = (os.environ.get("BAILING_GATEWAY_URL") or GATEWAY_DEFAULT_URL).rstrip("/")
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # core/.. = self-agent 根
+    exe = os.environ.get("BAILING_GATEWAY_EXE") or os.path.join(root, "llm-gateway", "bailing-gateway.exe")
+    cfg_dir = os.environ.get("BAILING_GATEWAY_CONFIG") or os.path.join(root, "config")
+    return {"url": url, "exe": exe, "config_dir": cfg_dir}
+
+
+def _ping_url(url: str, timeout: float = 1.5) -> bool:
+    try:
+        with urllib.request.urlopen(url + "/health", timeout=timeout) as r:
+            return r.status == 200
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def ensure_gateway_up() -> bool:
+    """确保 Go 网关进程在（不在则静默拉起，无窗口）。返回是否就绪。
+
+    供白绫启动流程调用：白绫启动时保证 LLM 基础设施就绪。
+    """
+    g = _resolve_gateway_config()
+    if _ping_url(g["url"]):
+        return True
+    exe = g["exe"]
+    if not exe or not os.path.exists(exe):
+        return False
+    try:
+        port = g["url"].rsplit(":", 1)[-1]
+        flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+        subprocess.Popen(
+            [exe, "--config", g["config_dir"], "--port", port],
+            creationflags=flags,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        for _ in range(14):  # ≤7s 等就绪
+            time.sleep(0.5)
+            if _ping_url(g["url"]):
+                return True
+    except Exception:  # noqa: BLE001
+        pass
+    return False
 
 
 class LLMGateway:
+    """白绫 → Go LLM 网关的轻量 HTTP 客户端（保持原 chat() 返回格式不变）。"""
+
     def __init__(
         self,
         base_url: str,
@@ -25,100 +85,110 @@ class LLMGateway:
         max_tokens: int = 4096,
         timeout: int = 60,
     ):
+        # base_url/api_key 仅供诊断透传（网关统一管理渠道与 key）
         self.base_url = base_url
         self.api_key = api_key
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.timeout = timeout
-        self._client = None
-        self._ready = False
-        self._init_client()
-
-    def _init_client(self) -> None:
-        if not self.api_key:
-            self._ready = False
-            return
-        try:
-            from openai import OpenAI
-
-            self._client = OpenAI(
-                base_url=self.base_url,
-                api_key=self.api_key,
-                timeout=self.timeout,
-            )
-            self._ready = True
-        except Exception as e:  # noqa: BLE001
-            self._ready = False
-            self._init_error = str(e)
+        g = _resolve_gateway_config()
+        self._gateway_url = g["url"]
+        self._gateway_exe = g["exe"]
+        self._gateway_config = g["config_dir"]
+        self._port = int(self._gateway_url.rsplit(":", 1)[-1])
+        self._ready = True
+        self._init_error = None
 
     @property
     def ready(self) -> bool:
         return self._ready
 
-    @staticmethod
-    def _is_transient(e: Exception) -> bool:
-        """瞬时错误判定：网络/限流/服务端临时故障 → 值得重试；参数/密钥等确定性错误不重试。"""
-        msg = f"{type(e).__name__}: {e}".lower()
-        return any(h in msg for h in _TRANSIENT_HINTS)
+    # ---- 网关探活 / 自动拉起 ----
+
+    def _ping(self, timeout: float = 1.5) -> bool:
+        return _ping_url(self._gateway_url, timeout)
+
+    def _ensure_gateway_up(self) -> bool:
+        """网关不可达时尝试自动拉起；成功返回 True。"""
+        if self._ping():
+            return True
+        if ensure_gateway_up():
+            return self._ping()
+        return False
+
+    # ---- 对话 ----
 
     def chat(self, messages: List[Dict], tools: Optional[List[Dict]] = None,
              tool_choice: str = "auto", temperature: Optional[float] = None) -> Dict:
-        """调用 chat/completions。
+        """调用 Go 网关 /v1/chat。
 
-        tool_choice: "auto"（模型自主）/ "required"（强制调用一个工具）/ "none"。
-        temperature: 可选，本轮覆盖实例温度（表达层用：情绪改变语气温度，
-                     不改变事实与判断）。None = 用实例默认。
-        返回: {"content": str|None, "tool_calls": [{"id","name","arguments"}], "finish_reason": str}
+        返回（与原实现键一致，追加网关信息）:
+          content / reasoning_content / tool_calls / finish_reason
+          model / base_url / failover_note / failover_applied
+          error / error_code（网关容灾失败时）
         """
-        if not self._ready:
-            return {
-                "content": None,
-                "tool_calls": [],
-                "finish_reason": "error",
-                "error": (
-                    "LLM 未就绪：缺少 API key。"
-                    f"请设置环境变量 BAILING_API_KEY（base_url={self.base_url}, model={self.model}）"
-                ),
-            }
-        kwargs: Dict[str, Any] = {
-            "model": self.model,
+        payload: Dict[str, Any] = {
             "messages": messages,
             "temperature": self.temperature if temperature is None else float(temperature),
             "max_tokens": self.max_tokens,
         }
         if tools:
-            kwargs["tools"] = tools
-            kwargs["tool_choice"] = tool_choice
-        # 有限重试：仅瞬时错误重试 1 次（退避 1.5s）；确定性错误直接失败（不无效投入）
+            payload["tools"] = tools
+            payload["tool_choice"] = tool_choice
+        # DeepSeek 思考预算：限制每轮 reasoning 输出，显著降延迟（其他模型不支持该参数，跳过）
+        # 2026-09-15 诊断：白绫每轮 2-8s（偶尔 20s+）慢的根因是 thinking 全量思考；
+        # budget_tokens 设上限后简单轮次 1-2s 可回，复杂推理（计划线）仍够用。
+        model_name = str(getattr(self, "model", "") or "").lower()
+        if model_name.startswith("deepseek"):
+            payload["thinking"] = {"type": "enabled", "budget_tokens": _DEEPSEEK_THINKING_BUDGET}
+        data = json.dumps(payload).encode("utf-8")
         last_err: Optional[Exception] = None
+        resp_data: Optional[Dict] = None
         for attempt in range(2):
             try:
-                resp = self._client.chat.completions.create(**kwargs)
-                msg = resp.choices[0].message
-                tool_calls = []
-                if getattr(msg, "tool_calls", None):
-                    for tc in msg.tool_calls:
-                        tool_calls.append({
-                            "id": tc.id,
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments,
-                        })
-                return {
-                    "content": msg.content,
-                    "reasoning_content": getattr(msg, "reasoning_content", None),
-                    "tool_calls": tool_calls,
-                    "finish_reason": resp.choices[0].finish_reason,
-                }
+                req = urllib.request.Request(
+                    self._gateway_url + "/v1/chat", data=data,
+                    headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                    resp_data = json.loads(r.read().decode("utf-8"))
+                break
             except Exception as e:  # noqa: BLE001
                 last_err = e
-                if attempt == 0 and self._is_transient(e):
-                    time.sleep(1.5)
-                    continue
+                if attempt == 0:
+                    # 网关不可达（连接失败/超时）→ 尝试拉起一次再重试
+                    if self._ensure_gateway_up():
+                        continue
                 break
+        if resp_data is None:
+            return {
+                "content": None, "tool_calls": [], "finish_reason": "error",
+                "error": f"LLM 网关不可达（{self._gateway_url}）: {last_err}。"
+                         "已尝试自动拉起，仍失败——请确认 bailing-gateway.exe 可执行",
+                "error_code": "network",
+            }
+        if resp_data.get("error"):
+            return {
+                "content": None, "tool_calls": [], "finish_reason": "error",
+                "error": resp_data.get("error", "LLM 调用失败"),
+                "error_code": resp_data.get("error_code", "error"),
+                "model": resp_data.get("model"),
+                "base_url": resp_data.get("base_url"),
+                "failover_note": resp_data.get("failover_note"),
+            }
+        # 正常回复：透传网关信息（容灾已由网关完成，白绫只消费结果）
+        tcs = resp_data.get("tool_calls") or []
         return {
-            "content": None,
-            "tool_calls": [],
-            "finish_reason": "error",
-            "error": f"LLM 调用失败: {type(last_err).__name__}: {last_err}",
+            "content": resp_data.get("content"),
+            "reasoning_content": resp_data.get("reasoning_content"),
+            "tool_calls": [
+                {"id": t.get("id", ""), "name": t.get("name", ""),
+                 "arguments": t.get("arguments", "{}")}
+                for t in tcs
+            ],
+            "finish_reason": resp_data.get("finish_reason"),
+            "model": resp_data.get("model"),
+            "base_url": resp_data.get("base_url"),
+            "failover_note": resp_data.get("failover_note"),
+            "failover_applied": bool(resp_data.get("failover_applied")),
         }

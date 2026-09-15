@@ -77,3 +77,18 @@ workspace/_trash/
 # 个人形象资产（webui 头像等；与 persona/ 同策略：本地留存）
 webui/assets/
 data/last_active.json
+# 工作区临时脚本区（一次性/补丁脚本，用完即清，不入库）
+workspace/tmp/
+
+# 运行时/实例数据（webui 独立目录）
+webui/data/
+webui/workspace/
+# 编译产物
+llm-gateway/*.exe
+llm-gateway/_testcfg/
+
+# 凭据/日志/二进制残留
+mcp-service/config/secrets.json
+mcp-service/data/
+*.exe~
+llm-gateway/*.exe~

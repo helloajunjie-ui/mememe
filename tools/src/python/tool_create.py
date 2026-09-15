@@ -289,7 +289,8 @@ def _create_go(name: str, code: str, test_args: dict = None) -> dict:
 
 @tool(
     "tool_create",
-    "创建新工具（工具自举核心）。支持两种语言：language=python（默认）写入 tools/src/python/，"
+    "创建新工具（工具自举核心）。新工具源码里的 @tool 请带上 group='功能域'（词表见 docs/工具归档规范.md），"
+    "否则工具目录/检索里会落进'其他'未归类，tool_health_audit 会告警。"
     "经语法校验、独立加载后注册；language=go 写入 tools/src/go/，经 go build 编译、冒烟测试后注册为 go_binary。"
     "注册成功后该工具立即被后续调用复用。属高风险操作，调用前须陈述五问结论。",
     {
@@ -298,7 +299,9 @@ def _create_go(name: str, code: str, test_args: dict = None) -> dict:
             "name": {"type": "string", "description": "工具名，英文小写下划线，如 weather_query"},
             "code": {"type": "string",
                      "description": "完整工具源码。Python：须 import tools.base 的 tool 装饰器，"
-                                    "@tool('工具名','描述',{参数schema}) 标记 def run(...) 入口。"
+                                    "@tool('工具名','描述',{参数schema}, group='功能域') 标记 def run(...) 入口；"
+                                    "group 请显式声明（词表见 docs/工具归档规范.md），漏声明会落进'其他'未归类，"
+                                    "tool_health_audit 会告警。"
                                     "Go：须含 package main + func main，顶部注释 // @schema {JSON} 声明参数 schema"
                                     "（参考 tools/templates/go_tool_template.go）。"},
             "language": {"type": "string", "enum": ["python", "go"],

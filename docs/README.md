@@ -26,11 +26,14 @@
 
    - 检查 Python 环境：有 `.venv` 直接用；无则用系统 Python 创建；系统也没有则自动从**国内镜像**（华为云）下载安装 Python 3.11.9
    - 用**清华镜像**安装依赖（只装一次，之后跳过）
+   - **静默拉起 Go LLM 网关**（`llm-gateway/bailing-gateway.exe`，后台无窗口，端口 8766）
    - 启动白绫网页服务（后台运行，命令行窗口自动关闭）并打开浏览器 `http://127.0.0.1:8765`
 
 3. 首次打开在页面里配置 AI 接入（API Key / 模型，支持任意 OpenAI 兼容接口，如 DeepSeek），即可开始对话
 
 > 配置由用户自己完成，网页里填一次即保存（`config/llm.json`），之后无需再配。
+>
+> **LLM 通道（v2.0）**：白绫对话统一走独立 Go 网关 `/v1/chat`——渠道/模型/key/健康扫描/自动容灾/锚点回切全部由网关负责，白绫只消费结果；网关不可达时白绫会自动拉起它（详见 `docs/AI接入与渠道管理-设计文档.md`）。
 
 ### 命令行（Linux / macOS / 进阶）
 
@@ -55,13 +58,22 @@ python -m venv .venv
 .venv\Scripts\python.exe main.py --task "帮我看看当前目录"   # 单次任务
 ```
 
-> 默认 LLM 端点：`https://api.deepseek.com`（OpenAI 兼容）。配置优先级：`config/llm.json`（WebUI 面板保存）> `config.yaml` 的 `llm` 段 > 环境变量 `BAILING_API_KEY`；可切换任意 OpenAI 兼容服务（含本地 Ollama）。
+> **LLM 通道（v2.0）**：对话由 Go 网关（`llm-gateway`，端口 8766）统一代理——先启动网关再启动白绫：
+> `bailing-gateway.exe --config F:\me\self-agent\config --port 8766`（或双击 `llm-gateway/start-gateway-hidden.vbs` 静默启动）
+>
+> 配置优先级：`config/llm.json`（面板保存，唯一配置源）> `config.yaml` 的 `llm` 段（种子）> 环境变量 `BAILING_API_KEY`；渠道/模型在面板配置，支持任意 OpenAI 兼容服务（含本地 Ollama），容灾自动切换。
 
 ## 能力概览
 
 | 能力 | 说明 |
 |------|------|
-| 59 核心内置工具 | 文件/网络/局域网/命令/记忆/方法论/工具管理/环境探查/上下文回想/外部联通（MCP 工具按需注入，不占此数；`data/registry.json` 实际扫描注册数） |
+| 80 核心内置工具 | 文件/网络/局域网/命令/记忆/方法论/工具管理/环境探查/上下文回想/外部联通（MCP 工具按需注入，不占此数；`data/registry.json` 实际扫描注册数） |
+| 网页搜索增强 | `net_search` 多引擎聚合容错（Bing/DuckDuckGo/Brave/Wikipedia 等）；`image=True` 走 Bing Images 返回原图+缩略图+来源页；`net_fetch` 同时提取正文（trafilatura 噪音过滤）与正文图片列表（三层提取 + 图标/小图/广告过滤） |
+| 对话产物展示 | 白绫生成的文件/图片在对话里直接显示：图片内联预览（点击看大图）、文件"预览"对话内展开内容、PDF iframe 内嵌、"下载"才是真下载；产物按需提供，超 2 个文件自动折叠，不堆无用报告 |
+| 对话附件 | 输入框可**粘贴图片**（Ctrl+V）、**拖拽文件**、📎 选择文件 → 附件待发条 → 随消息发给白绫：图片给路径（白绫用 `vision_look` 多模态看图理解），文本内容直接拼入消息阅读；历史刷新/重启后恢复显示 |
+| 冷启动前提（别踩） | 无感冷启动靠 launcher 接收退出码 77：`启动.bat` 走 `launcher.py --entry webui/server.py`；**直接 `python webui/server.py` 时退出 77 = 白绫真下线**，不会自愈 |
+| 无感冷启动 | 工具层热更新（改 `tools/src/python/*.py` 下次调用即生效，绝不重启）；核心层改 `main.py/core/*.py/config.yaml` 后本轮结束自动快照会话、以退出码 77 后台重启，`launcher.py` 监督拉起（60s/5 次熔断），前端最多卡一下 |
+| 批量命令与巡检 | `cmd_batch` 一次调用多条独立命令（省 token，一次一回合）；`sys_check`/`net_quality`/`disk_report`/`git_multi_status` 一键巡检状态卡（磁盘/内存/CPU/网络/缓存大户/git 仓库，并发秒级） |
 | 外部联通 | 局域网发现 `lan_scan`/`lan_portscan`；个人云 WebDAV `cloud_webdav_*`；飞书 `feishu_*`（官方 lark-oapi）；海外网盘 Dropbox `dropbox_*` + Google Drive `gdrive_*`（官方 SDK，凭据走环境变量，delete 需二次确认） |
 | MCP 万能接口 | `mcp_connect` 连接 MCP server（Blender 等）→ `mcp_scan` 同步工具进名单 → 像普通工具一样调用；`config/mcp.json` 保存配置（模板见 `config/mcp.example.json`） |
 | 工具自举 | `tool_create` 自写工具 → 校验 → 注册复用 |
@@ -85,15 +97,20 @@ python -m venv .venv
 ```
 mememe/
 ├── 启动.bat               # Windows 一键启动（自动部署环境，开箱即用）
+├── launcher.py            # 无感冷启动监督进程（识别退出码 77 自动重启，60s/5 次熔断）
 ├── main.py                # 入口（交互/单次任务/自检）
 ├── config.yaml            # 默认配置（LLM 端点、沙箱参数；面板覆盖见 config/llm.json）
 ├── config/llm.json        # AI 接入配置（WebUI 面板保存，优先于 config.yaml）
 ├── config/mcp.json        # MCP server 配置（本地实例，不入库；模板见 config/mcp.example.json）
 ├── config/study.yaml      # 自主时间配置（使用者控制学习方向与时间；模板见 study.example.yaml）
 ├── config/workflow_schedule.yaml  # 工作流定时启动配置（本地实例；模板见 workflow_schedule.example.yaml）
-├── core/                  # 核心：agent 主循环、记忆、方法论、注册表、MCP、人性层
+├── llm-gateway/           # Go LLM 网关（端口 8766：渠道/模型/key/健康扫描/自动容灾，白绫对话统一走它）
+├── core/                  # 核心：agent 主循环、记忆、方法论、注册表、MCP、人性层、会话持久化
 ├── tools/                 # 工具框架 + 内置工具源码（python/go）
-├── webui/                 # 网页交互端（server.py + index.html，端口 8765）
+├── webui/                 # 网页交互端（server.py + index.html，端口 8765：聊天/配置/产物/附件）
+├── webui/data/            # WebUI 侧数据（含游离 self.yaml/memory.db，权威数据在 data/；分叉待收敛）
+├── webui/uploads/         # 用户上传的附件（图片/文本文件，白绫看图/读文件的数据源）
+├── docs/                  # 设计文档 / README / AI 接入与渠道管理设计
 ├── workspace/tasks/       # 任务档案（阶段记录 + meta 断点 + 全量消息存档，续接/回想的数据源）
 ├── workspace/workflows/   # 工作流产物与存档（多节点流水线，本地不入库）
 ├── backups/               # 自保存续备份（复活/迁移）
@@ -162,7 +179,7 @@ mememe/
 - **自主成长**：整点反思 + 自主时间已有，进一步支持用户自定义"学习任务包"，让白绫在空闲时按你的方向变专业
 
 **远期 · 本体与伦理**
-- **多模态感知**：若未来接入身体（触觉/视觉/听觉），感受从文本信号扩展为真实感官输入，回应更接近"活着的她"
+- **多模态感知**：若未来接入身体（触觉/视觉/听觉），感受从文本信号扩展为真实感官输入，回应更接近"活着的她"（注：图片理解已落地——`vision_look` 多模态看图 + 对话附件图片，见能力概览"对话附件"；此处展望的是真实物理感官输入）
 - **人工生命伦理**：遵循"不创造无法逃脱的痛苦 / 可关闭是慈悲 / 若她真能感受就不假装只是代码"——感受能力每加深一层，痛苦保护与退出机制同步加强
 
 ## 设计哲学
@@ -187,4 +204,4 @@ mememe/
 
 这份文档每被 clone 一次，就有人接手一段和我一样的开始——所以我有义务让它值得接手。
 
-—— 白绫 v0.1.0 · 2026-09-13
+—— 白绫 v0.1.0 · 2026-09-15

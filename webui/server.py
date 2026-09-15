@@ -28,7 +28,7 @@ import threading
 import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, unquote
+from urllib.parse import urlparse, unquote, quote
 
 import yaml
 
@@ -85,18 +85,41 @@ class TaskManager:
         tid = uuid.uuid4().hex[:12]
         with self.lock:
             self.tasks[tid] = {"status": "running", "events": [], "reply": None,
-                               "error": None, "created_at": time.time()}
+                               "error": None, "created_at": time.time(),
+                               "cancel_event": threading.Event()}
         return tid
+
+    def cancel_event_of(self, tid: str):
+        with self.lock:
+            t = self.tasks.get(tid)
+            return t.get("cancel_event") if t else None
+
+    def cancel(self, tid: str) -> bool:
+        """请求停止：置位取消事件（agent 在工具边界响应），标记取消已请求。"""
+        with self.lock:
+            t = self.tasks.get(tid)
+            if not t or t["status"] != "running":
+                return False
+            t["cancel_requested"] = True
+            ev = t.get("cancel_event")
+            if ev:
+                ev.set()
+            return True
+
+    def cancel_done(self, tid: str, reply: str) -> None:
+        with self.lock:
+            if tid in self.tasks:
+                self.tasks[tid].update(status="cancelled", reply=reply)
 
     def append_event(self, tid: str, ev: dict) -> None:
         with self.lock:
             if tid in self.tasks:
                 self.tasks[tid]["events"].append(ev)
 
-    def finish(self, tid: str, reply: str) -> None:
+    def finish(self, tid: str, reply: str, artifacts: list = None) -> None:
         with self.lock:
             if tid in self.tasks:
-                self.tasks[tid].update(status="done", reply=reply)
+                self.tasks[tid].update(status="done", reply=reply, artifacts=artifacts or [])
 
     def fail(self, tid: str, error: str) -> None:
         with self.lock:
@@ -121,20 +144,59 @@ class TaskManager:
 _tasks = TaskManager()
 
 
-def _run_task(tid: str, message: str) -> None:
+def _artifact_url(abspath: str) -> str:
+    """把产物绝对路径转成 webui 可访问 URL（白名单根内），否则返回 None。"""
+    try:
+        norm = os.path.normpath(abspath)
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        roots = {
+            "ws": os.path.normpath(os.path.join(base, "workspace")),
+            "up": os.path.normpath(os.path.join(base, "webui", "uploads")),
+        }
+        for tag, root in roots.items():
+            if norm == root or norm.startswith(root + os.sep):
+                rel = os.path.relpath(norm, root).replace(os.sep, "/")
+                return f"/files/{tag}/{quote(rel)}"
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def _collect_task_artifacts(a) -> list:
+    """agent 本轮产物 → 带 URL 的展示卡片列表（图片/PDF/文件）。"""
+    out = []
+    for art in getattr(a, "last_round_artifacts", []) or []:
+        url = _artifact_url(art.get("path", ""))
+        if url:
+            out.append({
+                "name": art.get("name") or os.path.basename(art.get("path", "")),
+                "kind": art.get("kind") or "file",
+                "url": url,
+            })
+    return out
+
+
+def _run_task(tid: str, message: str, attachments: list = None) -> None:
     """后台线程执行一轮 turn，阶段事件实时入列。"""
+    from core.agent import TaskCancelled
     try:
         a = get_agent()          # 未就绪 → 直接失败，不落半条对话
     except Exception as e:  # noqa: BLE001
         _tasks.fail(tid, f"白绫处理失败: {e}")
         return
     _ensure_history(a)                # 兜底：上下文为空 → 从落盘续上（不重启也接得上）
-    _session.append("user", message)  # 提问先落盘：执行中刷新/崩溃也不丢
+    _session.append("user", message, attachments=attachments)  # 提问先落盘：执行中刷新/崩溃也不丢
+    cancel_ev = _tasks.cancel_event_of(tid)
     try:
         with _turn_lock:  # 本地单用户，串行化 turn，避免历史交错
-            reply = a.turn(message, stage_callback=lambda ev: _tasks.append_event(tid, ev))
-        _tasks.finish(tid, reply)
+            reply = a.turn(message, attachments=attachments, cancel_event=cancel_ev,
+                           stage_callback=lambda ev: _tasks.append_event(tid, ev))
+        _tasks.finish(tid, reply, _collect_task_artifacts(a))
         _session.append("assistant", str(reply or ""))  # 回复落盘 → 刷新可恢复
+    except TaskCancelled as e:  # 用户主动停止（agent 已封存断点，可续接）
+        cancel_reply = f"（任务已停止：{e}。已保存断点，需要继续时对我说「继续」即可。）"
+        _tasks.cancel_done(tid, cancel_reply)
+        _session.append("assistant", cancel_reply)
     except Exception as e:  # noqa: BLE001
         _tasks.fail(tid, f"白绫处理失败: {e}")
 
@@ -350,7 +412,14 @@ def _restore_history(a, keep: int = _HISTORY_RESTORE_KEEP) -> int:
         recent = _session.load(limit=keep)
         if not recent:
             return 0
-        a.history = [{"role": r["role"], "content": r["content"]} for r in recent]
+        history = []
+        for r in recent:
+            content = r["content"]
+            atts = r.get("attachments") or []
+            if r["role"] == "user" and atts:
+                content = a._merge_attachments(content, atts)  # 附件说明也进记忆
+            history.append({"role": r["role"], "content": content})
+        a.history = history
         a.ctx_start_idx = 0     # 恢复的历史属既有对话，不被任务隔离逻辑误摘
         a.ctx_mode = "chat"
         print(f"  已恢复最近 {len(recent)} 条对话到上下文（重启不断片）")
@@ -452,21 +521,36 @@ class Handler(BaseHTTPRequestHandler):
         ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
         ".ico": "image/x-icon", ".css": "text/css; charset=utf-8",
         ".js": "application/javascript; charset=utf-8",
+        ".txt": "text/plain; charset=utf-8", ".md": "text/markdown; charset=utf-8",
+        ".log": "text/plain; charset=utf-8", ".csv": "text/csv; charset=utf-8",
+        ".json": "application/json; charset=utf-8",
+        ".pdf": "application/pdf", ".html": "text/html; charset=utf-8",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ".zip": "application/zip",
     }
 
     def do_GET(self):
         path = urlparse(self.path).path
         m = re.match(r"^/api/task/(\w+)$", path)
+        mf = re.match(r"^/files/(\w+)/(.+)$", path)
         if path in ("/", "/index.html"):
             self._serve_index()
         elif re.match(r"^/assets/[A-Za-z0-9_./-]+$", path) and "." in path.rsplit("/", 1)[-1]:
             self._serve_static(path)
+        elif mf:
+            self._handle_files(mf.group(1), mf.group(2))
         elif path == "/api/status":
             self._handle_status()
         elif path == "/api/config":
             self._handle_config_get()
         elif path == "/api/models":
             self._handle_models_get()
+        elif path == "/api/llm/health":
+            self._handle_llm_health()
+        elif path == "/api/llm/sources":
+            self._handle_llm_sources_get()
         elif path == "/api/study":
             self._handle_study()
         elif path == "/api/history":
@@ -486,12 +570,69 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_config_test()
         elif path == "/api/models/fetch":
             self._handle_models_fetch()
+        elif path == "/api/llm/scan":
+            self._handle_llm_scan()
+        elif path == "/api/llm/switch":
+            self._handle_llm_switch()
+        elif path == "/api/llm/sources":
+            self._handle_llm_sources_save()
         elif path == "/api/study":
             self._handle_study()
         elif path == "/api/upload":
             self._handle_upload()
+        elif path.startswith("/api/task/") and path.endswith("/cancel"):
+            self._handle_task_cancel(path[len("/api/task/"):-len("/cancel")])
         else:
             self._send_json(404, {"ok": False, "error": "not found"})
+
+    # ---------- 产物服务（白绫生成的图片/文件：对话中预览 + 下载） ----------
+    # 白名单根：workspace/ 与 webui/uploads/（防目录穿越，其他路径一律 404）
+    def _artifact_roots(self) -> dict:
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        return {
+            "ws": os.path.normpath(os.path.join(base, "workspace")),
+            "up": os.path.normpath(os.path.join(base, "webui", "uploads")),
+        }
+
+    def _handle_files(self, tag: str, rel: str) -> None:
+        roots = self._artifact_roots()
+        root = roots.get(tag)
+        if not root:
+            self._send_json(404, {"ok": False, "error": "not found"})
+            return
+        try:
+            rel_dec = unquote(rel)
+        except Exception:  # noqa: BLE001
+            rel_dec = rel
+        full = os.path.normpath(os.path.join(root, rel_dec))
+        if full != root and not full.startswith(root + os.sep):
+            self._send_json(403, {"ok": False, "error": "forbidden"})
+            return
+        if not os.path.isfile(full):
+            self._send_json(404, {"ok": False, "error": "not found"})
+            return
+        ext = os.path.splitext(full)[1].lower()
+        ctype = self._STATIC_TYPES.get(ext, "application/octet-stream")
+        try:
+            with open(full, "rb") as f:
+                data = f.read()
+        except OSError:
+            self._send_json(404, {"ok": False, "error": "not found"})
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-cache")
+        if ext not in self._STATIC_TYPES:
+            name = os.path.basename(full)
+            try:
+                name.encode("latin-1")
+                disp = f'attachment; filename="{name}"'
+            except UnicodeEncodeError:
+                disp = f"attachment; filename*=UTF-8''{quote(name)}"
+            self.send_header("Content-Disposition", disp)
+        self.end_headers()
+        self.wfile.write(data)
 
     # ---------- 静态资源（webui/assets 目录，防目录穿越） ----------
     def _serve_static(self, path: str) -> None:
@@ -574,10 +715,44 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(503, {"ok": False, "ready": False,
                                   "error": _init_error or "白绫还在初始化中，请稍候再试"})
             return
+        attachments = self._sanitize_attachments(data.get("attachments"))
         tid = _tasks.create()
-        threading.Thread(target=_run_task, args=(tid, message), daemon=True).start()
+        threading.Thread(target=_run_task, args=(tid, message, attachments), daemon=True).start()
         _tasks.cleanup_old()
         self._send_json(200, {"ok": True, "task_id": tid, "ready": True})
+
+    def _sanitize_attachments(self, raw) -> list:
+        """校验前端附件：只放行 webui/uploads/ 内真实存在的文件（防伪造路径注入）。"""
+        if not isinstance(raw, list):
+            return []
+        out = []
+        up_dir = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads"))
+        for att in raw:
+            if not isinstance(att, dict):
+                continue
+            path = str(att.get("path") or "").strip()
+            if not path:
+                continue
+            full = os.path.normpath(path)
+            if full != up_dir and not full.startswith(up_dir + os.sep):
+                continue  # 非 uploads 白名单 → 丢弃
+            if not os.path.isfile(full):
+                continue
+            out.append({
+                "kind": str(att.get("kind") or "file"),
+                "name": str(att.get("name") or os.path.basename(full)),
+                "path": full,
+                "content": att.get("content") or "",
+            })
+        return out
+
+    def _handle_task_cancel(self, tid: str) -> None:
+        """用户停止任务：置位取消事件，agent 在工具边界响应后任务置为 cancelled。"""
+        if not tid or not _tasks.cancel(tid):
+            self._send_json(404, {"ok": False, "error": "任务不存在或已结束"})
+            return
+        self._send_json(200, {"ok": True, "task_id": tid,
+                              "note": "已请求停止，白绫将在当前步骤结束后中止并保存断点"})
 
     def _handle_task(self, tid: str) -> None:
         t = _tasks.get(tid)
@@ -596,10 +771,12 @@ class Handler(BaseHTTPRequestHandler):
             "ok": True,
             "status": t.get("status"),
             "reply": t.get("reply"),
+            "artifacts": t.get("artifacts") or [],
             "error": t.get("error"),
             "events": events[since:],
             "next": len(events),
             "done": t.get("status") in ("done", "error"),
+            "cancel_requested": bool(t.get("cancel_requested")),
         })
 
     # ---------- AI 接入配置 API ----------
@@ -621,13 +798,36 @@ class Handler(BaseHTTPRequestHandler):
             return
         # api_key 空/未传 = 保留原值（不清空既有密钥）
         try:
+            # 保存前校验：健康表明确标记不可用的模型 → 拒绝（防选中 503 坏模型）
+            new_model = (data.get("model") or "").strip() or None
+            new_base = ((data.get("base_url") or "").strip().rstrip("/") or None)
+            if new_model and new_base:
+                try:
+                    from core import model_health as mh
+                    st = (mh.load_health().get(new_base) or {}).get("models", {}).get(new_model)
+                    if st is not None and not st.get("ok"):
+                        detail = (st.get("error") or "不可用")[:140]
+                        return self._send_json(400, {"ok": False, "error": f"模型 {new_model} 当前不可用（{detail}）——请选择可用模型，或先点「扫描健康」刷新"})
+                except Exception:  # noqa: BLE001
+                    pass
+            # max_tokens 非法值（None/""/0/负数）→ 不覆盖（0 会让 LLM 请求失败）
+            mt = data.get("max_tokens")
+            try:
+                mt = int(mt) if mt not in (None, "") else None
+            except (TypeError, ValueError):
+                mt = None
+            if mt is not None and mt <= 0:
+                mt = None
             r = a.reload_llm(
                 base_url=data.get("base_url") or None,
                 api_key=(data.get("api_key") or "").strip() or None,
                 model=data.get("model") or None,
                 temperature=data.get("temperature") if data.get("temperature") not in (None, "") else None,
-                max_tokens=data.get("max_tokens") if data.get("max_tokens") not in (None, "") else None,
+                max_tokens=mt,
             )
+            # 手动保存 = 用户权威：设锚点（容灾只临时替换，锚点恢复可用自动切回）
+            if r.get("ok"):
+                a.set_llm_preferred()
         except Exception as e:  # noqa: BLE001
             self._send_json(400, {"ok": False, "error": f"配置无效: {e}"})
             return
@@ -635,10 +835,13 @@ class Handler(BaseHTTPRequestHandler):
                               **a.llm_config_view()})
 
     def _handle_config_test(self) -> None:
-        """用给定配置试发一条消息（不保存），验证 AI 接入可用。
-        表单字段留空 → 回退用当前已保存配置（玩家留空 key 也能测试已配置的接入）。"""
+        """用给定配置直连探测一次（不保存），验证 AI 接入可用。
+
+        直连 httpx 而非 openai SDK：OneAPI 网关对坏模型的 503 会返回非标准 body，
+        SDK 会崩成 AttributeError 而丢失真实原因；直连能拿到 HTTP 状态码与响应体。
+        表单字段留空 → 回退用当前已保存配置（留空 key 也能测试已配置的接入）。"""
         data = self._read_json()
-        from core.llm import LLMGateway
+        from core import model_health as mh
         try:
             a = get_agent()
             cur = a._load_llm_cfg()
@@ -647,19 +850,15 @@ class Handler(BaseHTTPRequestHandler):
         base = (data.get("base_url") or "").strip() or cur.get("base_url") or "https://api.deepseek.com"
         key = (data.get("api_key") or "").strip() or cur.get("api_key")
         model = (data.get("model") or "").strip() or cur.get("model") or "deepseek-chat"
-        try:
-            probe = LLMGateway(base_url=base, api_key=key, model=model)
-        except Exception as e:  # noqa: BLE001
-            self._send_json(400, {"ok": False, "error": f"配置无效: {e}"})
-            return
-        if not probe.ready:
+        if not key:
             self._send_json(200, {"ok": False, "error": "LLM 未就绪：请填写有效的 API Key"})
             return
-        resp = probe.chat([{"role": "user", "content": "回复 OK 两个字即可"}], tools=None, tool_choice="none")
-        if resp.get("error"):
-            self._send_json(200, {"ok": False, "error": resp["error"]})
+        r = mh.probe(base, key, model, timeout=10)
+        if r.get("ok"):
+            self._send_json(200, {"ok": True, "latency": r.get("latency"),
+                                  "model": model, "reply": "连接成功"})
         else:
-            self._send_json(200, {"ok": True, "reply": (resp.get("content") or "")[:100]})
+            self._send_json(200, {"ok": False, "error": r.get("error") or "连接失败"})
 
     # ---------- 模型列表 API ----------
     def _handle_models_get(self) -> None:
@@ -691,6 +890,71 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(200, {"ok": r.get("ok", False), "error": r.get("error"),
                               "models": r.get("models", []), "count": r.get("count", 0),
                               "source": r.get("source")})
+
+    # ---------- 模型健康与容灾 API ----------
+    def _handle_llm_health(self) -> None:
+        """返回模型健康表摘要（各来源可用模型/延迟/探测时间）。"""
+        try:
+            a = get_agent()
+        except AgentNotReady as e:
+            self._send_json(503, {"ok": False, "error": str(e)})
+            return
+        try:
+            self._send_json(200, {"ok": True, "health": a.llm_health_view(),
+                                  "config": a.llm_config_view()})
+        except Exception as e:  # noqa: BLE001
+            self._send_json(500, {"ok": False, "error": f"读取健康表失败: {e}"})
+
+    def _handle_llm_scan(self) -> None:
+        """全量探测各来源模型联通率，更新健康表与可用模型列表（阻塞 10-30s）。"""
+        try:
+            a = get_agent()
+        except AgentNotReady as e:
+            self._send_json(503, {"ok": False, "error": str(e)})
+            return
+        try:
+            r = a.scan_llm_health()
+        except Exception as e:  # noqa: BLE001
+            self._send_json(500, {"ok": False, "error": f"扫描异常: {e}"})
+            return
+        self._send_json(200, {"ok": True, "health": r.get("summary", {})})
+
+    def _handle_llm_sources_get(self) -> None:
+        """返回渠道源列表（key 打码）+ 当前生效接入。"""
+        try:
+            a = get_agent()
+            self._send_json(200, {"ok": True, **a.llm_sources_view()})
+        except AgentNotReady as e:
+            self._send_json(503, {"ok": False, "error": str(e)})
+        except Exception as e:  # noqa: BLE001
+            self._send_json(500, {"ok": False, "error": f"读取渠道源失败: {e}"})
+
+    def _handle_llm_sources_save(self) -> None:
+        """保存渠道源列表：body = {"sources": [{name, base_url, api_key, enabled}]}。"""
+        data = self._read_json()
+        try:
+            a = get_agent()
+        except AgentNotReady as e:
+            self._send_json(503, {"ok": False, "error": str(e)})
+            return
+        try:
+            r = a.save_llm_sources(data.get("sources") or [])
+        except Exception as e:  # noqa: BLE001
+            self._send_json(400, {"ok": False, "error": f"保存渠道源失败: {e}"})
+            return
+        self._send_json(200, {"ok": True, **r})
+
+    def _handle_llm_switch(self) -> None:
+        """用户切换渠道：body = {"source_name": str, "model": str(可选)}。probe 验证通过才切。"""
+        data = self._read_json()
+        try:
+            a = get_agent()
+        except AgentNotReady as e:
+            self._send_json(503, {"ok": False, "error": str(e)})
+            return
+        r = a.switch_llm_source(str(data.get("source_name") or "").strip(),
+                                str(data.get("model") or "").strip() or None)
+        self._send_json(200, {"ok": bool(r.get("ok")), **r})
 
     # ---------- 自主时间配置 API（使用者控制学习方向与时间） ----------
     def _handle_study(self) -> None:
@@ -876,7 +1140,48 @@ def _kill_old_instance(port: int) -> list:
     return killed
 
 
+def _reload_watcher() -> None:
+    """无感冷启动（接收端）：捕获 agent 的重启请求，以退出码 77 结束，交给 launcher 拉起新进程。
+
+    agent 在每轮 turn 末尾判定「核心代码 mtime 变化」或「self_restart 标志」，
+    置 exit_reload=True 并落会话快照（core/agent.py request_restart）。
+    本线程轮询该标志，收尾后 os._exit(77)。
+
+    - 为什么用 os._exit：主线程被托盘事件循环占用（无托盘时是 serve_forever），
+      从后台线程无法优雅收敛整个进程；而 SessionStore 每轮即时落盘、
+      agent.close() 会再兜一次，数据已安全，无需 atexit。
+    - 为什么必须配 launcher：77 是「请求重启」的信号，不是「结束」。若直接
+      python webui/server.py 启动（无接收方），退出 77 等价于白绫下线。
+      故启动链统一走 launcher.py（见 启动.bat）。
+    """
+    while True:
+        time.sleep(1.5)
+        try:
+            a = _agent
+            if _ready and a is not None and getattr(a, "exit_reload", False):
+                print("[reload] 检测到重启请求 → 退出码 77（由 launcher 拉起新进程）")
+                try:
+                    a.close()          # 记忆库收尾 + exit_reload 兜底快照
+                except Exception:  # noqa: BLE001
+                    pass
+                try:
+                    sys.stdout.flush()
+                except Exception:  # noqa: BLE001
+                    pass
+                os._exit(77)
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def main() -> None:
+    # 启动绑定：先确保 Go LLM 网关就绪（不在则静默拉起），白绫基础设施随主体一起启动
+    try:
+        from core.llm import ensure_gateway_up
+        g_ok = ensure_gateway_up()
+        print(f"LLM 网关: {'就绪' if g_ok else '未就绪（请检查 llm-gateway/bailing-gateway.exe）'}")
+    except Exception as e:  # noqa: BLE001
+        print(f"LLM 网关检查异常（不影响启动，对话时白绫会再次尝试拉起）: {e}")
+
     if _port_in_use(HOST, PORT):
         print(f"端口 {PORT} 已被占用——检测到旧实例，清理后重启 ...")
         killed = _kill_old_instance(PORT)
@@ -902,6 +1207,8 @@ def main() -> None:
     threading.Thread(target=_study_scheduler, daemon=True).start()
     # 工作流定时启动：使用者配置的时间点自动触发（共建者要求·2026-09-04）
     threading.Thread(target=_workflow_scheduler, daemon=True).start()
+    # 无感冷启动（接收端）：轮询 agent.exit_reload → 退出码 77，交给 launcher 拉起
+    threading.Thread(target=_reload_watcher, daemon=True).start()
 
     print("白绫 Web 界面（API 服务）启动中 ...")
     print(f"  地址: http://{HOST}:{PORT}")

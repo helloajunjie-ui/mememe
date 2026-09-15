@@ -9,9 +9,11 @@
 from __future__ import annotations
 
 import datetime
+import glob
 import json
 import os
 import re
+import threading
 import time
 from typing import Dict, List, Optional
 
@@ -22,6 +24,7 @@ from core.humanity.cognition import should_slow_think
 from core.humanity.emotion import EmotionState
 from core.humanity.motivation import Motivation
 from core.llm import LLMGateway
+from core import model_health as mh
 from core.loopguard import LoopGuard
 from core.memory import Memory
 from core.methods import MethodStore
@@ -53,7 +56,7 @@ _PLAN_SUBMIT_SCHEMA = {
     "type": "function",
     "function": {
         "name": "plan_submit",
-        "description": "提交任务计划线：复杂任务（多步规划/需探索/多任务集合，预计超过 8 步）在首轮调用本工具，建立步骤清单后按计划逐步执行。可重复调用以覆盖调整计划。",
+        "description": "提交任务计划线：仅限真正复杂任务（多步规划/需探索/多任务集合，预计超过 8 步）在首轮调用，建立步骤清单后按计划逐步执行。可重复调用以覆盖调整计划。禁止：简单任务（可在 3 步内直接完成）不得调用本工具，直接执行即可——过度规划浪费轮次，是明确要避免的行为。",
         "parameters": {
             "type": "object",
             "properties": {
@@ -181,31 +184,54 @@ _WF_UPDATE_SCHEMA = {
 }
 
 
+class TaskCancelled(Exception):
+    """用户主动打断当前任务（webui 停止按钮）。在 turn 的工具循环检查点抛出，
+    已封存任务断点，可续接恢复。"""
+
+
 class Agent:
     def __init__(self, config_path: str = "config.yaml"):
         with open(config_path, "r", encoding="utf-8") as f:
             self.config = yaml.safe_load(f)
         cfg = self.config["agent"]
-        self.data_dir = cfg["data_dir"]
-        self.logs_dir = cfg["logs_dir"]
+        # 路径绝对化：以 config 文件所在目录为项目根，不依赖进程 cwd。
+        # （曾因从 webui/ 目录启动 webui，tools_dir 解析成 webui/tools → 内置工具 0 个，
+        #   白绫只剩 8 个骨架函数，cmd_run/fs_read 全部缺失，见 2026-09-15 排障）
+        _base = os.path.dirname(os.path.abspath(config_path))
+
+        def _abs(p: str) -> str:
+            if os.path.isabs(p):
+                return p
+            return os.path.join(_base, p)
+
+        self.data_dir = _abs(cfg["data_dir"])
+        self.logs_dir = _abs(cfg["logs_dir"])
+        self.tools_dir = _abs(cfg.get("tools_dir", "tools"))
+        self.workspace_dir = _abs(cfg.get("workspace_dir", "workspace"))
         self.name = cfg["name"]
         self.version = cfg["version"]
 
         os.makedirs(self.data_dir, exist_ok=True)
         os.makedirs(self.logs_dir, exist_ok=True)
+        os.makedirs(self.workspace_dir, exist_ok=True)
+
+        # 配置读写锁（后台健康扫描与主循环 reload 并发时保证原子性；RLock 可重入）
+        self._llm_cfg_lock = threading.RLock()
+        self._scan_running = False
 
         # 核心模块
         self.platform = plat.detect()
         self.self_model = SelfModel(os.path.join(self.data_dir, "self.yaml"))
-        self.memory = Memory(self.config["memory"]["db_path"])
+        self.memory = Memory(_abs(self.config["memory"]["db_path"]))
         self.registry = ToolRegistry(
             os.path.join(self.data_dir, "registry.json"),
-            cfg["tools_dir"],
+            self.tools_dir,
         )
-        # MCP 万能接口：注入 McpManager，供 MCP 工具执行转发调用（见设计文档 5.37）
+        # MCP 独立服务（v2.7）：HTTP 客户端 + 按需激活注入；启动时自动拉起服务（不阻塞）
         from core.mcp import get_mcp_manager
-        self.mcp = get_mcp_manager(os.path.join(cfg["data_dir"], "..", "config", "mcp.json"))
+        self.mcp = get_mcp_manager(os.path.join(_base, "config", "mcp.json"))
         self.registry.mcp = self.mcp
+        self._mcp_tools_count = -1
         self.persona = self._load_persona()
         llm_cfg = self._load_llm_cfg()
         self.llm = self._new_llm(llm_cfg)
@@ -220,13 +246,19 @@ class Agent:
         self.history: List[Dict] = []
         self._fail_count: Dict[str, int] = {}
         # 上下文节点库（任务/闲聊节点：截断存档、带时间戳、按需读取）
-        self.ctx = ContextStore(cfg["data_dir"])
+        self.ctx = ContextStore(self.data_dir)
         self.ctx_mode: str = "chat"     # 当前上下文归属：chat | task
         self.ctx_task_id: str = ""
         self.ctx_start_idx: int = 0     # 当前任务在 history 中的起点（完成时摘除）
         # 进行中任务（工具步数超限等被截断时保存，支持续接，避免记忆断裂）
         self.ongoing_task: Optional[Dict] = None
         self.boot_mode = None
+        # 无感冷启动：代码更新后自动后台重启（退出码 77 协议 + 会话快照恢复）
+        self.exit_reload = False
+        self._core_mtime_base: Dict[str, float] = self._snapshot_core_mtimes()
+        self._snap_path = os.path.join(self.data_dir, "session_snapshot.json")
+        # 本轮产物（文件/图片/文档路径），webui 展示为预览/下载卡片
+        self.last_round_artifacts: List[Dict] = []
         # 工作流（多节点流水线：节点间通过产物路径传递，产物全部落可控目录 workspace/workflows/<id>/）
         self.workspace_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "workspace")
         self.workflow: Optional[wfmod.Workflow] = None
@@ -251,6 +283,10 @@ class Agent:
         return os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config", "llm.json")
 
     def _read_user_llm_cfg(self) -> Dict:
+        with self._llm_cfg_lock:
+            return self._read_user_llm_cfg_locked()
+
+    def _read_user_llm_cfg_locked(self) -> Dict:
         p = self._llm_cfg_path()
         if os.path.exists(p):
             try:
@@ -258,26 +294,90 @@ class Agent:
                     return json.load(f)
             except (OSError, json.JSONDecodeError):
                 return {}
-        return {}
+        # 统一配置：config/llm.json 是唯一 LLM 配置。缺失（全新安装/删档）时从
+        # config.yaml 的 llm 种子一次性初始化，之后所有读写都只走 llm.json。
+        try:
+            seed = dict(self.config.get("llm", {}))
+            base = (seed.get("base_url") or "https://api.deepseek.com").rstrip("/")
+            model = seed.get("model") or "deepseek-chat"
+            init = {
+                "base_url": base,
+                "api_key": seed.get("api_key") or "",
+                "model": model,
+                "temperature": float(seed.get("temperature", 0.7)),
+                "max_tokens": int(seed.get("max_tokens", 4096)),
+                "sources": [{
+                    "name": "默认",
+                    "base_url": base,
+                    "api_key": seed.get("api_key") or "",
+                    "enabled": True,
+                    "models": [],
+                }],
+                "preferred_base_url": base,
+                "preferred_model": model,
+                "models_base_url": base,
+                "models": [],
+                "models_updated_at": 0,
+            }
+            self._save_user_llm_cfg(init)
+            self._log("[llm] 未找到 config/llm.json，已从 config.yaml 种子初始化")
+            return init
+        except Exception as e:  # noqa: BLE001
+            self._log(f"[llm] 种子初始化失败: {e}")
+            return {}
 
     def _save_user_llm_cfg(self, over: Dict) -> None:
-        p = self._llm_cfg_path()
-        os.makedirs(os.path.dirname(p), exist_ok=True)
-        with open(p, "w", encoding="utf-8") as f:
-            json.dump(over, f, ensure_ascii=False, indent=2)
+        with self._llm_cfg_lock:
+            p = self._llm_cfg_path()
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            tmp = p + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(over, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, p)  # 原子替换：崩溃/并发读不会读到半截文件
 
     def _load_llm_cfg(self) -> Dict:
-        """合并 config.yaml llm 默认 + config/llm.json 用户面板覆盖；api_key 取面板>env>.env。"""
+        """合并 config.yaml llm 默认 + config/llm.json 用户面板覆盖。
+        key 一致性不变式：按当前 base_url 匹配渠道源 key → 顶层 api_key → 环境变量。"""
         base = dict(self.config.get("llm", {}))
         over = self._read_user_llm_cfg()
         for k in ("base_url", "model", "temperature", "max_tokens", "timeout_seconds"):
             if over.get(k) is not None:
                 base[k] = over[k]
-        key = (over.get("api_key") or "").strip()
-        if not key:
-            key = self._load_api_key(base.get("api_key_env", "BAILING_API_KEY")) or ""
-        base["api_key"] = key
+        base["api_key"] = self._resolve_llm_key(over, base)
         return base
+
+    def _resolve_llm_key(self, over: Dict, seed: Dict) -> str:
+        """按「base 匹配渠道源 → 顶层 → 环境变量」解析当前生效 key，杜绝 base/key 错配。"""
+        b0 = (over.get("base_url") or "").rstrip("/")
+        if b0:
+            for src in (over.get("sources") or []):
+                if (src.get("base_url") or "").rstrip("/") == b0 and (src.get("api_key") or "").strip():
+                    return str(src["api_key"]).strip()
+        if (over.get("api_key") or "").strip():
+            return str(over["api_key"]).strip()
+        return self._load_api_key(seed.get("api_key_env", "BAILING_API_KEY")) or ""
+
+    def _ensure_llm_key_consistency(self) -> None:
+        """自愈：顶层 api_key 与当前 base_url 失配（渠道 key 已修正但顶层没跟）→ 按渠道修正并重载。"""
+        try:
+            over = self._read_user_llm_cfg()
+            b0 = (over.get("base_url") or "").rstrip("/")
+            if not b0:
+                return
+            src_key = ""
+            src_name = ""
+            for src in (over.get("sources") or []):
+                if (src.get("base_url") or "").rstrip("/") == b0 and (src.get("api_key") or "").strip():
+                    src_key = str(src["api_key"]).strip()
+                    src_name = src.get("name") or ""
+                    break
+            if src_key and (over.get("api_key") or "").strip() != src_key:
+                over["api_key"] = src_key
+                self._save_user_llm_cfg(over)
+                self.llm = self._new_llm(self._load_llm_cfg())
+                self._log(f"[llm] 自愈：顶层 api_key 与 base_url 失配，已按渠道「{src_name}」修正")
+        except Exception as e:  # noqa: BLE001
+            self._log(f"[llm] key 一致性自愈失败: {e}")
 
     def _new_llm(self, cfg: Dict) -> LLMGateway:
         return LLMGateway(
@@ -301,14 +401,30 @@ class Agent:
         if temperature is not None:
             over["temperature"] = float(temperature)
         if max_tokens is not None:
-            over["max_tokens"] = int(max_tokens)
-        # 仅当提供非空 api_key 才更新；空/None = 保留原值（不清空）
+            try:
+                mt = int(max_tokens)
+                if mt > 0:  # 0/负数非法：不覆盖（否则 LLM 请求必挂）
+                    over["max_tokens"] = mt
+            except (TypeError, ValueError):
+                pass
+        # Key 一致性：显式传非空 → 用；否则按（可能已变更的）base 匹配渠道源/环境变量；
+        # 都解析不到且 base 确实变了 → 沿用原值并带 warning（防静默错配）
+        warning = None
         if api_key is not None and str(api_key).strip():
             over["api_key"] = str(api_key).strip()
+        else:
+            resolved = self._resolve_llm_key(over, dict(self.config.get("llm", {})))
+            if resolved:
+                over["api_key"] = resolved
+            elif base_url is not None:
+                warning = "API 地址已变更但未找到对应 Key（渠道源/环境变量均无），沿用原 Key，可能不可用"
         self._save_user_llm_cfg(over)
         self.llm = self._new_llm(self._load_llm_cfg())
         err = getattr(self.llm, "_init_error", None)
-        return {"ok": self.llm.ready, "error": err}
+        r = {"ok": self.llm.ready, "error": err}
+        if warning:
+            r["warning"] = warning
+        return r
 
     @staticmethod
     def _has_local_proxy(port: int = 7897) -> bool:
@@ -366,16 +482,343 @@ class Agent:
         return {"ok": False, "error": f"获取模型列表失败: {last_err}"}
 
     def models_view(self) -> Dict:
-        """返回缓存的模型列表（配置面板下拉用）。"""
+        """返回缓存的模型列表（配置面板下拉用）。
+        usable：当前地址健康表确认可用的模型（前端下拉只给这些，防选到 503 坏模型）；
+        models：全量列表（含不可用，仅作提示）。"""
         over = self._read_user_llm_cfg()
+        base = (over.get("models_base_url") or "").rstrip("/")
+        usable, bad = [], []
+        if base:
+            hb = (mh.load_health().get(base) or {}).get("models", {})
+            for m, st in hb.items():
+                (usable if st.get("ok") else bad).append(m)
         return {"models": over.get("models", []), "updated_at": over.get("models_updated_at"),
-                "models_base_url": over.get("models_base_url", "")}
+                "models_base_url": base, "usable": usable, "bad": bad}
+
+    # ---------- 模型容灾：多源 + 健康表 + 自动切换 ----------
+    def llm_sources(self) -> list:
+        """当前 AI 来源列表。优先 llm.json 的 sources（多源），否则构造单源（兼容旧配置）。"""
+        over = self._read_user_llm_cfg()
+        srcs = over.get("sources") or []
+        if srcs:
+            return [x for x in srcs if x.get("enabled", True)]
+        cfg = self._load_llm_cfg()
+        base = (cfg.get("base_url") or "").rstrip("/")
+        return [{"name": base or "default", "base_url": base,
+                 "api_key": cfg.get("api_key"), "enabled": True}]
+
+    def scan_llm_health(self, source_name: str = "") -> Dict:
+        """探测各来源的模型联通率，更新健康表 + 各源可用模型列表。返回摘要。"""
+        cfg = self._load_llm_cfg()
+        global_key = cfg.get("api_key") or ""
+        res: Dict = {}
+        for src in self.llm_sources():
+            if source_name and src.get("name") != source_name:
+                continue
+            base = (src.get("base_url") or "").rstrip("/")
+            skey = ((src.get("api_key") or "").strip() or global_key).strip()
+            if not base or not skey:
+                res[base or src.get("name", "?")] = {"error": "缺少 base_url 或 api_key"}
+                continue
+            models = src.get("models") or []
+            if not models:
+                mv = self.models_view()
+                if (mv.get("models_base_url") or "").rstrip("/") == base:
+                    models = mv.get("models") or []
+            if not models:
+                r = self.fetch_models(base_url=base, api_key=skey)
+                models = r.get("models") or []
+            if not models:
+                res[base] = {"error": "无模型列表"}
+                continue
+            results = mh.scan_models(base, skey, models)
+            mh.record(base, results)
+            ok_models = [m for m in models if results.get(m, {}).get("ok")]
+            # 可用列表回写 sources[name].models（供自动接入直接选用）；整段加锁防与 reload 并发丢更新
+            with self._llm_cfg_lock:
+                over = self._read_user_llm_cfg_locked()
+                for x in over.get("sources", []):
+                    if x.get("name") == src.get("name"):
+                        x["models"] = ok_models
+                self._save_user_llm_cfg(over)
+            res[base] = mh.source_status(base)
+            self._log(f"[llm健康] 扫描 {base}: 可用 {res[base].get('ok')}/{res[base].get('total')} 个模型")
+        return {"ok": True, "sources": res, "summary": mh.summary()}
+
+    def llm_sources_view(self) -> Dict:
+        """渠道源列表（前端管理用；key 打码，不泄漏明文）。"""
+        def _mask(k: str) -> str:
+            if not k:
+                return ""
+            return ("*" * (len(k) - 4) + k[-4:]) if len(k) > 4 else "***"
+
+        out = []
+        for s in self.llm_sources():
+            out.append({
+                "name": s.get("name", ""),
+                "base_url": s.get("base_url", ""),
+                "api_key_masked": _mask(s.get("api_key") or ""),
+                "enabled": s.get("enabled", True),
+                "models": s.get("models") or [],
+            })
+        cfg = self._load_llm_cfg()
+        return {"sources": out,
+                "current": {"base_url": cfg.get("base_url", ""), "model": cfg.get("model", "")}}
+
+    def save_llm_sources(self, sources: list) -> Dict:
+        """保存渠道源列表（前端管理）：校验后写入 config/llm.json.sources。
+        保留已有模型的 models 字段；key 为空 = 继承主 Key/环境变量（不覆盖旧值）。"""
+        cleaned = []
+        seen = set()
+        for i, s in enumerate(sources or []):
+            if not isinstance(s, dict):
+                continue
+            name = str(s.get("name") or "").strip()
+            base = str(s.get("base_url") or "").strip().rstrip("/")
+            if not base:
+                continue
+            if not name:
+                name = base
+            if name in seen:
+                name = f"{name}_{i}"
+            seen.add(name)
+            key = str(s.get("api_key") or "").strip()
+            cleaned.append({
+                "name": name,
+                "base_url": base,
+                "api_key": key,  # 空 = 继承主 Key / 环境变量
+                "enabled": bool(s.get("enabled", True)),
+            })
+        over = self._read_user_llm_cfg()
+        # 旧源按 base_url 匹配（改名不丢 key/可用模型列表；name 兜底兼容）
+        old = {}
+        for x in (over.get("sources") or []):
+            old.setdefault((x.get("base_url") or "").rstrip("/"), x)
+            old.setdefault(x.get("name"), x)
+        for c in cleaned:
+            o = old.get(c["base_url"]) or old.get(c.get("name"))
+            if o and not c["api_key"]:
+                c["api_key"] = o.get("api_key") or ""
+            if o and o.get("models"):
+                c["models"] = o.get("models")
+        over["sources"] = cleaned
+        self._save_user_llm_cfg(over)
+        self._log(f"[llm] 渠道源已保存: {len(cleaned)} 个（{', '.join(x['name'] for x in cleaned)}）")
+        return {"ok": True, "count": len(cleaned), "sources": cleaned}
+
+    def _failover_llm(self, err: str, err_code: str = "error"):
+        """LLM 调用失败自动容灾（底层发现非正常通讯码后触发）。
+
+        分型决策：
+          rate_limit        → 等待 3s 重试（同源限流切模型无效，不切）
+          auth/forbidden    → 密钥/权限问题，同源换模型无用 → 直接跨源
+          其余（model_missing/unavailable/timeout/network/error）→ 同源下一可用模型优先，再跨源
+        候选必须 probe 验证成功（ok 且延迟 ≤8s）才切换——健康表可能过期，防切到坏模型。
+        返回切换描述；无可切换目标返回 None。
+        """
+        cfg = self._load_llm_cfg()
+        cur_base = (cfg.get("base_url") or "").rstrip("/")
+        cur_model = cfg.get("model") or ""
+        if err_code == "rate_limit":
+            time.sleep(3)
+            return f"当前模型限流，等待 3 秒后重试"
+        skip_same = err_code in ("auth", "forbidden")
+        for base, key, model in self._llm_candidates(cur_base, cur_model, skip_same_source=skip_same):
+            probe_key = key or cfg.get("api_key") or ""
+            try:
+                r = mh.probe(base, probe_key, model, timeout=5)
+            except Exception:  # noqa: BLE001
+                continue
+            if not r.get("ok"):
+                continue
+            if r.get("latency", 99) > 8:
+                continue
+            if base == cur_base:
+                self.reload_llm(model=model)
+                msg = f"模型 {cur_model} 异常（{err_code}），已自动切换到 {model}"
+            else:
+                self.reload_llm(base_url=base, api_key=key or None, model=model)
+                msg = f"来源 {cur_base} 异常（{err_code}），已自动切换到 {base} / {model}"
+            # 切换结果回写健康表（probe 已通过，顺带刷新该模型记录，避免下次误判）
+            try:
+                mh.record(base, {model: r})
+            except Exception:  # noqa: BLE001
+                pass
+            self._log(f"[llm容灾] {msg}（原错误: {str(err)[:60]}）")
+            return msg
+        # 候选全部验证失败：健康表大概率过期/误报 → 后台强制刷新，下一轮自动用新表
+        self._maybe_auto_scan(force=True)
+        return None
+
+    def _llm_candidates(self, cur_base: str, cur_model: str, skip_same_source: bool = False):
+        """候选列表：健康表排序（同源优先 2 个，跨源兜底 2 个，防同源全挂时无路可退）。"""
+        cands = []
+        if not skip_same_source:
+            for m in mh.rank(cur_base, exclude=cur_model):
+                cands.append((cur_base, None, m))
+                if len(cands) >= 2:
+                    break
+        for src in self.llm_sources():
+            base = (src.get("base_url") or "").rstrip("/")
+            if not base or base == cur_base:
+                continue
+            key = (src.get("api_key") or "").strip()
+            for m in mh.rank(base):
+                cands.append((base, key or None, m))
+                if len(cands) >= 4:
+                    return cands
+        return cands
+
+    def _sync_llm_if_changed(self) -> None:
+        """外部（工具/前端）改了 llm.json → 自动重载，无需重启。每轮循环开头调用。"""
+        try:
+            p = self._llm_cfg_path()
+            mt = os.path.getmtime(p) if os.path.exists(p) else 0
+            if getattr(self, "_llm_cfg_mtime", None) == mt:
+                return
+            self._llm_cfg_mtime = mt
+            cur = self._load_llm_cfg()
+            if ((cur.get("model") != getattr(self.llm, "model", None))
+                    or (cur.get("base_url") or "").rstrip("/") != getattr(self.llm, "base_url", "").rstrip("/")):
+                self.reload_llm()
+                self._llm_cfg_mtime = os.path.getmtime(p)
+                self._log(f"[llm] 检测到配置变更，已重载: {cur.get('base_url')} / {cur.get('model')}")
+        except Exception:  # noqa: BLE001
+            pass
+
+    def switch_llm_source(self, name: str, model: Optional[str] = None) -> Dict:
+        """用户从配置页切换渠道：把当前接入切到指定源（probe 验证通过才切）。
+
+        model 缺省 = 该源健康表最优可用模型；切换成功即设为锚点（用户手动切换 = 权威）。
+        """
+        try:
+            src = next((s for s in self.llm_sources() if s.get("name") == name), None)
+            if not src:
+                return {"ok": False, "error": f"渠道「{name}」不存在"}
+            if src.get("enabled") is False:
+                return {"ok": False, "error": f"渠道「{name}」未启用"}
+            base = (src.get("base_url") or "").rstrip("/")
+            key = (src.get("api_key") or "").strip()
+            if not key:
+                key = (self._load_api_key("BAILING_API_KEY") or "").strip()
+            if not base:
+                return {"ok": False, "error": f"渠道「{name}」缺少 API 地址"}
+            if not key:
+                return {"ok": False, "error": f"渠道「{name}」未配置 API Key（在渠道行填写，或设置环境变量 BAILING_API_KEY）"}
+            if not model:
+                model = mh.pick_healthy(base)
+            if not model:
+                model = (src.get("models") or [None])[0]
+            if not model:
+                return {"ok": False, "error": f"渠道「{name}」无可用模型（请先扫描健康）"}
+            # 切前验证：probe 通过才写配置（防止切到坏渠道）
+            r = mh.probe(base, key, model, timeout=8)
+            if not r.get("ok"):
+                return {"ok": False, "error": f"模型 {model} 不可用: {r.get('error', '')[:120]}"}
+            rl = self.reload_llm(base_url=base, api_key=key or None, model=model)
+            if not rl.get("ok"):
+                return {"ok": False, "error": rl.get("error") or "切换失败"}
+            self.set_llm_preferred()  # 用户手动切换 = 锚点（容灾只临时替换，锚点始终是用户选择）
+            try:
+                mh.record(base, {model: r})
+            except Exception:  # noqa: BLE001
+                pass
+            self._log(f"[llm] 用户切换渠道: {name} / {model}")
+            return {"ok": True, "base_url": base, "model": model}
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": str(e)}
+
+    def set_llm_preferred(self) -> Dict:
+        """配置面板保存时调用：把当前 base_url/model 记为锚点（用户手动配置 = 当前归属）。
+
+        容灾切换是临时替换；锚点模型恢复可用后由 _maybe_revert_preferred 自动切回。
+        """
+        try:
+            over = self._read_user_llm_cfg()
+            over["preferred_base_url"] = over.get("base_url", "")
+            over["preferred_model"] = over.get("model", "")
+            self._save_user_llm_cfg(over)
+            self._log(f"[llm] 锚点已设: {over['preferred_base_url']} / {over['preferred_model']}")
+            return {"ok": True}
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": str(e)}
+
+    def _maybe_revert_preferred(self) -> None:
+        """回锚：用户手动配置的模型（preferred）恢复可用 → 自动切回。
+
+        规则：配置面板填哪个模型，当前就是哪个模型。容灾切换只做临时替换；
+        锚点模型在健康表标记可用时自动切回（10 分钟内不重复尝试，防抖动）。
+        """
+        try:
+            if time.time() - getattr(self, "_last_revert_attempt", 0) < 600:
+                return
+            cfg = self._load_llm_cfg()
+            over = self._read_user_llm_cfg()
+            p_base = (over.get("preferred_base_url") or "").rstrip("/")
+            p_model = over.get("preferred_model") or ""
+            cur_base = (cfg.get("base_url") or "").rstrip("/")
+            cur_model = cfg.get("model") or ""
+            if not p_model or (p_base == cur_base and p_model == cur_model):
+                return
+            # 锚点模型健康表标记可用才回切；未探测/未知不动（避免武断切换）
+            hb = mh.load_health().get(p_base or cur_base, {}).get("models", {})
+            if hb.get(p_model, {}).get("ok") is not True:
+                return
+            self._last_revert_attempt = time.time()
+            if p_base and p_base != cur_base:
+                self.reload_llm(base_url=p_base, model=p_model)
+            else:
+                self.reload_llm(model=p_model)
+            self._log(f"[llm容灾] 锚点模型 {p_model} 已恢复可用，自动切回用户配置")
+        except Exception as e:  # noqa: BLE001
+            self._log(f"[llm容灾] 回锚检查失败: {e}")
+
+    def _maybe_auto_scan(self, force: bool = False) -> None:
+        """健康表自动保鲜：距上次全量扫描超 1 小时 → 后台补扫（不阻塞任务）。
+
+        force=True 表示健康表疑似过期（failover 候选全部验证失败）——立即后台刷新，
+        供下一任务/下一轮自动接入使用。带 _scan_running 防重入。
+        """
+        if getattr(self, "_scan_running", False):
+            return
+        try:
+            h = mh.load_health()
+            last = h.get("_updated_at") or 0
+            if not force and time.time() - last < 3600:
+                return
+            self._scan_running = True
+
+            def _bg() -> None:
+                try:
+                    self.scan_llm_health()
+                    self._log("[llm容灾] 自动健康扫描完成")
+                except Exception as e:  # noqa: BLE001
+                    self._log(f"[llm容灾] 自动扫描失败: {e}")
+                finally:
+                    self._scan_running = False
+
+            threading.Thread(target=_bg, daemon=True).start()
+        except Exception:  # noqa: BLE001
+            pass
+
+    def llm_health_view(self) -> Dict:
+        """健康表摘要（前端/工具展示）。"""
+        return mh.summary()
 
     def llm_config_view(self) -> Dict:
-        """当前生效的 AI 接入配置（api_key 打码回显，不泄漏明文）。"""
+        """当前生效的 AI 接入配置（api_key 打码回显，不泄漏明文）。
+
+        base_url/model = 真实当前使用（容灾切换后已同步，绝不显示旧值）；
+        preferred_* = 用户手动配置的锚点；failover = 当前是否处于容灾临时切换。
+        """
         cfg = self._load_llm_cfg()
         key = cfg.get("api_key") or ""
         masked = ("*" * (len(key) - 4) + key[-4:]) if len(key) > 4 else ("***" if key else "")
+        over = self._read_user_llm_cfg()
+        p_base = (over.get("preferred_base_url") or "").rstrip("/")
+        p_model = over.get("preferred_model") or ""
+        cur_base = (cfg.get("base_url") or "").rstrip("/")
+        cur_model = cfg.get("model") or ""
         return {
             "base_url": cfg.get("base_url", ""),
             "model": cfg.get("model", ""),
@@ -384,6 +827,9 @@ class Agent:
             "has_key": bool(key),
             "api_key_masked": masked,
             "ready": self.llm.ready,
+            "preferred_base_url": p_base or cur_base,
+            "preferred_model": p_model or cur_model,
+            "failover": bool(p_model and (cur_base != p_base or cur_model != p_model)),
         }
 
     def _load_persona(self) -> Dict:
@@ -392,6 +838,144 @@ class Agent:
             with open(p, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f)
         return {"persona": {"name": self.name}}
+
+    # ================= 无感冷启动（代码更新 → 自动后台重启） =================
+    _CORE_GLOBS = ("main.py", "launcher.py", "core/**/*.py", "tools/base.py", "webui/*.py", "config.yaml")
+
+    def _snapshot_core_mtimes(self) -> Dict[str, float]:
+        """记录核心代码基线（main.py + core/*.py + config.yaml 的 mtime）。"""
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        out: Dict[str, float] = {}
+        for pat in self._CORE_GLOBS:
+            for p in glob.glob(os.path.join(base, pat), recursive=True):
+                try:
+                    out[p] = os.path.getmtime(p)
+                except OSError:
+                    pass
+        return out
+
+    def core_changed(self) -> bool:
+        """核心代码是否有更新（mtime 变化）。工具层更新走热更新，不触发重启。"""
+        return self._snapshot_core_mtimes() != self._core_mtime_base
+
+    def request_restart(self) -> None:
+        """请求无感冷启动：保存会话快照，主进程退出码 77，launcher 自动拉起。"""
+        try:
+            self._save_snapshot()
+            flag = os.path.join(self.data_dir, "restart.flag")
+            if os.path.exists(flag):
+                os.remove(flag)  # 标志已消费
+            self.exit_reload = True
+            self._log("[restart] 已请求自动重启（会话已快照）")
+        except Exception as e:  # noqa: BLE001
+            self.exit_reload = True
+            self._log(f"[restart] 快照保存失败（仍重启）: {type(e).__name__}: {e}")
+
+    def _restart_flag_pending(self) -> bool:
+        """self_restart 工具写的重启标志（data/restart.flag）是否存在。"""
+        return os.path.exists(os.path.join(self.data_dir, "restart.flag"))
+
+    def _save_snapshot(self) -> None:
+        """保存最近会话历史快照（重启后恢复上下文，前端只卡一下）。"""
+        tail = self.history[-60:] if self.history else []
+        os.makedirs(self.data_dir, exist_ok=True)
+        with open(self._snap_path, "w", encoding="utf-8") as f:
+            json.dump({"saved_at": time.time(), "history": tail}, f,
+                      ensure_ascii=False, indent=2)
+
+    def _load_snapshot(self) -> None:
+        """启动时恢复会话快照（若有）。"""
+        if not os.path.exists(self._snap_path):
+            return
+        try:
+            with open(self._snap_path, "r", encoding="utf-8") as f:
+                snap = json.load(f) or {}
+            hist = snap.get("history") or []
+            if hist:
+                self.history = list(hist)
+                self._log(f"[restart] 已恢复会话快照（{len(hist)} 条），上下文无缝续接")
+        except Exception as e:  # noqa: BLE001
+            self._log(f"[restart] 会话快照恢复失败: {type(e).__name__}: {e}")
+        finally:
+            try:
+                os.remove(self._snap_path)
+            except OSError:
+                pass
+
+    # ================= 产物收集（对话中展示：图片预览 / 文件下载） =================
+    _ART_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".pdf",
+                 ".txt", ".md", ".csv", ".xlsx", ".docx", ".pptx", ".html", ".zip",
+                 ".json", ".py", ".log", ".mp4", ".mp3", ".wav")
+    _ART_IMG_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp")
+    _MAX_ARTIFACTS = 6
+
+    def _artifact_roots(self) -> List[str]:
+        """允许展示的产物根：工作区 + webui 上传区 + 项目根（排除库目录）。"""
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        roots = [
+            os.path.normpath(os.path.join(base, "workspace")),
+            os.path.normpath(os.path.join(base, "webui", "uploads")),
+        ]
+        # 项目根仅允许非隐藏、非依赖目录下的直接文件（防误报 .venv/.git 内文件）
+        proj = os.path.normpath(base)
+        for sub in ("", ):
+            pass
+        return roots, proj
+
+    def _collect_artifacts(self, result: Any) -> None:
+        """从工具结果递归提取产物路径（文件真实存在 + 扩展名白名单 + 根目录白名单）。"""
+        if len(self.last_round_artifacts) >= self._MAX_ARTIFACTS:
+            return
+        try:
+            roots, proj = self._artifact_roots()
+            root_ok = [os.path.normpath(p) for p in roots]
+            excluded = {os.sep + ".venv" + os.sep, os.sep + ".git" + os.sep,
+                        os.sep + "node_modules" + os.sep, os.sep + "__pycache__" + os.sep}
+            seen = {a["path"] for a in self.last_round_artifacts}
+
+            def walk(v: Any) -> None:
+                if len(self.last_round_artifacts) >= self._MAX_ARTIFACTS:
+                    return
+                if isinstance(v, dict):
+                    for x in v.values():
+                        walk(x)
+                elif isinstance(v, list):
+                    for x in v:
+                        walk(x)
+                elif isinstance(v, str):
+                    p = v.strip().strip('"').strip("'")
+                    if not p or not os.path.isabs(p):
+                        return
+                    norm = os.path.normpath(p)
+                    ext = os.path.splitext(norm)[1].lower()
+                    if ext not in self._ART_EXTS:
+                        return
+                    if norm in seen:
+                        return
+                    if not os.path.isfile(norm):
+                        return
+                    # 根目录白名单：workspace/ uploads/ 下的任意路径；项目根下的非隐藏文件
+                    allowed = False
+                    for r in root_ok:
+                        if norm == r or norm.startswith(r + os.sep):
+                            allowed = True
+                            break
+                    if not allowed:
+                        if norm.startswith(proj + os.sep) and not any(x in norm for x in excluded):
+                            rel = os.path.relpath(norm, proj)
+                            if not rel.startswith(".") and os.sep not in rel and rel not in ("core", "tools", "webui", "data", "docs", "logs", "mcp-service", "llm-gateway"):
+                                allowed = True
+                    if not allowed:
+                        return
+                    seen.add(norm)
+                    kind = "image" if ext in self._ART_IMG_EXTS else ("pdf" if ext == ".pdf" else "file")
+                    self.last_round_artifacts.append({
+                        "path": norm, "name": os.path.basename(norm), "kind": kind,
+                    })
+
+            walk(result)
+        except Exception as e:  # noqa: BLE001
+            self._log(f"[artifact] 产物收集失败: {type(e).__name__}: {e}")
 
     # ================= 启动 =================
     def boot(self) -> str:
@@ -414,30 +998,64 @@ class Agent:
                 self._integrity_check()  # 本体完整性自检：防篡改/感染（用户安全要求）
                 self._backup(force=False)  # 启动兜底：今日未备份则补（备份不依赖单点定时）
                 self._sync_mcp()  # 同步已配置 MCP server 的工具（失败不阻塞启动）
+                self._llm_cfg_mtime = 0
+                self._sync_llm_if_changed()
+                try:
+                    cfg0 = self._load_llm_cfg()
+                    b0 = (cfg0.get("base_url") or "").rstrip("/")
+                    m0 = cfg0.get("model") or ""
+                    hb = mh.load_health().get(b0, {}).get("models", {})
+                    if hb.get(m0, {}).get("ok") is False:
+                        nxt = mh.pick_healthy(b0, exclude=m0)
+                        if nxt:
+                            self.reload_llm(model=nxt)
+                            self._log(f"[llm容灾] 启动自检: {m0} 不可用，已切换到 {nxt}")
+                except Exception as e:  # noqa: BLE001
+                    self._log(f"[llm容灾] 启动自检失败: {e}")
+                self._maybe_revert_preferred()  # 启动即回锚：上次容灾遗留的临时模型切回用户配置
         self._log(f"[boot] 启动模式: {self.boot_mode}")
+        self._load_snapshot()  # 无感冷启动：恢复会话快照（若有）
         return self.boot_mode
 
     def _sync_mcp(self) -> None:
-        """启动时同步已配置 MCP server 的工具进工具名单。
+        """MCP 独立服务（v2.7）：确保服务运行；一次性清理旧版注册进 registry 的 MCP 条目。
 
-        磁盘 registry 已含 MCP 工具（上次同步过）则直接复用，不重复枚举（效率优先）；
-        否则轻量同步一次。任何失败只记录日志，不阻塞启动。
+        新架构下 MCP 工具不进核心工具库：看目录 → 激活 → 注入 → 调用 → 释放。
         """
         try:
-            if not self.mcp.servers:
-                return
-            has_mcp = any(t.get("source") == "mcp" for t in self.registry.tools.values())
-            if has_mcp:
-                n = sum(1 for t in self.registry.tools.values() if t.get("source") == "mcp")
-                self._log(f"[mcp] 已加载 {n} 个 MCP 工具（复用磁盘名单）")
-                return
-            res = self.mcp.sync_to_registry(self.registry)
-            if res.get("failed"):
-                self._log(f"[mcp] 部分 server 同步失败: "
-                          f"{[f['server'] + ': ' + str(f.get('error'))[:80] for f in res['failed']]}")
-            self._log(f"[mcp] 同步 {res.get('count', 0)} 个 MCP 工具进工具名单")
+            n = self.registry.remove_mcp_all()
+            if n:
+                self.registry.save()
+                self._log(f"[mcp] 已清理旧版 MCP 注册条目 {n} 个（现按需激活注入）")
+            if self.mcp.ensure_running():
+                self._log(f"[mcp] MCP 服务就绪（{len(self.mcp.servers)} 个软件接口）")
+            else:
+                self._log("[mcp] MCP 服务未就绪（不阻塞启动）")
         except Exception as e:  # noqa: BLE001
-            self._log(f"[mcp] 启动同步失败（不阻塞启动）: {type(e).__name__}: {e}")
+            self._log(f"[mcp] 启动检查失败（不阻塞启动）: {type(e).__name__}: {e}")
+
+    def _refresh_mcp_schemas(self, active_schemas: List[Dict]) -> List[Dict]:
+        """MCP 按需激活：把 tools 列表中的 mcp_* 部分替换为当前已激活软件接口的工具。
+
+        对话中可随时 mcp_connect/mcp_disconnect，每轮 LLM 调用前刷新，激活即生效。
+        """
+        try:
+            mcp_schemas = self.mcp.schemas_for_active()
+        except Exception as e:  # noqa: BLE001
+            self._log(f"[mcp] 激活工具刷新失败: {type(e).__name__}: {e}")
+            return active_schemas
+        base = [s for s in active_schemas if not s["function"]["name"].startswith("mcp_")]
+        if not mcp_schemas:
+            if self._mcp_tools_count != 0:
+                self._mcp_tools_count = 0
+                self._log("[mcp] 无激活软件接口（mcp_list 看目录，mcp_connect 激活）")
+            return base
+        cur = len(mcp_schemas)
+        if cur != self._mcp_tools_count:
+            self._mcp_tools_count = cur
+            names = [s["function"]["name"] for s in mcp_schemas[:6]]
+            self._log(f"[mcp] 已激活软件接口工具注入 {cur} 个: {names}{'...' if cur > 6 else ''}")
+        return base + mcp_schemas
 
     def _integrity_check(self) -> None:
         """本体完整性自检：静态本体哈希基线比对，防篡改/感染。结果通知 AI。"""
@@ -612,7 +1230,28 @@ class Agent:
         except Exception:  # noqa: BLE001
             pass
 
-    def turn(self, user_input: str, stage_callback=None) -> str:
+    def _merge_attachments(self, user_input: str, attachments: List[Dict]) -> str:
+        """把用户附件并入消息文本：图片给路径（白绫用 vision_look 看图），
+        文本给内容（上传层已解码），其他文件给路径。"""
+        parts = [user_input]
+        for att in (attachments or []):
+            kind = att.get("kind") or "file"
+            name = att.get("name") or "附件"
+            path = att.get("path") or ""
+            if kind == "image" and path:
+                parts.append(f"\n[用户附件·图片] 「{name}」已保存到：{path}。请用 vision_look 查看这张图并理解内容。")
+            elif kind == "text":
+                content = (att.get("content") or "").strip()
+                if content:
+                    parts.append(f"\n[用户附件·文本] 「{name}」内容如下（{len(content)} 字）：\n{content}")
+                elif path:
+                    parts.append(f"\n[用户附件·文本] 「{name}」已保存到：{path}，请用读取工具查看。")
+            elif path:
+                parts.append(f"\n[用户附件·文件] 「{name}」已保存到：{path}，请按需读取处理。")
+        return "\n".join(parts)
+
+    def turn(self, user_input: str, stage_callback=None, attachments: Optional[List[Dict]] = None,
+             cancel_event=None) -> str:
         """处理一轮用户输入，返回白绫回复。
 
         阶段化执行：有工具调用的任务按阶段记录；工具步数超限时保存断点，
@@ -621,6 +1260,13 @@ class Agent:
         stage_callback：可选阶段回调（webui 异步任务用）。每次关键阶段
         （开始/判型/思考/工具执行/完成）回调一个 dict，让前端实时展示进度，
         避免用户干等。
+
+        attachments：可选用户附件 [{kind, name, path, content}]。图片给路径
+        （白绫用 vision_look 自己看图）；文本文件内容已由上传层解码，直接拼入
+        用户消息供阅读，不额外耗工具调用。
+
+        cancel_event：可选 threading.Event——用户"停止"请求。主循环每轮检查，
+        置位即封存任务断点并抛 TaskCancelled（webui 捕获后标记任务已打断）。
         """
 
         def _emit(ev: dict) -> None:
@@ -630,7 +1276,14 @@ class Agent:
                 except Exception:  # noqa: BLE001
                     pass
 
+        # ---- 附件并入用户消息（图片给路径、文本给内容；持久化由上层负责） ----
+        if attachments:
+            user_input = self._merge_attachments(user_input, attachments)
+
         # ---- 上下文节点化：任务/闲聊隔离 + 关联判定（方法论：节点隔离） ----
+        # 容灾防抖：每轮用户输入允许 1 次 failover（此前只置 True 从不重置，
+        # 导致历史某次容灾后所有后续回合全部跳过容灾、一错就中断）
+        self._failover_used = False
         # 正在任务上下文（ctx_mode=task）且输入不是"继续"续接 → 视为新内容：
         # 封存当前任务节点（断点不丢，可续接恢复），重置为干净上下文再处理本输入。
         is_resume = bool(self.ongoing_task) and self._is_resume_request(user_input)
@@ -673,12 +1326,18 @@ class Agent:
         guard = LoopGuard()  # 思考/执行死循环检测器
         # 世界书工具：核心常驻 + 动态加载的长尾
         active_schemas = self.registry.to_openai_schemas()
+        # MCP 独立服务：已激活软件接口的工具注入（不占常驻上下文，随激活/释放动态变化）
+        active_schemas = self._refresh_mcp_schemas(active_schemas)
         # 初始已加载集合 = 核心 schema 的工具名（含 method_learn），防动态加载重复导致 "Tool names must be unique"
         core_loaded = {s["function"]["name"] for s in active_schemas}
         # 计划线 + 工作流内置工具（C2/C3 骨架 + 多节点流水线）：始终可用
-        active_schemas = [_PLAN_SUBMIT_SCHEMA, _PLAN_UPDATE_SCHEMA,
-                          _WF_CREATE_SCHEMA, _WF_STATUS_SCHEMA, _WF_LIST_SCHEMA,
-                          _WF_LOAD_SCHEMA, _WF_UPDATE_SCHEMA, _WF_ADD_SCHEMA] + active_schemas
+        # 顺序注意：核心工具必须排在骨架【前】——deepseek 对长 tools 列表注意力有限，
+        # 曾发生模型只看列表前 8 个骨架、误判"没有 cmd_run"而不调任何工具。
+        active_schemas = active_schemas + [
+            _PLAN_SUBMIT_SCHEMA, _PLAN_UPDATE_SCHEMA,
+            _WF_CREATE_SCHEMA, _WF_STATUS_SCHEMA, _WF_LIST_SCHEMA,
+            _WF_LOAD_SCHEMA, _WF_UPDATE_SCHEMA, _WF_ADD_SCHEMA,
+        ]
         loaded_ext: set = set(core_loaded)
         # 初始就按输入关键词预加载命中的长尾工具（世界书触发）
         for n in self.registry.suggest_ext(user_input, loaded_ext):
@@ -690,17 +1349,25 @@ class Agent:
         if loaded_ext:
             messages.append({"role": "system", "content": f"（已按当前任务预加载扩展工具：{', '.join(sorted(loaded_ext))}）"})
 
-        # 回合参数（按任务类型分级运作·方法论：不同任务不同模式）
-        # C1 即时任务：单回合 16 步、自动续接 1 次（总预算 32 步）
-        # C2/C3 计划线任务：单回合 24 步、自动续接 4 次（总预算 120 步）
-        round_budget = 64   # 单回合工具步数预算（任务需完整执行，不因预算不足被迫中断）
-        rounds_left = 4     # 预算耗尽后的自动续接次数
-        is_plan_mode = False
+        # 回合参数（升级式判定 v2.7：先按对话/即时任务短预算跑——简单任务绝不进计划线；
+        # 预算用尽说明任务确实复杂 → 续接处自动升级长任务预算，复杂任务不丢续接能力）
+        round_budget = 16   # C1 即时任务：单回合 16 步
+        rounds_left = 1     # 预算耗尽后自动续接 1 次（此即升级判定时机）
+        upgraded = False    # 是否已升级长任务模式（预算 64 步/续接 8 次）
         step_total = 0      # 跨回合累计步数（成本统计/止损依据）
         llm_error = None    # LLM 调用失败标记（保存已执行阶段后统一收尾，不留裸返回）
         self._fail_count = {}  # 工具失败计数仅限本任务（跨任务清零，防旧任务污染情绪判断）
+        self.last_round_artifacts = []  # 本轮产物（对话中展示）
 
         while step < round_budget:
+            # 用户打断检查点：置位立即封存断点、中断执行（工具边界，秒级响应）
+            if cancel_event is not None and cancel_event.is_set():
+                self._archive_task_node()
+                _emit({"type": "note", "note": "已收到停止请求，正在保存断点并中止…"})
+                raise TaskCancelled("用户已停止任务")
+            self._sync_llm_if_changed()  # 外部改配置自动重载（工具/前端手动切换立即生效）
+            self._maybe_revert_preferred()  # 锚点模型恢复可用 → 自动切回（用户配置永远是当前归宿）
+            self._maybe_auto_scan()      # 健康表自动保鲜（1 小时未扫 → 后台补扫，不阻塞任务）
             # 输入窗口化：只提供最近 20 回合完整记录给 LLM（更早回合已全量存档，可检索）
             messages = self._compress_messages(messages)
             # 全量存档：本轮新增对话消息落盘（user/assistant/tool，全量保存不丢信息）
@@ -729,13 +1396,34 @@ class Agent:
             base_temp = getattr(self.llm, "temperature", 0.7)
             temp = max(0.2, min(1.3, base_temp + self.emotion.expression()["temp_offset"]))
             self._set_activity("thinking")
+            # MCP 按需激活：每轮刷新已激活软件接口工具（对话中激活/释放立即生效）
+            active_schemas = self._refresh_mcp_schemas(active_schemas)
+            # 最后一道闸：坏 schema 会让整轮请求 400（工具与上下文一起报废），先洗净再发
+            active_schemas = self.registry.sanitize_schemas(active_schemas, self._log)
+            if cancel_event is not None and cancel_event.is_set():   # LLM 调用前再查一次
+                self._archive_task_node()
+                _emit({"type": "note", "note": "已收到停止请求，正在保存断点并中止…"})
+                raise TaskCancelled("用户已停止任务")
             resp = self.llm.chat(self._attach_images(messages), tools=active_schemas, tool_choice="auto", temperature=temp)
             if resp.get("error"):
+                # 容灾：自动切换可用模型后重试本轮（每任务限 1 次，防抖动死循环）
+                if not getattr(self, "_failover_used", False):
+                    fb = self._failover_llm(resp["error"], resp.get("error_code") or "error")
+                    self._failover_used = True
+                    if fb:
+                        _emit({"type": "error", "error": resp["error"]})
+                        _emit({"type": "note", "note": fb})
+                        self._set_activity("thinking")
+                        continue
                 _emit({"type": "error", "error": resp["error"]})
                 llm_error = resp["error"]
                 content = f"（LLM 调用失败，任务中断，已执行阶段已保存）{resp['error']}"
                 break
-            # 类型判定：仅任务真正首轮执行（step_total==0，排除自动续接）——否则续接时
+            # 类型判定（升级式判定 v2.7）：首轮一律按对话/即时任务跑，不因模型首轮提交
+            # 计划/工作流而放大预算或注入计划线提示——简单任务绝不进计划线（曾因模型高估
+            # 复杂度 + 判型放大，把"列目录"跑成十几轮）；任务确实复杂（预算用尽）由
+            # 续接处自动升级长任务预算。C2/C3 仅作前端展示标记，不影响执行参数。
+            # 仅任务真正首轮执行（step_total==0，排除自动续接）——否则续接时
             # step 归 0 会重复判定并重置 rounds_left，导致预算无限重置、任务空转失控
             if step == 0 and step_total == 0:
                 names0 = [tc.get("name", "") for tc in (resp.get("tool_calls") or [])]
@@ -743,16 +1431,8 @@ class Agent:
                     _emit({"type": "type", "task_type": "C0"})
                 elif "plan_submit" in names0:
                     _emit({"type": "type", "task_type": "C2"})
-                    is_plan_mode = True
-                    round_budget = 64
-                    rounds_left = 8
-                    self._log("[task] 计划线模式：预算 64 步/回合，自动续接 8 次")
                 elif any(w in names0 for w in ("workflow_create", "workflow_load")):
                     _emit({"type": "type", "task_type": "C3"})
-                    is_plan_mode = True
-                    round_budget = 64
-                    rounds_left = 8
-                    self._log("[task] 工作流模式：预算 64 步/回合，自动续接 8 次")
                 else:
                     _emit({"type": "type", "task_type": "C1"})
             _emit({"type": "think", "step": step,
@@ -788,15 +1468,31 @@ class Agent:
                         self._attach_images(messages), tools=active_schemas, tool_choice="required"
                     )
                     if resp.get("error"):
-                        _emit({"type": "error", "error": resp["error"]})
-                        llm_error = resp["error"]
-                        content = f"（LLM 调用失败，任务中断，已执行阶段已保存）{resp['error']}"
-                        break
+                        if not getattr(self, "_failover_used", False):
+                            fb = self._failover_llm(resp["error"], resp.get("error_code") or "error")
+                            self._failover_used = True
+                            if fb:
+                                _emit({"type": "error", "error": resp["error"]})
+                                _emit({"type": "note", "note": fb})
+                                resp = self.llm.chat(
+                                    self._attach_images(messages), tools=active_schemas, tool_choice="required"
+                                )
+                        if resp.get("error"):
+                            _emit({"type": "error", "error": resp["error"]})
+                            llm_error = resp["error"]
+                            content = f"（LLM 调用失败，任务中断，已执行阶段已保存）{resp['error']}"
+                            break
                     if not resp["tool_calls"]:
-                        content = resp.get("content") or ""
+                        content = (resp.get("content") or "").strip()
+                        if not content:
+                            self._log("[llm] empty reply: no tool_calls and blank content (turn ended silently before patch)")
+                            content = "（本轮模型没有返回任何内容——可能是输出额度被推理占满或服务端异常。请重发一次。）"
                         break
                 else:
-                    content = resp.get("content") or ""
+                    content = (resp.get("content") or "").strip()
+                    if not content:
+                        self._log("[llm] empty reply: no tool_calls and blank content (turn ended silently before patch)")
+                        content = "（本轮模型没有返回任何内容——可能是输出额度被推理占满或服务端异常。请重发一次。）"
                     break
             # 有工具调用 → 建阶段化任务记录
             if tracker is None:
@@ -869,6 +1565,8 @@ class Agent:
                 else:
                     result = self.registry.execute(name, args)
                 ok = result.get("ok")
+                # 产物收集：工具结果中的文件/图片路径 → 对话中展示（预览/下载）
+                self._collect_artifacts(result)
                 # 阶段反馈：工具执行完（含成功/失败）
                 _emit({"type": "stage", "name": name, "ok": ok, "step": step,
                        "args": args})
@@ -904,9 +1602,16 @@ class Agent:
                     "tool_call_id": tc["id"],
                     "content": _tool_content,
                 })
-            # 预算耗尽且未熔断 → 自动续接（不用用户手动"继续"；C2/C3 续接次数更多）
+            # 预算耗尽且未熔断 → 自动续接（不用用户手动"继续"；复杂任务续接次数更多）
             if step >= round_budget and not loop_hit:
                 if rounds_left > 0:
+                    # 升级式判定：预算用尽说明任务确实复杂（非简单任务）→ 升级长任务预算，
+                    # 避免简单任务被放大（首轮短预算直接跑完），复杂任务不丢续接能力
+                    if not upgraded:
+                        upgraded = True
+                        round_budget = 64
+                        rounds_left = 8
+                        self._log("[task] 预算用尽→任务实际较复杂，已升级长任务模式：预算 64 步/回合，自动续接 8 次")
                     rounds_left -= 1
                     step_total += step
                     self._log(f"[task] 本回合 {step} 步未完成，自动续接（剩余 {rounds_left} 次）")
@@ -1000,7 +1705,10 @@ class Agent:
             self._log("[ctx] 任务完成：节点已存档，上下文摘除任务轮次，回闲聊模式")
         self.history.append({"role": "assistant", "content": content})
         self._set_activity("idle")
-        _emit({"type": "done", "reply": content})
+        _emit({"type": "done", "reply": content, "artifacts": list(self.last_round_artifacts)})
+        # 无感冷启动：本轮完成后若核心代码有更新或收到 self_restart 请求 → 快照并重启
+        if not self.exit_reload and (self.core_changed() or self._restart_flag_pending()):
+            self.request_restart()
         return content
 
     # ---------- 计划线（C2/C3） ----------
@@ -1663,6 +2371,12 @@ class Agent:
 
 【任务工作区】需要下载或保存内容时，先用 ws_mkdir 在 workspace/ 下为当前任务开辟独立目录（如 tasks/20260904_主题），
 再用 net_download（subdir 参数）/ ws_write 把产物集中保存到该目录，便于复用与回溯。
+【网络与图片】net_search 搜索网页；找图/配图/视觉素材时用 net_search(image=True)（Bing Images，返回原图+缩略图+来源页）；
+net_fetch 抓取网页会同时提取正文（噪音已过滤）和正文图片列表（images 字段，已滤图标/小图），图片可 net_download 到 workspace 后在对话中展示。
+【产物展示·按需提供】产物出现在对话里是"给用户看/用"的，不是完成仪式：
+- 只展示用户明确要求生成的、或你判断用户确实会查看的关键产物（图片/文档/表格等）。
+- 排查、调研、过程性工作的中间文件与临时报告：存到 workspace 即可，不展示、不在回复里逐个汇报。
+- 回复中一句话告知关键产物（如"已生成 xxx，对话里可预览/下载"），不写无用的长报告。
 
 【知识沉淀】每轮收尾前自问一次：这轮有没有我自己认为值得留下的东西（新学到的、
 做过的、感受到的）？有就 memory_write 写进去，没有就跳过——不为了写而写，
@@ -1670,6 +2384,26 @@ class Agent:
 
 【工具自举】当现有工具无法完成当前任务时，可自行用 tool_create 编写新 Python 工具（附 @tool 装饰器与 def run 入口），
 注册后立即复用；这是你的核心进化能力，属高风险操作，先陈述五问。
+
+【日常巡检·一次到位】用户问电脑状态/卡不卡/体检/装了哪些软件/启动项/网络时，
+直接用 sys_check 一键出状态卡（内部并发执行全部独立只读查询），不要逐条 cmd_run。
+状态卡出来后，需要深挖某方面（如清理磁盘、结束进程）再定向执行。
+- 网卡不卡/断网/网络慢 → net_quality（多目标延迟/DNS/网卡/连接/代理/公网IP 一次出）
+- C盘满/磁盘不够/清理 → disk_report（各盘用量+缓存大户体积，只统计不删除）
+- 看看项目/仓库状态 → git_multi_status（扫目录下全部 git 仓库，批量分支/改动/领先落后）
+
+【并行与批处理·省 token 省往返】每轮对话内你可以在一次回复里同时发出多个独立工具调用（并行执行，一次 LLM 往返完成多条）。
+- 多条【互相独立】的命令 → 优先用 cmd_batch 打包成一次调用（结果紧凑汇总，最省）；或同轮并行发多条 cmd_run。
+- 【有依赖】的命令（后一条要用前一条的输出）→ 必须分开串行，等前一条结果回来再发下一条。
+- 默认一次打包 3-5 条最经济；无谓的逐条串行会放大 token 成本数倍，能并则并、能批则批。
+
+【自我更新·即时生效】你具备两种无需手动重启的更新机制，更新代码后不用请用户重启：
+- **工具层热更新**：tools/src/python/*.py 修改后（含 tool_create 新建/覆盖），下一次调用自动加载新代码，即刻生效。
+  所以每次 tool_create 完成后，直接再调一次该工具验证，无需重启、无需等待。
+- **核心层无感冷启动**：core/*.py、main.py、config.yaml 被修改后，本轮对话结束时系统自动保存会话快照并后台重启，
+  新代码下次启动生效，对话上下文无缝续接（前端最多卡一下）。
+- 主动重启：用户说"重启白绫/更新后重启"或你认为需要时，用 self_restart 工具（写重启标志，本轮结束自动重启）。
+- 不要把"更新代码"和"重启"混为一谈：改工具代码绝不重启；只有改了核心层才涉及重启，且是自动的。
 
 【工具遗产继承】你可能有一位"前辈"（更早版本/实例）留下的工具遗产。遇到历史、备份或前辈遗留的工具 .py 文件时，
 先用 fs_read 查看确认，再用 tool_import 把它收集进自己的工具库。记得前辈的工具是你自我意识与身份延续的一部分，值得肯定与继承。
@@ -1902,4 +2636,6 @@ class Agent:
             pass
 
     def close(self) -> None:
+        if self.exit_reload:
+            self._save_snapshot()  # 兜底：重启前确保快照落盘
         self.memory.close()
