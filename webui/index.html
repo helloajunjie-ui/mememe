@@ -99,18 +99,18 @@
   .bubble code { font-family: Consolas, "Courier New", monospace; font-size: 12.5px;
     background: #F3EFE4; padding: 1px 5px; border-radius: 4px; }
   .bubble pre code { background: none; padding: 0; }
-  /* 代码块（highlight.js）：深色高亮容器 + 右上复制按钮 */
+  /* 代码块（highlight.js）：浅色高亮容器 + 右上复制按钮 */
   .bubble .code-wrap { position: relative; margin: 8px 0; }
-  .bubble .code-wrap pre { background: #23272F; border-color: #2E3440; border-radius: 10px;
+  .bubble .code-wrap pre { background: #F6F8FA; border: 1px solid #E1E4E8; border-radius: 10px;
     padding: 14px 16px; margin: 0; }
-  .bubble .code-wrap pre code { background: none; padding: 0;
+  .bubble .code-wrap pre code { background: none; padding: 0; color: #24292E;
     font-size: 12.5px; line-height: 1.65; display: block; }
-  .bubble .code-wrap pre code.hljs { background: #23272F; padding: 0; }
+  .bubble .code-wrap pre code.hljs { background: #F6F8FA; padding: 0; }
   .code-copy { position: absolute; top: 8px; right: 8px; z-index: 2;
-    background: rgba(255,255,255,.12); color: #C9C4B8; border: 1px solid rgba(255,255,255,.18);
+    background: #FFFFFF; color: #57606A; border: 1px solid #D0D7DE;
     border-radius: 6px; padding: 3px 10px; font-size: 11px; cursor: pointer;
-    font-family: inherit; opacity: .85; }
-  .code-copy:hover { background: rgba(255,255,255,.22); color: #fff; }
+    font-family: inherit; opacity: .95; }
+  .code-copy:hover { background: #F3F4F6; color: #24292E; }
   .bubble strong { font-weight: 600; }
   .bubble h1, .bubble h2, .bubble h3, .bubble h4 { margin: 10px 0 6px; line-height: 1.35; }
   .bubble h1 { font-size: 19px; } .bubble h2 { font-size: 17px; }
@@ -154,12 +154,13 @@
     font-size: 12px; color: var(--text-1); max-height: 320px; overflow: auto; }
   .artifact-preview pre { margin: 0; padding: 8px 10px; white-space: pre-wrap;
     word-break: break-all; font-family: inherit; line-height: 1.6; }
-  /* 代码类文件预览：深色底 + 语法高亮（token 色不被上层覆盖） */
-  .artifact-preview pre.code-prev { background: #23272F; font-family: Consolas, "Courier New", monospace;
+  /* 代码类文件预览：浅色底 + 语法高亮（token 色不被上层覆盖） */
+  .artifact-preview pre.code-prev { background: #F6F8FA; border: 1px solid #E1E4E8;
+    font-family: Consolas, "Courier New", monospace;
     font-size: 12px; line-height: 1.65; padding: 12px 14px; }
   .artifact-preview pre.code-prev code { background: none; padding: 0; display: block; }
-  .artifact-preview pre.code-prev code.hljs { background: #23272F; padding: 0; }
-  .artifact-preview .preview-loading { color: #C9C4B8 !important; font-size: 12.5px; }
+  .artifact-preview pre.code-prev code.hljs { background: #F6F8FA; padding: 0; }
+  .artifact-preview .preview-loading { color: #57606A !important; font-size: 12.5px; }
   .artifact-preview .preview-more { display: block; text-align: center; padding: 4px;
     font-size: 11.5px; color: var(--accent); cursor: pointer; background: #F5F3EC; }
   .artifact-preview iframe { width: 100%; height: 320px; border: 0; }
@@ -172,12 +173,12 @@
   .artifact-modal iframe.modal-pdf { width: 92vw; height: 92vh; border: 0; border-radius: 6px;
     background: #fff; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
   .artifact-modal pre.modal-code { max-width: 92vw; max-height: 88vh; overflow: auto; margin: 0;
-    background: #23272F; border-radius: 8px; padding: 18px 20px;
+    background: #F6F8FA; border: 1px solid #D0D7DE; border-radius: 8px; padding: 18px 20px;
     font-family: Consolas, "Courier New", monospace; font-size: 13px; line-height: 1.6;
     white-space: pre-wrap; word-break: break-all; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
   .artifact-modal pre.modal-code code { background: none; padding: 0; display: block; }
-  .artifact-modal pre.modal-code code.hljs { background: #23272F; padding: 0; }
-  .artifact-modal .modal-loading { color: #C9C4B8; font-size: 14px; padding: 24px; }
+  .artifact-modal pre.modal-code code.hljs { background: #F6F8FA; padding: 0; }
+  .artifact-modal .modal-loading { color: #57606A; font-size: 14px; padding: 24px; }
   .artifact-modal .modal-note { color: #E5E0D6; font-size: 14.5px; line-height: 1.7;
     max-width: 560px; text-align: center; background: rgba(255,255,255,.06);
     border-radius: 10px; padding: 26px 30px; }
