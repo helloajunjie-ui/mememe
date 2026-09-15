@@ -1,13 +1,13 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title BaiLing Launcher
+title Suyue Launcher
 
 set "MIRROR=https://pypi.tuna.tsinghua.edu.cn/simple"
 set "PYW=%~dp0.venv\Scripts\pythonw.exe"
 
 echo ============================================
-echo   白绫 BaiLing 启动器（开箱即用）
+echo   素月 Suyue 启动器（开箱即用）
 echo ============================================
 
 REM ---- 1. Python 环境：有 venv 直接用；无则系统 python 建；再无则国内下载安装 ----
@@ -45,8 +45,8 @@ if not exist "%~dp0.venv\.deps_ok" (
 )
 
 REM ---- 2. 启动（start 分离，pythonw 后台无窗口，本窗口自动关闭） ----
-echo [3/3] 启动白绫...
-REM ---- gateway: start Go LLM gateway (hidden) before BaiLing ----
+echo [3/3] 启动素月...
+REM ---- gateway: start Go LLM gateway (hidden) before Suyue ----
 if exist "%~dp0llm-gateway\bailing-gateway.exe" (
   wscript.exe "%~dp0llm-gateway\start-gateway-hidden.vbs"
 )
@@ -54,7 +54,7 @@ if exist "%~dp0llm-gateway\bailing-gateway.exe" (
 start "" "%PYW%" "%~dp0launcher.py" --entry "webui/server.py"
 ping -n 4 127.0.0.1 >nul
 start "" "http://127.0.0.1:8765"
-echo 白绫已启动：http://127.0.0.1:8765
+echo 素月已启动：http://127.0.0.1:8765
 exit /b 0
 
 :fail
