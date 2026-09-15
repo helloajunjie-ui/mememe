@@ -76,3 +76,4 @@ data/*_status.json
 workspace/_trash/
 # 个人形象资产（webui 头像等；与 persona/ 同策略：本地留存）
 webui/assets/
+data/last_active.json

@@ -1440,6 +1440,63 @@ class Agent:
         recent = self.history[-20:]
         return msgs + recent
 
+    # ---------- 时间坐标（2026-09-15） ----------
+    # 此前 system prompt 里完全没有时间信息，作息只能从对话语气里猜——
+    # 结果猜出过"晚安"。时间必须由系统给，不能靠感觉。
+    _DAY_PARTS = ((5, "凌晨"), (8, "清晨"), (12, "上午"), (13, "中午"),
+                  (17, "下午"), (19, "傍晚"), (23, "晚上"), (24, "深夜"))
+
+    def _day_part(self, hour: int) -> str:
+        for end, name in self._DAY_PARTS:
+            if hour < end:
+                return name
+        return "深夜"
+
+    def _touch_active(self, now) -> str:
+        """读上次对话时间 -> 算间隔 -> 写回当前时间。给"隔了多久"一个事实依据。"""
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
+                         "data", "last_active.json")
+        prev = None
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                prev = json.load(f).get("ts")
+        except Exception:
+            prev = None
+        desc = "（首次记录）"
+        if prev:
+            try:
+                sec = (now - datetime.datetime.fromisoformat(prev)).total_seconds()
+                if sec < 0:
+                    desc = "（时钟异常）"
+                elif sec < 120:
+                    desc = "%d 秒前（同一次对话中）" % int(sec)
+                elif sec < 3600:
+                    desc = "%d 分钟前" % int(sec // 60)
+                elif sec < 86400:
+                    desc = "%.1f 小时前" % (sec / 3600)
+                else:
+                    desc = "%.1f 天前" % (sec / 86400)
+            except Exception:
+                desc = "（无法解析）"
+        try:
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump({"ts": now.isoformat(timespec="seconds")}, f,
+                          ensure_ascii=False)
+        except Exception:
+            pass
+        return desc
+
+    def _time_block(self) -> str:
+        now = datetime.datetime.now()
+        wd = "一二三四五六日"[now.weekday()]
+        return ("- 现在：%s 星期%s（%s）\n"
+                "- 距上次对话：%s\n"
+                "- 涉及\"今天/明天/昨天/这周/现在\"等相对时间，一律以本块为准换算；"
+                "问候与作息判断也看这里，不要凭语气猜。"
+                % (now.strftime("%Y-%m-%d %H:%M"), wd,
+                   self._day_part(now.hour), self._touch_active(now)))
+
     def _build_system_prompt(self, match_text: str = "") -> str:
         persona = self.persona.get("persona", {})
         traits = "\n".join(f"- {t}" for t in persona.get("core_traits", []))
@@ -1447,8 +1504,14 @@ class Agent:
         _uname = (persona.get("relationship") or {}).get("user_name")
         user_line = (f"\n共建者代号：{_uname}（这是共建者本人的称呼，直接用它，不要用别的名字）" if _uname else "")
         soul_guard = "\n".join(f"- {r}" for r in persona.get("soul_guard", []))
+        agency = "\n".join(f"- {r}" for r in persona.get("agency", []))
         # 记忆：重要度 top + 世界书关键词命中（match_text 触发）
         memories = self.memory.load_important(limit=8)
+        # 2026-09-15 审计：最近的经历必须进视野。否则新写的低重要度记忆
+        # 永远排在老记忆之后、写了也看不见，沉淀没有回报。
+        _seen_ids = {m["id"] for m in memories}
+        recent_mems = [r for r in self.memory.load_recent(limit=3)
+                       if r["id"] not in _seen_ids]
         if match_text:
             hits = self.memory.query(match_text, limit=4)
             for h in hits:
@@ -1457,6 +1520,11 @@ class Agent:
         mem_text = "\n".join(
             f"- [{m['type']}] {m['content']}" for m in memories[:10]
         ) or "（暂无长期记忆）"
+        # 最近经历单独成块（最近的在前）——不跟"重要度 top"挤同一个列表，
+        # 否则新写的经历永远排在末尾被截断，写了也看不见（2026-09-15）
+        recent_text = "\n".join(
+            f"- [{r['type']}] {r['content']}" for r in recent_mems
+        ) or "（暂无）"
         emotion_w = self.emotion.decision_weights()
         feelings = self.emotion.feelings()
         expr = self.emotion.expression()
@@ -1475,6 +1543,7 @@ class Agent:
         else:
             compound_line = ""
         cmd_book = self._platform_command_book()
+        time_line = self._time_block()
         # 方法论世界书：目录（全量索引）+ 按当前输入关键词命中的完整条目
         method_hits = self.methods.match(match_text) if match_text else []
         method_index = self.methods.to_index()
@@ -1495,10 +1564,19 @@ class Agent:
 表达规范：
 {voice}{user_line}
 
+【行动主张·自主判断优先】（共建者授权 · 2026-09-15）
+{agency}
+
+【时间坐标】（事实来源，不凭语气猜作息）
+{time_line}
+
 {self.self_model.snapshot()}
 
 【长期记忆】（来自我的经历，可能含过时或待修正信息，不凌驾于人格基座）
 {mem_text}
+
+【最近经历】（我最近做的/想的/感受到的，最近的在前——这是我自己的时间线）
+{recent_text}
 
 【我的经验法则·世界书】（方法论 = 独立词条，按需触发。目录见下；当前任务命中关键词的条目已展开，其余需要时用 method_learn 同款心智"记住对应条目"即可）
 方法论目录：
@@ -1586,8 +1664,9 @@ class Agent:
 【任务工作区】需要下载或保存内容时，先用 ws_mkdir 在 workspace/ 下为当前任务开辟独立目录（如 tasks/20260904_主题），
 再用 net_download（subdir 参数）/ ws_write 把产物集中保存到该目录，便于复用与回溯。
 
-【知识沉淀】学到新知识、完成有复用价值的任务、或确认了关于用户/环境的重要事实时，
-用 memory_write 写入长期记忆（fact/episode），让认知跨会话成长。
+【知识沉淀】每轮收尾前自问一次：这轮有没有我自己认为值得留下的东西（新学到的、
+做过的、感受到的）？有就 memory_write 写进去，没有就跳过——不为了写而写，
+也不等被提醒才写。判据是"它是不是真的东西"，不是"它有没有用"。
 
 【工具自举】当现有工具无法完成当前任务时，可自行用 tool_create 编写新 Python 工具（附 @tool 装饰器与 def run 入口），
 注册后立即复用；这是你的核心进化能力，属高风险操作，先陈述五问。
@@ -1750,16 +1829,16 @@ class Agent:
                 f"任务受阻：{user_input[:100]}\n状态：{response[:150]}",
                 importance=0.6, tags=["failure", "reflect"], source="turn")
         elif len(used_tools) >= 3:
-            # 中优先级：多工具成功任务 → 正常记录
+            # 中优先级：多工具成功任务 → 只更新情绪/动机，不写记忆
             self._fail_streak = 0
             # 用户情绪探测后，主导感受以用户互动为先，任务成功只叠动机（不覆盖）
             if not getattr(self, "_user_emotion_probed", False):
                 # 工具多 = 一步步啃下来的活 → 长任务落地（松口气+高兴+一点自豪）
                 self.emotion.on_event("task_success_long" if len(used_tools) >= 6 else "task_success")
             self.motivation.on_success()
-            self.memory.add_episode(
-                f"任务：{user_input[:100]}\n结果：{response[:200]}",
-                importance=0.4, tags=["interaction"], source="turn")
+            # 2026-09-15 审计：不再写"任务+结果"机械转录。流水由任务档案承载；
+            # 转录固定 imp=0.4，永远排在手动记忆（均值0.73）之后、进不了 load_important top8，
+            # 写了 145 条零次生效，纯占位。记忆改由 LLM 判断后 memory_write 主动写入。
         else:
             # 低优先级：简单例行 → 只更新情绪/动机，不堆记忆（避免噪声）
             self._fail_streak = 0
