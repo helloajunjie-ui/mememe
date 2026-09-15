@@ -1,11 +1,11 @@
-"""MCP 独立服务核心（自包含，从白绫 core/mcp.py 提炼，去掉 registry 依赖）。
+"""MCP 独立服务核心（自包含，从素月 core/mcp.py 提炼，去掉 registry 依赖）。
 
 设计：
 - MCP 是开放协议，MCP server 通过标准 tools 暴露能力（blender-mcp / gobot-mcp /
   filesystem / playwright 等），本模块作为 MCP **客户端**管理这些连接。
 - 新增"激活"概念：activate(server) 拉取并缓存工具清单；deactivate 释放。
-  白绫侧只在激活状态下装配对应工具 schema（按需激活，不常驻核心工具）。
-- 独立进程运行，供白绫通过 HTTP API 调用，与 LLM 网关（Go）架构对称。
+  素月侧只在激活状态下装配对应工具 schema（按需激活，不常驻核心工具）。
+- 独立进程运行，供素月通过 HTTP API 调用，与 LLM 网关（Go）架构对称。
 """
 from __future__ import annotations
 
@@ -401,7 +401,7 @@ class McpGateway:
             return None
 
     def analyze_deps(self, server: str) -> Dict:
-        """评估某软件接口的依赖/凭据状态，产出安装计划（供白绫通知用户确认）。"""
+        """评估某软件接口的依赖/凭据状态，产出安装计划（供素月通知用户确认）。"""
         cfg = self.mgr.servers.get(server)
         if not cfg:
             return {"ok": False, "error": f"MCP server 未配置: {server}"}
@@ -418,7 +418,7 @@ class McpGateway:
             ver = self._read_version(path) if path else ""
             if not path:
                 issues.append(f"本体软件未找到: {app_exe}（装好后本接口才能用；"
-                              f"装的位置白绫可用 app_probe 探查）")
+                              f"装的位置素月可用 app_probe 探查）")
             elif not ver:
                 issues.append(f"本体 {app_exe} 已找到（{path}），但版本读取失败，"
                               f"无法校验是否 >= {min_ver}")
@@ -455,7 +455,7 @@ class McpGateway:
                     plan = {"type": "pip", "action": "install", "pkg": pip_pkg,
                             "size_mb": None, "est_sec": 60,
                             "env_impact": f"pip 安装到当前 Python 环境（{sys.executable}，"
-                                          f"白绫 venv，隔离不影响系统 Python）"}
+                                          f"素月 venv，隔离不影响系统 Python）"}
             except Exception:  # noqa: BLE001
                 issues.append(f"无法检查 Python 包: {pip_pkg}")
         # 3) 命令类型判定
@@ -493,14 +493,14 @@ class McpGateway:
                 issues.append(f"可执行文件不存在: {cmd}")
                 if cfg.get("install_mode") == "manual":
                     # 大型桌面软件（3DMAX/Photoshop/Blender 本体等）：用户自行安装，
-                    # 白绫只说明，绝不自动下载（几 GB、需授权/序列号、环境复杂）
+                    # 素月只说明，绝不自动下载（几 GB、需授权/序列号、环境复杂）
                     issues.append("这是大型软件，无法自动安装，需用户自行安装（下载安装包、"
                                   "按官方流程安装）；安装完成后重新 mcp_connect 即可。")
                     plan = {"type": "manual", "action": "user_install",
                             "pkg": cmd,
                             "size_mb": None, "est_sec": None,
                             "env_impact": "需用户手动下载并安装（大型桌面软件，"
-                                          "涉及安装目录/授权/系统注册），白绫不代装"}
+                                          "涉及安装目录/授权/系统注册），素月不代装"}
                 elif "ffmpeg" in low:
                     plan = {"type": "binary", "action": "install", "pkg": "ffmpeg",
                             "size_mb": 90, "est_sec": 180,
@@ -513,7 +513,7 @@ class McpGateway:
                 "installable": bool(plan and plan.get("action") in ("auto", "install"))}
 
     def install_deps(self, server: str, upgrade: bool = False) -> Dict:
-        """执行依赖安装/升级（白绫已获得用户确认后调用）。
+        """执行依赖安装/升级（素月已获得用户确认后调用）。
 
         upgrade=True 时对 pip 型执行 pip install -U（走镜像）；npm 型说明 npx 机制；
         大型软件（manual）仍拒绝代装。"""
@@ -548,7 +548,7 @@ class McpGateway:
         kind, action = plan["type"], plan["action"]
         if kind == "manual" and action == "user_install":
             return {"ok": False, "error": f"大型软件需用户自行安装（{plan['pkg']}），"
-                                          f"白绫不自动代装；安装完成后重新 mcp_connect 即可。"}
+                                          f"素月不自动代装；安装完成后重新 mcp_connect 即可。"}
         if kind == "npm" and action == "auto":
             return {"ok": True, "server": server, "note": "npm 包无需预装：直接激活时自动下载。"}
         if kind == "npm" and action == "check":
@@ -598,7 +598,7 @@ class McpGateway:
 
     # ---------- 对外操作 ----------
     def servers_info(self) -> List[Dict]:
-        """配置的软件接口目录 + 状态（描述/激活/工具数）。白绫据此决定激活哪个。"""
+        """配置的软件接口目录 + 状态（描述/激活/工具数）。素月据此决定激活哪个。"""
         out = []
         for name, cfg in self.mgr.servers.items():
             tools = self.active.get(name)
@@ -662,7 +662,7 @@ class McpGateway:
                 "active": {k: [t["name"] for t in v] for k, v in self.active.items()}}
 
     def schemas(self, server: str) -> Dict:
-        """已激活 server 的 OpenAI function-calling schema（白绫装配 tools 用）。"""
+        """已激活 server 的 OpenAI function-calling schema（素月装配 tools 用）。"""
         tools = self.active.get(server)
         if tools is None:
             return {"ok": False, "error": f"server 未激活: {server}"}
@@ -691,7 +691,7 @@ class McpGateway:
             args: Optional[List[str]] = None, env: Optional[Dict[str, str]] = None,
             url: Optional[str] = None, transport: str = "http",
             install_mode: str = "", pip: str = "") -> Dict:
-        """添加/更新软件接口配置（白绫侧通过 API 新增来源）。"""
+        """添加/更新软件接口配置（素月侧通过 API 新增来源）。"""
         with self._lock:
             cfg = self.mgr.add_server(name, command=command, args=args, env=env,
                                       url=url, transport=transport)

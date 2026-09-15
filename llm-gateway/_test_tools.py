@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""验证带 tools 的调用 → tool_calls 格式透传（对齐白绫原有 {id,name,arguments}）"""
+"""验证带 tools 的调用 → tool_calls 格式透传（对齐素月原有 {id,name,arguments}）"""
 import sys, json, urllib.request
 sys.path.insert(0, r"F:\me\self-agent")
 from core.llm import LLMGateway

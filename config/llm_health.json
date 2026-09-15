@@ -1,25 +1,32 @@
 {
-  "_updated_at": 1789473686,
+  "_updated_at": 1789477297.2420242,
   "https://api.deepseek.com": {
     "models": {
       "deepseek-flash": {
         "ok": true,
-        "latency": 0.1128846,
-        "checked_at": 1789471599
+        "latency": 0.75,
+        "error": "",
+        "reply_ok": false,
+        "tested_at": 1789477296.6674173
       },
       "deepseek-v4-pro": {
         "ok": true,
-        "latency": 0.1231354,
-        "checked_at": 1789473686
+        "latency": 1.32,
+        "error": "",
+        "reply_ok": false,
+        "tested_at": 1789477297.240666
       }
-    }
+    },
+    "tested_at": 1789477297.2420242
   },
   "https://api.yuegle.com": {
     "models": {
       "gemini-2.5-flash": {
         "ok": true,
-        "latency": 1.1331386,
-        "checked_at": 1789454792
+        "latency": 2.14,
+        "error": "",
+        "reply_ok": false,
+        "tested_at": 1789477295.908007
       },
       "gemini-2.5-flash-lite": {
         "ok": false,
@@ -66,8 +73,10 @@
         "latency": 2.96
       },
       "gemini-3.1-pro-preview-high": {
-        "ok": true,
-        "latency": 2.86
+        "ok": false,
+        "latency": 1.82,
+        "error": "HTTP 503 {\n  \"error\": {\n    \"code\": 503,\n    \"message\": \"No capacity available for model gemini-3.1-pro on the server\",\n    \"status\": \"UNAVAILABLE\",\n    \"details\": [\n   ",
+        "tested_at": 1789477295.586879
       },
       "gemini-3.1-pro-preview-low": {
         "ok": true,
@@ -78,6 +87,7 @@
         "latency": 7.84,
         "error": "ReadTimeout: The read operation timed out"
       }
-    }
+    },
+    "tested_at": 1789477295.909437
   }
 }

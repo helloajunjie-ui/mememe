@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""白绫侧 MCP 独立服务接入端到端测试（模拟 agent 装配链路，不跑 LLM）"""
+"""素月侧 MCP 独立服务接入端到端测试（模拟 agent 装配链路，不跑 LLM）"""
 import sys, time
 sys.path.insert(0, r"F:\me\self-agent")
 

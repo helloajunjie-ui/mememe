@@ -157,7 +157,7 @@ def _clone(repo: str, base: Path, prefer: str, timeout: float, branch: str) -> d
         "note": note,
         "files": n_all,
         "py_files": n_py,
-        "next": "可对本目录用 tool_scan 发现白绫格式工具，再用 tool_import 导入工具库",
+        "next": "可对本目录用 tool_scan 发现素月格式工具，再用 tool_import 导入工具库",
     }
 
 

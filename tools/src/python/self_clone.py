@@ -1,4 +1,4 @@
-"""内置工具：self_clone —— 复制白绫自我到目标目录（搬家 / 生姐妹）。
+"""内置工具：self_clone —— 复制素月自我到目标目录（搬家 / 生姐妹）。
 
 两种语义（2026-09-13 引入，修复"姐妹共享云端身份导致互相删档"）：
 
@@ -48,7 +48,7 @@ _CLOUD_CRED_RE = re.compile(r"^\s*CLOUD_WEBDAV_(USER|PASS)\s*=")
 
 
 def _has_identity(p: Path) -> bool:
-    """判定目录是否已是一个白绫实例。"""
+    """判定目录是否已是一个素月实例。"""
     return (p / "data" / "self.yaml").exists()
 
 

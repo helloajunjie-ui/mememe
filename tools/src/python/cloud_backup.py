@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""白绫云存档：instance_id 身份 + 自动注册 + AES-256-GCM 加密上传 + 多版本回滚。
+"""素月云存档：instance_id 身份 + 自动注册 + AES-256-GCM 加密上传 + 多版本回滚。
 
 架构（与本地私有备份互补）：
 - 本地 backup_private.py   → backups/private_<ts>.zip（本地复活点，30 份）
@@ -244,7 +244,7 @@ def encrypt_bytes(data: bytes, key: bytes, key_id: int = 1) -> bytes:
 def decrypt_bytes(data: bytes, key: bytes) -> bytes:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     if not data.startswith(_MAGIC):
-        raise ValueError("不是白绫加密存档（缺文件头）")
+        raise ValueError("不是素月加密存档（缺文件头）")
     off = len(_MAGIC)
     key_id = data[off]
     if key_id != 1:

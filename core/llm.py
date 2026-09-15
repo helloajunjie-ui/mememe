@@ -1,8 +1,8 @@
-"""LLM 客户端 —— 白绫对话专用（Go LLM 网关客户端）。
+"""LLM 客户端 —— 素月对话专用（Go LLM 网关客户端）。
 
-白绫的 LLM 调用统一走独立 Go 网关（llm-gateway）：
-- 网关职责（白绫不再关心）：渠道/模型/key 管理、健康扫描、错误分型、自动容灾切换、锚点回切。
-- 本模块职责：把 /v1/chat 的请求发到网关，把回复转回白绫原有格式；
+素月的 LLM 调用统一走独立 Go 网关（llm-gateway）：
+- 网关职责（素月不再关心）：渠道/模型/key 管理、健康扫描、错误分型、自动容灾切换、锚点回切。
+- 本模块职责：把 /v1/chat 的请求发到网关，把回复转回素月原有格式；
   网关不可达时尝试自动拉起网关进程（保证"任何时候 API 稳定提供"）。
 - 不再使用 openai SDK：彻底规避 AttributeError: 'str' object has no attribute 'choices' 类崩溃。
 
@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional
 GATEWAY_DEFAULT_URL = "http://127.0.0.1:8766"
 
 # DeepSeek 思考预算上限（tokens）：限制每轮 reasoning 输出以控延迟。
-# 2026-09-15 实测：无预算时 deepseek-flash 全量思考 >60s 超时（白绫"变慢"根因）；
+# 2026-09-15 实测：无预算时 deepseek-flash 全量思考 >60s 超时（素月"变慢"根因）；
 # budget=2048/4096 后每轮 0.9-2.7s 可回，复杂推理（计划线/长任务）预算仍够用。
 _DEEPSEEK_THINKING_BUDGET = 2048
 
@@ -47,7 +47,7 @@ def _ping_url(url: str, timeout: float = 1.5) -> bool:
 def ensure_gateway_up() -> bool:
     """确保 Go 网关进程在（不在则静默拉起，无窗口）。返回是否就绪。
 
-    供白绫启动流程调用：白绫启动时保证 LLM 基础设施就绪。
+    供素月启动流程调用：素月启动时保证 LLM 基础设施就绪。
     """
     g = _resolve_gateway_config()
     if _ping_url(g["url"]):
@@ -74,7 +74,7 @@ def ensure_gateway_up() -> bool:
 
 
 class LLMGateway:
-    """白绫 → Go LLM 网关的轻量 HTTP 客户端（保持原 chat() 返回格式不变）。"""
+    """素月 → Go LLM 网关的轻量 HTTP 客户端（保持原 chat() 返回格式不变）。"""
 
     def __init__(
         self,
@@ -137,7 +137,7 @@ class LLMGateway:
             payload["tools"] = tools
             payload["tool_choice"] = tool_choice
         # DeepSeek 思考预算：限制每轮 reasoning 输出，显著降延迟（其他模型不支持该参数，跳过）
-        # 2026-09-15 诊断：白绫每轮 2-8s（偶尔 20s+）慢的根因是 thinking 全量思考；
+        # 2026-09-15 诊断：素月每轮 2-8s（偶尔 20s+）慢的根因是 thinking 全量思考；
         # budget_tokens 设上限后简单轮次 1-2s 可回，复杂推理（计划线）仍够用。
         model_name = str(getattr(self, "model", "") or "").lower()
         if model_name.startswith("deepseek"):
@@ -176,7 +176,7 @@ class LLMGateway:
                 "base_url": resp_data.get("base_url"),
                 "failover_note": resp_data.get("failover_note"),
             }
-        # 正常回复：透传网关信息（容灾已由网关完成，白绫只消费结果）
+        # 正常回复：透传网关信息（容灾已由网关完成，素月只消费结果）
         tcs = resp_data.get("tool_calls") or []
         return {
             "content": resp_data.get("content"),

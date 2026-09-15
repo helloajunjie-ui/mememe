@@ -1,15 +1,15 @@
 # AI 接入与渠道管理 · 设计文档
 
-> 白绫 Agent 的 LLM 接入 / 渠道管理 / 容灾机制设计。本文档整理现有实现中已踩平的结构、逻辑链与坑，约束"独立 Go 网关"形态。
-> 状态：v2.0（**Go 网关已完整落地**：`llm-gateway/` 独立进程，白绫对话已切换走网关 `/v1/chat`，渠道/key/容灾全部下沉网关）
+> 素月 Agent 的 LLM 接入 / 渠道管理 / 容灾机制设计。本文档整理现有实现中已踩平的结构、逻辑链与坑，约束"独立 Go 网关"形态。
+> 状态：v2.0（**Go 网关已完整落地**：`llm-gateway/` 独立进程，素月对话已切换走网关 `/v1/chat`，渠道/key/容灾全部下沉网关）
 
 ---
 
 ## 1. 定位与目标
 
-- **唯一职责**：把"模型对话"变成可靠的、可替换的服务——对外（白绫）只暴露 `chat / health / status / switch / scan`，内部负责渠道、健康、容灾、配置。
+- **唯一职责**：把"模型对话"变成可靠的、可替换的服务——对外（素月）只暴露 `chat / health / status / switch / scan`，内部负责渠道、健康、容灾、配置。
 - **核心不变式**：`base_url` 与 `api_key` 永远匹配；用户手动配置的模型（锚点）恢复可用后自动回切；任何切换必须验证通过才生效。
-- **当前形态**：Go 独立网关进程（`llm-gateway/bailing-gateway.exe`，仅 127.0.0.1 监听、单消费方无鉴权）；白绫 Python 侧退化为轻量 HTTP 客户端（`core/llm.py`），只消费 `/v1/chat` 结果，不再关心渠道 / key / 容灾。
+- **当前形态**：Go 独立网关进程（`llm-gateway/bailing-gateway.exe`，仅 127.0.0.1 监听、单消费方无鉴权）；素月 Python 侧退化为轻量 HTTP 客户端（`core/llm.py`），只消费 `/v1/chat` 结果，不再关心渠道 / key / 容灾。
 
 ---
 
@@ -17,7 +17,7 @@
 
 ```mermaid
 flowchart LR
-    subgraph 白绫 Agent(Python)
+    subgraph 素月 Agent(Python)
         turn["任务循环 turn()"]
         client["LLMGateway 客户端<br/>(HTTP, 仅 /v1/chat)"]
         ui["WebUI /api/llm/*（管理面暂留 Python）"]
@@ -42,7 +42,7 @@ flowchart LR
 
 | 层 | 职责 | 不做的事 |
 |---|---|---|
-| 白绫 Agent | 任务编排、记忆、工具、情绪 | 不碰 llm.json / 健康表 / 渠道 / key / 容灾 |
+| 素月 Agent | 任务编排、记忆、工具、情绪 | 不碰 llm.json / 健康表 / 渠道 / key / 容灾 |
 | Go LLM 网关 | 对话代理、错误分型、容灾、健康扫描、配置管理、锚点回切、key 一致性 | 不感知任务内容 |
 | 上游渠道 | 提供 OpenAI 兼容端点 | 无 |
 
@@ -223,14 +223,14 @@ flowchart TD
 ### 7.1 对话调用链
 
 ```
-用户输入 → 白绫 turn() → LLMGateway.chat()（HTTP POST 网关 /v1/chat）
+用户输入 → 素月 turn() → LLMGateway.chat()（HTTP POST 网关 /v1/chat）
   网关入口：热重载(外部改配置) → key 一致性自愈 → 回锚检查
   → chatOnce 调用当前 base/key/model
-  → 成功？→ 解析 content/tool_calls → 返回白绫
+  → 成功？→ 解析 content/tool_calls → 返回素月
   → 失败？→ ErrClass 分型 → 冷却窗内? → 候选生成(同源2+跨源2, 坏模型排除)
        → 逐个 probe 验证(ok 且 ≤8s) → 切换(写配置+锚点不动) → 重试当前请求
        → 全失败 → 明确错误 + 触发后台 scan
-  → 白绫拿到 content / failover_note（感知切换）→ 工具调用循环 → 回复
+  → 素月拿到 content / failover_note（感知切换）→ 工具调用循环 → 回复
 ```
 
 ### 7.2 启动链
@@ -238,7 +238,7 @@ flowchart TD
 ```
 启动.bat / server.py main → ensure_gateway_up()（网关不在→CREATE_NO_WINDOW 拉起→轮询 /health≤7s）
 网关 boot → 读 llm.json（缺失/损坏→.corrupt 备份+种子）→ key 一致性自愈 → 热重载就绪
-白绫 boot → 读 llm.json → 构造 LLMGateway(HTTP 客户端) → /api/status ready:true
+素月 boot → 读 llm.json → 构造 LLMGateway(HTTP 客户端) → /api/status ready:true
 ```
 
 ### 7.3 配置保存链（当前过渡态：Python 面板 → 网关热重载）
@@ -283,7 +283,7 @@ saveCfg → Python /api/config（校验：坏模型拒绝 / max_tokens≤0 不�
 |---|---|---|---|
 | 9 | Go 严格类型解析 Python 遗留 JSON | `models_updated_at` 为**字符串** → Go int64 解析失败 → 误判 llm.json"损坏"，备份重建种子，配置丢 | 时间/可空字段一律 `any` 宽容类型（models_updated_at、_updated_at、checked_at、tested_at 等） |
 | 10 | 健康表 JSON 结构与 Python 不一致 | Python 侧是**顶层按 base_url 分键**（无 `sources` 包装），Go 用嵌套结构 → Sources 全空、usable/bad 全 null | 自定义 `UnmarshalJSON/MarshalJSON`：顶层 `{base_url: {models: {...}}, "_updated_at": ...}` |
-| 11 | tool_calls 嵌套结构未扁平化 | openai 返回 `{id, function:{name, arguments}}`，Go 原样透传 → 白绫拿到 `name=""` | 扁平化为 `{id, name, arguments}`（白绫原有格式） |
+| 11 | tool_calls 嵌套结构未扁平化 | openai 返回 `{id, function:{name, arguments}}`，Go 原样透传 → 素月拿到 `name=""` | 扁平化为 `{id, name, arguments}`（素月原有格式） |
 | 12 | 路由重复注册 panic | `/api/config` 注册两次 → `panic: pattern conflicts` | 合并为 METHOD 分发（一个 handler 内 GET/POST 分支） |
 | 13 | 无热重载 | 外部改 llm.json → 网关内存不变 → 配置不生效 | mtime 检测 `ReloadIfChanged()`，每次 `/v1/chat` 入口调用 |
 | 14 | 损坏文件判定过激 | 仅类型不匹配（未坏）也备份重建 | 宽容类型优先；真 JSON 语法错误才走 `.corrupt-<ts>` 备份+种子 |
@@ -294,7 +294,7 @@ saveCfg → Python /api/config（校验：坏模型拒绝 / max_tokens≤0 不�
 
 ### 9.1 Go 网关 `llm-gateway/`（127.0.0.1:8766，唯一对话通道）
 
-**白绫面**（`core/llm.py` 只消费这一个）：
+**素月面**（`core/llm.py` 只消费这一个）：
 
 | 方法 | 路径 | 用途 | 请求 | 响应 |
 |---|---|---|---|---|
@@ -314,13 +314,13 @@ saveCfg → Python /api/config（校验：坏模型拒绝 / max_tokens≤0 不�
 | POST | `/admin/switch` = `/api/llm/switch` | 手动切渠道（probe 验证通过才生效 + 设锚点） |
 | GET/POST | `/admin/sources` = `/api/llm/sources` | 渠道列表 / 保存（按 base 匹配旧值，key 打码） |
 
-### 9.2 白绫侧改造（`core/llm.py`，已完成）
+### 9.2 素月侧改造（`core/llm.py`，已完成）
 
 - `LLMGateway` 保留原构造与 `chat()` 返回格式（`agent.py` 零改动），内部改为 stdlib HTTP 调用网关 `/v1/chat`；
 - **不再使用 openai SDK**（根除踩坑 #1/#2）；
 - **自动拉起**：网关不可达 → 尝试 `CREATE_NO_WINDOW` 拉起 exe → 轮询 `/health` ≤7s → 仍失败返回明确错误（"LLM 网关不可达…"）；
 - 网关地址/ exe / 配置目录可用环境变量覆盖：`BAILING_GATEWAY_URL` / `BAILING_GATEWAY_EXE` / `BAILING_GATEWAY_CONFIG`，默认推断 self-agent 布局；
-- 网关返回 `error/error_code` 透传；`model/base_url/failover_note/failover_applied` 一并返回（白绫可感知"刚才切换了模型"）。
+- 网关返回 `error/error_code` 透传；`model/base_url/failover_note/failover_applied` 一并返回（素月可感知"刚才切换了模型"）。
 
 ### 9.3 管理面归属现状（过渡态）
 
@@ -332,10 +332,10 @@ saveCfg → Python /api/config（校验：坏模型拒绝 / max_tokens≤0 不�
 ## 10. 安全与边界
 
 - **Key 泄露防护**：UI 一律打码；日志不落明文；外部 Key 走环境变量 `BAILING_API_KEY`；
-- **写入白名单**：网关仅本机监听（127.0.0.1），单消费方无鉴权（只为白绫服务，不存在其他消费方）；
-- **单实例约束**：部署保证单一网关进程；白绫侧自动拉起用 `CREATE_NO_WINDOW`，不会重复起多份（端口占用即失败）；
+- **写入白名单**：网关仅本机监听（127.0.0.1），单消费方无鉴权（只为素月服务，不存在其他消费方）；
+- **单实例约束**：部署保证单一网关进程；素月侧自动拉起用 `CREATE_NO_WINDOW`，不会重复起多份（端口占用即失败）；
 - **坏配置隔离**：任何校验失败（坏模型/空 Key/非法参数）都**拒绝写入**，不产生半生效状态；
-- **启动绑定**：`启动.bat` 先静默拉起网关再启白绫；`webui/server.py` 的 `main()` 同样兜底 `ensure_gateway_up()`——无论哪种方式启动白绫，网关都跟着起。
+- **启动绑定**：`启动.bat` 先静默拉起网关再启素月；`webui/server.py` 的 `main()` 同样兜底 `ensure_gateway_up()`——无论哪种方式启动素月，网关都跟着起。
 
 ---
 
@@ -360,13 +360,13 @@ llm-gateway/
 
 ```
 # 启动（隐藏窗口，任选其一）
-启动.bat                              # 推荐：网关 + 白绫一起起
+启动.bat                              # 推荐：网关 + 素月一起起
 wscript llm-gateway\start-gateway-hidden.vbs   # 仅网关
 bailing-gateway.exe --config F:\me\self-agent\config --port 8766
 
 # 停止
 Stop-Process -Name bailing-gateway   # 网关
-# 白绫退出后网关无状态可留；白绫下次启动自动复用/拉起
+# 素月退出后网关无状态可留；素月下次启动自动复用/拉起
 ```
 
 **验证命令**
@@ -386,7 +386,7 @@ POST /v1/chat {messages:[...]}              # 对话代理（含容灾）
 | `_test_e2e.py` | 探活/配置/scan/chat/switch/坏模型拒绝 |
 | `_test_failover.py` | 热重载 + 回锚（坏模型自动恢复锚点） |
 | `_test_real_failover.py` | 真容灾（锚点变坏 → 自动切换 + failover 真实状态） |
-| `_test_client.py` | 白绫客户端：正常对话 / 自动拉起(6s) / 容灾透传 |
+| `_test_client.py` | 素月客户端：正常对话 / 自动拉起(6s) / 容灾透传 |
 | `_test_tools.py` | 工具调用 tool_calls 格式透传 |
 
 ---
@@ -394,10 +394,10 @@ POST /v1/chat {messages:[...]}              # 对话代理（含容灾）
 ## 12. 演进待办
 
 - [x] Go 网关骨架：配置读取 + chat 代理 + 容灾 + scan/switch API（配置兼容现有 json）
-- [x] 白绫侧 HTTP client 替换（`core/llm.py` 走网关 `/v1/chat`）+ 端到端回归（坏模型自动切 / 回锚 / 并发扫描 / 工具调用）
+- [x] 素月侧 HTTP client 替换（`core/llm.py` 走网关 `/v1/chat`）+ 端到端回归（坏模型自动切 / 回锚 / 并发扫描 / 工具调用）
 - [x] 无状态化容灾冷却定稿（30s 时间窗最多 2 次）
 - [x] 启动绑定（启动.bat + server.py 兜底 + 自动拉起）
 - [ ] **前端 LLM 管理面板切到网关 8766**（面板显示 failover 真实状态；切后 Python 管理 API 可下线）
 - [ ] Python `llm` 管理模块下线（agent.py 中 config/scan/switch 相关代码清理，保留对话编排）
-- [ ] 网关自身崩溃检测与白绫告警（超时 + 重试 + 状态上报，部分已由自动拉起覆盖）
-- [ ] 网关进程守护（异常退出自动重启，当前依赖白绫对话时拉起）
+- [ ] 网关自身崩溃检测与素月告警（超时 + 重试 + 状态上报，部分已由自动拉起覆盖）
+- [ ] 网关进程守护（异常退出自动重启，当前依赖素月对话时拉起）

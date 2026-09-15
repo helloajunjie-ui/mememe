@@ -278,10 +278,10 @@ class ToolRegistry:
         except OSError:
             self._mod_mtime[name] = 0.0
 
-    # ---------- 工具热更新（源码 mtime 变化 → reload 模块，无需重启白绫） ----------
+    # ---------- 工具热更新（源码 mtime 变化 → reload 模块，无需重启素月） ----------
     def reload_if_changed(self, name: str) -> bool:
         """工具源码文件变化时重新加载对应模块并刷新 fn/schema。返回是否发生了重载。
-        改 tools/src/python/*.py 后，白绫下一次调用即用新代码，无需重启进程。"""
+        改 tools/src/python/*.py 后，素月下一次调用即用新代码，无需重启进程。"""
         impl = (self.tools.get(name) or {}).get("impl") or {}
         src = impl.get("source")
         if not src or not os.path.exists(src):
@@ -322,7 +322,7 @@ class ToolRegistry:
     # ---------- MCP 工具注册（见设计文档 5.37） ----------
     def register_mcp(self, tool_name: str, server: str, tool: str,
                      description: str = "", schema: Optional[Dict] = None) -> None:
-        """注册一个 MCP server 暴露的工具为白绫工具（impl.type="mcp"，执行转发调用）。"""
+        """注册一个 MCP server 暴露的工具为素月工具（impl.type="mcp"，执行转发调用）。"""
         import re
         safe = re.sub(r"[^a-zA-Z0-9_-]", "_", f"{server}_{tool}")
         self.tools[tool_name] = {
@@ -483,7 +483,7 @@ class ToolRegistry:
         "app_probe": ["软件探查", "软件安装", "装了哪些软件", "装了什么软件", "软件在哪",
                       "查找软件", "定位软件", "软件路径", "office", "office在哪", "办公软件",
                       "有没有装", "app_probe"],
-        "self_restart": ["重启", "重启白绫", "更新后重启", "无感重启", "冷启动", "自动重启",
+        "self_restart": ["重启", "重启素月", "更新后重启", "无感重启", "冷启动", "自动重启",
                          "self_restart", "重新加载核心"],
         "cmd_batch": ["批量命令", "命令集合", "多条命令", "连续执行", "批量执行", "cmd_batch",
                       "一次执行多条", "批量探测", "批量查询"],

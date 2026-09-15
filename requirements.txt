@@ -1,4 +1,4 @@
-# 白绫（Bailing）运行依赖
+# 素月（Bailing）运行依赖
 openai>=1.0
 httpx>=0.27
 PyYAML>=6.0

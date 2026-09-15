@@ -27,7 +27,7 @@
       "check_update": true
     },
     "filesystem": {
-      "desc": "本地文件系统（受控于 F:\\me 目录）：读/写/搜索/目录操作，适合白绫处理本地文件",
+      "desc": "本地文件系统（受控于 F:\\me 目录）：读/写/搜索/目录操作，适合素月处理本地文件",
       "command": "C:\\Program Files\\nodejs\\npx.cmd",
       "args": [
         "-y",

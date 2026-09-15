@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""白绫（Bailing）Web 交互界面服务端 —— API 化，网页仅作展示端。
+"""素月（Bailing）Web 交互界面服务端 —— API 化，网页仅作展示端。
 
 架构：
 - 本服务 = 轻量 HTTP API（Python 标准库，零外部依赖）。
-- Agent（白绫本体）在【后台线程异步初始化】，服务端口【秒级启动】，
+- Agent（素月本体）在【后台线程异步初始化】，服务端口【秒级启动】，
   不阻塞网页打开；初始化完成后 /api/status 报告 ready=true。
 - 网页（webui/index.html）纯展示：拉状态、发消息、渲染回复。
 
@@ -47,7 +47,7 @@ _session = SessionStore(os.path.join(ROOT, "data"))
 _HISTORY_RESTORE_KEEP = 20   # 重启后重建 agent.history 的条数上限（约 10 回合）
 _HISTORY_API_MAX = 200       # /api/history 单次返回上限
 
-# ---------- 文本文件上传（传文件给白绫） ----------
+# ---------- 文本文件上传（传文件给素月） ----------
 _TEXT_EXTS = {
     ".txt", ".md", ".markdown", ".log", ".rst", ".tex",
     ".csv", ".json", ".jsonl", ".yaml", ".yml", ".ini", ".conf", ".cfg", ".toml",
@@ -182,7 +182,7 @@ def _run_task(tid: str, message: str, attachments: list = None) -> None:
     try:
         a = get_agent()          # 未就绪 → 直接失败，不落半条对话
     except Exception as e:  # noqa: BLE001
-        _tasks.fail(tid, f"白绫处理失败: {e}")
+        _tasks.fail(tid, f"素月处理失败: {e}")
         return
     _ensure_history(a)                # 兜底：上下文为空 → 从落盘续上（不重启也接得上）
     _session.append("user", message, attachments=attachments)  # 提问先落盘：执行中刷新/崩溃也不丢
@@ -198,11 +198,11 @@ def _run_task(tid: str, message: str, attachments: list = None) -> None:
         _tasks.cancel_done(tid, cancel_reply)
         _session.append("assistant", cancel_reply)
     except Exception as e:  # noqa: BLE001
-        _tasks.fail(tid, f"白绫处理失败: {e}")
+        _tasks.fail(tid, f"素月处理失败: {e}")
 
 
 # ---------- 整点反思调度（空闲时间自主自省） ----------
-# 共建者要求（2026-09-04）：白绫在空闲时自主反思、自我维护，而非只等任务。
+# 共建者要求（2026-09-04）：素月在空闲时自主反思、自我维护，而非只等任务。
 # 设计：每小时整点检查一次；若当前无任务在跑（空闲）则后台静默触发一次轻量自省，
 # 不进入前端任务队列、不打断用户操作；同一小时内只反思一次，错过整点等下一小时。
 _reflect_last_hour = None
@@ -234,7 +234,7 @@ def _run_reflection() -> None:
 
 
 def _reflection_scheduler() -> None:
-    """每小时整点：若空闲（无任务在跑）则触发一次白绫自主整点反思。"""
+    """每小时整点：若空闲（无任务在跑）则触发一次素月自主整点反思。"""
     global _reflect_last_hour
     while True:
         try:
@@ -253,7 +253,7 @@ def _reflection_scheduler() -> None:
 
 
 # ---------- 自主时间调度（使用者配置·空闲时自主学习/自由探索） ----------
-# 共建者要求（2026-09-04）：学习方向与时间由"使用者"控制，白绫只负责执行。
+# 共建者要求（2026-09-04）：学习方向与时间由"使用者"控制，素月只负责执行。
 # 设计：config/study.yaml 定义 启用开关/时间窗口/间隔/主题（topic 留空=自由探索了解世界）。
 # 调度器在窗口内、距上次达间隔且空闲时触发一次自主学习，静默入后台，不打断用户。
 _STUDY_STATE = {"last": None}
@@ -351,7 +351,7 @@ def _load_workflow_cfg() -> dict:
 
 
 def _run_workflow_schedule(sch: dict) -> None:
-    """触发一次定时工作流：让白绫执行指定工作流（workflow_id）或按任务描述自主建工作流。"""
+    """触发一次定时工作流：让素月执行指定工作流（workflow_id）或按任务描述自主建工作流。"""
     name = sch.get("name") or "定时工作流"
     wf_id = (sch.get("workflow_id") or "").strip()
     task = (sch.get("task") or "").strip()
@@ -464,7 +464,7 @@ def _init_agent_async() -> None:
 
 def get_agent():
     if not _ready:
-        raise AgentNotReady(_init_error or "白绫仍在初始化中")
+        raise AgentNotReady(_init_error or "素月仍在初始化中")
     return _agent
 
 
@@ -488,7 +488,7 @@ def method_count() -> int:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "BailingWebUI/1.0"
+    server_version = "SuyueWebUI/1.0"
 
     def log_message(self, *args):  # 静默默认访问日志
         pass
@@ -585,7 +585,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._send_json(404, {"ok": False, "error": "not found"})
 
-    # ---------- 产物服务（白绫生成的图片/文件：对话中预览 + 下载） ----------
+    # ---------- 产物服务（素月生成的图片/文件：对话中预览 + 下载） ----------
     # 白名单根：workspace/ 与 webui/uploads/（防目录穿越，其他路径一律 404）
     def _artifact_roots(self) -> dict:
         base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -674,9 +674,9 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------- 状态 API ----------
     def _handle_status(self) -> None:
-        base = {"ok": True, "ready": _ready, "name": "白绫", "version": ""}
+        base = {"ok": True, "ready": _ready, "name": "素月", "version": ""}
         if not _ready:
-            base["message"] = _init_error or "白绫初始化中..."
+            base["message"] = _init_error or "素月初始化中..."
             self._send_json(200, base)
             return
         try:
@@ -713,7 +713,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if not _ready:
             self._send_json(503, {"ok": False, "ready": False,
-                                  "error": _init_error or "白绫还在初始化中，请稍候再试"})
+                                  "error": _init_error or "素月还在初始化中，请稍候再试"})
             return
         attachments = self._sanitize_attachments(data.get("attachments"))
         tid = _tasks.create()
@@ -752,7 +752,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"ok": False, "error": "任务不存在或已结束"})
             return
         self._send_json(200, {"ok": True, "task_id": tid,
-                              "note": "已请求停止，白绫将在当前步骤结束后中止并保存断点"})
+                              "note": "已请求停止，素月将在当前步骤结束后中止并保存断点"})
 
     def _handle_task(self, tid: str) -> None:
         t = _tasks.get(tid)
@@ -1151,7 +1151,7 @@ def _reload_watcher() -> None:
       从后台线程无法优雅收敛整个进程；而 SessionStore 每轮即时落盘、
       agent.close() 会再兜一次，数据已安全，无需 atexit。
     - 为什么必须配 launcher：77 是「请求重启」的信号，不是「结束」。若直接
-      python webui/server.py 启动（无接收方），退出 77 等价于白绫下线。
+      python webui/server.py 启动（无接收方），退出 77 等价于素月下线。
       故启动链统一走 launcher.py（见 启动.bat）。
     """
     while True:
@@ -1174,13 +1174,13 @@ def _reload_watcher() -> None:
 
 
 def main() -> None:
-    # 启动绑定：先确保 Go LLM 网关就绪（不在则静默拉起），白绫基础设施随主体一起启动
+    # 启动绑定：先确保 Go LLM 网关就绪（不在则静默拉起），素月基础设施随主体一起启动
     try:
         from core.llm import ensure_gateway_up
         g_ok = ensure_gateway_up()
         print(f"LLM 网关: {'就绪' if g_ok else '未就绪（请检查 llm-gateway/bailing-gateway.exe）'}")
     except Exception as e:  # noqa: BLE001
-        print(f"LLM 网关检查异常（不影响启动，对话时白绫会再次尝试拉起）: {e}")
+        print(f"LLM 网关检查异常（不影响启动，对话时素月会再次尝试拉起）: {e}")
 
     if _port_in_use(HOST, PORT):
         print(f"端口 {PORT} 已被占用——检测到旧实例，清理后重启 ...")
@@ -1195,7 +1195,7 @@ def main() -> None:
                 released = True
                 break
         if not released:
-            print(f"端口 {PORT} 仍被占用，无法启动。请手动检查占用进程（可能是非白绫程序）。")
+            print(f"端口 {PORT} 仍被占用，无法启动。请手动检查占用进程（可能是非素月程序）。")
             sys.exit(1)
         print("端口已释放，启动新实例 ...")
 
@@ -1210,7 +1210,7 @@ def main() -> None:
     # 无感冷启动（接收端）：轮询 agent.exit_reload → 退出码 77，交给 launcher 拉起
     threading.Thread(target=_reload_watcher, daemon=True).start()
 
-    print("白绫 Web 界面（API 服务）启动中 ...")
+    print("素月 Web 界面（API 服务）启动中 ...")
     print(f"  地址: http://{HOST}:{PORT}")
     print("  网页已就绪（Agent 后台初始化中，完成后即可对话）")
     print("  Ctrl+C 退出。")
@@ -1221,7 +1221,7 @@ def main() -> None:
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
 
     # ---- 托盘化：常驻系统托盘（悬停气泡 + 左键开网页 + 右键退出） ----
-    # 主线程跑托盘事件循环，HTTP 服务放子线程；托盘"退出白绫" → 关闭服务收尾。
+    # 主线程跑托盘事件循环，HTTP 服务放子线程；托盘"退出素月" → 关闭服务收尾。
     # 托盘依赖（pystray/Pillow）缺失时自动降级为前台运行（关终端 = 停止）。
     try:
         from webui.tray import available, run_tray

@@ -1,7 +1,7 @@
 """内置工具：proc_mgr —— 进程管理（列表 / 结束卡死进程，跨平台）。
 
 设计意图（补 cmd_run 黑名单缺口）：
-- cmd_run 的安全策略拦截了 taskkill /f 等破坏性命令，导致白绫无法处理卡死/失控进程。
+- cmd_run 的安全策略拦截了 taskkill /f 等破坏性命令，导致素月无法处理卡死/失控进程。
 - 本工具提供受控的进程结束通道：proc_list 只读查询；proc_kill 需 confirm="KILL" 二次确认。
 - 跨平台：Windows→tasklist/taskkill；Linux/macOS→ps/kill(pkill)。
 

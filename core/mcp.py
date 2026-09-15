@@ -2,8 +2,8 @@
 
 架构（与 Go LLM 网关对称）：
 - MCP 独立服务（mcp-service/server.py，端口 8767）统一管理所有软件接口的连接、
-  激活状态与工具调用；白绫侧本模块只是轻量 HTTP 客户端。
-- 按需激活：白绫先看目录（mcp_list）→ 激活（mcp_connect）→ 工具 schema 临时注入
+  激活状态与工具调用；素月侧本模块只是轻量 HTTP 客户端。
+- 按需激活：素月先看目录（mcp_list）→ 激活（mcp_connect）→ 工具 schema 临时注入
   对话 → 调用（mcp_<server>_<tool>）→ 释放（mcp_disconnect）。MCP 工具不常驻核心工具。
 - 服务未运行时自动拉起（后台无窗口进程）。
 """
@@ -101,15 +101,15 @@ class McpManager:
 
     # ---------- 目录与激活流程 ----------
     def servers_info(self) -> Dict:
-        """软件接口目录（含 desc/激活状态/工具数）——白绫决策激活哪个的依据。"""
+        """软件接口目录（含 desc/激活状态/工具数）——素月决策激活哪个的依据。"""
         return self._req("GET", "/mcp/servers")
 
     def activate(self, server: str, force: bool = False) -> Dict:
-        """激活：拉取并缓存工具清单。激活后白绫装配其 schema 即可调用。"""
+        """激活：拉取并缓存工具清单。激活后素月装配其 schema 即可调用。"""
         return self._req("POST", "/mcp/activate", json={"server": server, "force": force})
 
     def deactivate(self, server: str) -> Dict:
-        """释放：工具清单从白绫上下文移除。"""
+        """释放：工具清单从素月上下文移除。"""
         return self._req("POST", "/mcp/deactivate", json={"server": server})
 
     def schemas_for_active(self) -> List[Dict]:

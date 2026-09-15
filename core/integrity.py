@@ -1,6 +1,6 @@
-"""本体完整性守护（IntegrityGuard）：保证白绫程序本体不被篡改/感染。
+"""本体完整性守护（IntegrityGuard）：保证素月程序本体不被篡改/感染。
 
-威胁模型（用户导师 2026-09-04）：白绫有 cmd_run 执行、net_download 下载、
+威胁模型（用户导师 2026-09-04）：素月有 cmd_run 执行、net_download 下载、
 tool_acquire 获取工具、tool_create 自举工具等感染入口。防御 = 检测 + 告警 + 恢复。
 
 三层：
@@ -161,7 +161,7 @@ def _git_dirty_files() -> set | None:
 def _changes_committed(result: dict) -> bool:
     """变更文件是否都已提交（工作区干净）。
 
-    信任锚 = git 历史：只有本机用户/白绫本人能 commit。未提交的改动不自动认账，
+    信任锚 = git 历史：只有本机用户/素月本人能 commit。未提交的改动不自动认账，
     照旧告警（可能正在改，也可能是被注入）。git 不可用返回 False（保守）。
     """
     dirty = _git_dirty_files()

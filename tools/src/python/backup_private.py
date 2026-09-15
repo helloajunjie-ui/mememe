@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""私有状态备份工具：收集白绫实例的私有数据 → 打 zip 存本地 backups/。
+"""私有状态备份工具：收集素月实例的私有数据 → 打 zip 存本地 backups/。
 
 设计意图（用户导师 2026-09-04）：
 - 程序本体走公开仓库 mememe（任何人 clone 得独属实例）；
@@ -30,7 +30,7 @@ _PRIVATE_FILES = [
 _CORE_FILES = ["config.yaml", ".env"]
 
 # 私有目录（递归打包）——2026-09-13 补：资料库与凭据库原为备份盲区
-# library/：白绫的分类资料库（参考/研究/环境/自我）
+# library/：素月的分类资料库（参考/研究/环境/自我）
 # data/credentials/：多账户加密凭据库（密文 + 本机解密密钥）
 # data/keys/：私密钥匙区（云存档加密密钥）
 # 注：原设计"密钥不备份以防密文+密钥同处"已作废——该隔离只靠"zip 不外流"维持，
@@ -40,7 +40,7 @@ _PRIVATE_DIRS = ["library", "data/credentials", "data/keys", "data/session"]
 # data/session：对话可见层（chat_history.jsonl）——刷新页面/重启服务后不丢历史，
 #             属私有实例数据，绝不放公开仓库（2026-09-13 补）
 
-# 备份状态文件：每次备份结果写到这里，让 AI（白绫）能自我感知备份状态（结果/运行通知 AI）
+# 备份状态文件：每次备份结果写到这里，让 AI（素月）能自我感知备份状态（结果/运行通知 AI）
 _STATUS_FILE = Path("data/backup_status.json")
 
 

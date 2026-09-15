@@ -1,4 +1,4 @@
-"""内置工具：vision_look —— 读取本地图片（让白绫真正\"看见\"图像内容）。
+"""内置工具：vision_look —— 读取本地图片（让素月真正\"看见\"图像内容）。
 
 用途：persona 设定图、截图、照片、图表等本地图片的视觉理解。
 实现：PIL 压缩 → base64 → OpenAI 兼容多模态接口（chat/completions，content 数组）。

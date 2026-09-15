@@ -1,11 +1,11 @@
 """MCP 独立服务 HTTP API（127.0.0.1:8767）。
 
-白绫侧只依赖本服务：
+素月侧只依赖本服务：
 - GET    /health           探活
 - GET    /mcp/servers      软件接口列表 + 激活状态
 - GET    /mcp/active       当前已激活 server 及工具名
 - GET    /mcp/tools        工具明细（?server=xxx）
-- GET    /mcp/schemas      OpenAI schema（?server=xxx，供白绫装配 tools）
+- GET    /mcp/schemas      OpenAI schema（?server=xxx，供素月装配 tools）
 - POST   /mcp/activate     激活（拉取工具清单，?force 重拉）
 - POST   /mcp/deactivate   释放
 - POST   /mcp/call         工具调用代理 {server, tool, args}
@@ -126,7 +126,7 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(gateway.remove_secret(body.get("server", ""),
                                                      body.get("key", "")))
                 elif p == "/mcp/deps/assess":
-                    # 依赖/凭据评估（白绫据此通知用户是否安装）
+                    # 依赖/凭据评估（素月据此通知用户是否安装）
                     self._send(gateway.analyze_deps(body.get("server", "")))
                 elif p == "/mcp/deps/install":
                     # 执行依赖安装（须先经用户确认）
@@ -156,7 +156,7 @@ def _idle_sweeper():
             if released:
                 line = (f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 空闲自动释放: "
                         f"{', '.join(released)}（{gateway.idle_timeout_min} 分钟无调用，"
-                        f"需要时白绫可重新 mcp_connect）")
+                        f"需要时素月可重新 mcp_connect）")
                 print(line, flush=True)
                 try:
                     with open(log_path, "a", encoding="utf-8") as f:

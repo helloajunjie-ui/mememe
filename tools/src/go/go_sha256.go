@@ -40,7 +40,7 @@ func main() {
 	writeJSON(map[string]interface{}{"ok": true, "result": result})
 }
 
-// writeJSON 向 stdout 输出 JSON（保持与白绫统一协议）
+// writeJSON 向 stdout 输出 JSON（保持与素月统一协议）
 func writeJSON(v map[string]interface{}) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetEscapeHTML(false)

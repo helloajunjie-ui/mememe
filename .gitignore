@@ -66,7 +66,7 @@ webui/uploads/
 *.FBX
 
 
-# 白绫资料库（实例知识，不进公开仓库；走私有备份）
+# 素月资料库（实例知识，不进公开仓库；走私有备份）
 library/
 
 # ===== 实例运行状态（本机状态，不入公开仓库）=====
@@ -92,3 +92,4 @@ mcp-service/config/secrets.json
 mcp-service/data/
 *.exe~
 llm-gateway/*.exe~
+data/restart.flag

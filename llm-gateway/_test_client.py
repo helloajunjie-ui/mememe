@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""白绫 LLMGateway（网关客户端）回归测试：正常对话 / 自动拉起 / 容灾透传"""
+"""素月 LLMGateway（网关客户端）回归测试：正常对话 / 自动拉起 / 容灾透传"""
 import json, os, sys, time, urllib.request
 
 sys.path.insert(0, r"F:\me\self-agent")
@@ -31,7 +31,7 @@ r, llm = chat_once("C")
 print("3) 自动拉起:", "OK" if r.get("content") else f"FAIL {r.get('error')}",
       "| 回复:", str(r.get("content"))[:36], "| 耗时 %.0fs" % (time.time() - t0))
 
-# 4) 容灾透传：改真实配置锚点为坏模型 → chat → 网关容灾 → 白绫拿到 failover_note
+# 4) 容灾透传：改真实配置锚点为坏模型 → chat → 网关容灾 → 素月拿到 failover_note
 CFG = r"F:\me\self-agent\config\llm.json"
 d = json.load(open(CFG, encoding="utf-8"))
 backup = dict(d)

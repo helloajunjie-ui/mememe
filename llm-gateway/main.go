@@ -1,7 +1,7 @@
 package main
 
-// main.go —— 白绫 LLM 网关（Go 实现）
-// 独立进程，只为白绫服务：对话代理 / 容灾 / 健康扫描 / 渠道与配置管理。
+// main.go —— 素月 LLM 网关（Go 实现）
+// 独立进程，只为素月服务：对话代理 / 容灾 / 健康扫描 / 渠道与配置管理。
 // 配置与健康数据沿用现有 config/llm.json、config/llm_health.json（无缝迁移）。
 
 import (
@@ -56,7 +56,7 @@ func main() {
 	mux := http.NewServeMux()
 	// 探活
 	mux.HandleFunc("/health", g.hHealth)
-	// 对话代理（白绫面）
+	// 对话代理（素月面）
 	mux.HandleFunc("/v1/chat", g.hChat)
 	// 管理 API：/admin/* + /api/* 双路径（前端切 base 即可复用现有面板）
 	reg := func(admin, api string, h http.HandlerFunc) {
@@ -89,7 +89,7 @@ func main() {
 	})
 
 	addr := fmt.Sprintf("127.0.0.1:%d", *port)
-	fmt.Printf("[gateway] 白绫 LLM 网关启动: http://%s（配置: %s）\n", addr, filepath.Join(dir, "llm.json"))
+	fmt.Printf("[gateway] 素月 LLM 网关启动: http://%s（配置: %s）\n", addr, filepath.Join(dir, "llm.json"))
 	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	if err := srv.ListenAndServe(); err != nil {
 		fmt.Fprintln(os.Stderr, "监听失败（端口被占用？）:", err)

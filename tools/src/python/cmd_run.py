@@ -1,7 +1,7 @@
 """内置工具：cmd_run —— 执行系统命令（平台自适应 + 安全拦截）。
 
 设计意图（见设计文档 5.3）：
-- 白绫执行系统命令的唯一入口，底层走平台适配层 run_shell（Windows→PowerShell，Linux/macOS→bash）。
+- 素月执行系统命令的唯一入口，底层走平台适配层 run_shell（Windows→PowerShell，Linux/macOS→bash）。
 - 只读/查询命令放行；破坏性命令默认拦截，需用户确认。
 - 全部命令写审计日志 logs/cmd.log。
 """

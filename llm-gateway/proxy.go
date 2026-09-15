@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// chatRequest 白绫→网关的请求体（OpenAI chat.completions 格式子集）
+// chatRequest 素月→网关的请求体（OpenAI chat.completions 格式子集）
 type chatRequest struct {
 	Messages    []map[string]any `json:"messages"`
 	Tools       []map[string]any `json:"tools,omitempty"`
@@ -23,7 +23,7 @@ type chatRequest struct {
 	Thinking    map[string]any   `json:"thinking,omitempty"` // DeepSeek 思考预算（如 {"type":"enabled","budget_tokens":4096}）
 }
 
-// ChatResult 网关→白绫的响应
+// ChatResult 网关→素月的响应
 type ChatResult struct {
 	Reply           string           `json:"content,omitempty"`
 	Reasoning       string           `json:"reasoning_content,omitempty"`
@@ -127,7 +127,7 @@ func parseChatResp(parsed map[string]any, modelUsed, baseUsed string) ChatResult
 				r.Reasoning = rc
 			}
 			if tc, ok := msg["tool_calls"].([]any); ok {
-				// openai 返回嵌套 {id, function:{name, arguments}} → 扁平化为白绫格式 {id,name,arguments}
+				// openai 返回嵌套 {id, function:{name, arguments}} → 扁平化为素月格式 {id,name,arguments}
 				for _, item := range tc {
 					m, _ := item.(map[string]any)
 					fn, _ := m["function"].(map[string]any)

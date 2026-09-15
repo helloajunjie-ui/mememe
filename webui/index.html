@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>白绫 Bailing · 自我完善 AI 智能体</title>
+<title>素月 Suyue · 自我完善 AI 智能体</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23F5F0E6'/%3E%3Cpath d='M32 12c-6 0-9 4-9 10 0 8 4 12 9 12s9-4 9-12c0-6-3-10-9-10zm-10 26c-1 8 1 14 10 14s11-6 10-14c-4 2-7 3-10 3s-6-1-10-3z' fill='%234B5570'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/highlight-theme.css">
 <style>
   :root {
     --bg: #F7F3EA;
@@ -86,6 +87,8 @@
   .msg-wrap.user .bubble { background: var(--bubble-user); }
   .msg-wrap.user .avatar { order: 1; }
   .bubble p { margin: 4px 0; }
+  .bubble .chat-img { display: block; max-width: 100%; max-height: 320px; border-radius: 8px;
+    margin: 6px 0; border: 1px solid var(--border); object-fit: contain; background: #fff; }
   .bubble ul, .bubble ol { margin: 6px 0 6px 20px; }
   .bubble pre {
     background: #F7F3EA; border: 1px solid var(--border);
@@ -96,6 +99,18 @@
   .bubble code { font-family: Consolas, "Courier New", monospace; font-size: 12.5px;
     background: #F3EFE4; padding: 1px 5px; border-radius: 4px; }
   .bubble pre code { background: none; padding: 0; }
+  /* 代码块（highlight.js）：深色高亮容器 + 右上复制按钮 */
+  .bubble .code-wrap { position: relative; margin: 8px 0; }
+  .bubble .code-wrap pre { background: #23272F; border-color: #2E3440; border-radius: 10px;
+    padding: 14px 16px; margin: 0; }
+  .bubble .code-wrap pre code { background: none; padding: 0;
+    font-size: 12.5px; line-height: 1.65; display: block; }
+  .bubble .code-wrap pre code.hljs { background: #23272F; padding: 0; }
+  .code-copy { position: absolute; top: 8px; right: 8px; z-index: 2;
+    background: rgba(255,255,255,.12); color: #C9C4B8; border: 1px solid rgba(255,255,255,.18);
+    border-radius: 6px; padding: 3px 10px; font-size: 11px; cursor: pointer;
+    font-family: inherit; opacity: .85; }
+  .code-copy:hover { background: rgba(255,255,255,.22); color: #fff; }
   .bubble strong { font-weight: 600; }
   .bubble h1, .bubble h2, .bubble h3, .bubble h4 { margin: 10px 0 6px; line-height: 1.35; }
   .bubble h1 { font-size: 19px; } .bubble h2 { font-size: 17px; }
@@ -139,14 +154,37 @@
     font-size: 12px; color: var(--text-1); max-height: 320px; overflow: auto; }
   .artifact-preview pre { margin: 0; padding: 8px 10px; white-space: pre-wrap;
     word-break: break-all; font-family: inherit; line-height: 1.6; }
+  /* 代码类文件预览：深色底 + 语法高亮（token 色不被上层覆盖） */
+  .artifact-preview pre.code-prev { background: #23272F; font-family: Consolas, "Courier New", monospace;
+    font-size: 12px; line-height: 1.65; padding: 12px 14px; }
+  .artifact-preview pre.code-prev code { background: none; padding: 0; display: block; }
+  .artifact-preview pre.code-prev code.hljs { background: #23272F; padding: 0; }
+  .artifact-preview .preview-loading { color: #C9C4B8 !important; font-size: 12.5px; }
   .artifact-preview .preview-more { display: block; text-align: center; padding: 4px;
     font-size: 11.5px; color: var(--accent); cursor: pointer; background: #F5F3EC; }
   .artifact-preview iframe { width: 100%; height: 320px; border: 0; }
   /* 大图查看遮罩 */
   .artifact-modal { position: fixed; inset: 0; background: rgba(20,20,16,.72); z-index: 999;
-    display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
+    display: flex; align-items: center; justify-content: center; cursor: zoom-out;
+    padding: 4vh 4vw; }
   .artifact-modal img { max-width: 92vw; max-height: 92vh; border-radius: 6px;
     box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+  .artifact-modal iframe.modal-pdf { width: 92vw; height: 92vh; border: 0; border-radius: 6px;
+    background: #fff; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+  .artifact-modal pre.modal-code { max-width: 92vw; max-height: 88vh; overflow: auto; margin: 0;
+    background: #23272F; border-radius: 8px; padding: 18px 20px;
+    font-family: Consolas, "Courier New", monospace; font-size: 13px; line-height: 1.6;
+    white-space: pre-wrap; word-break: break-all; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+  .artifact-modal pre.modal-code code { background: none; padding: 0; display: block; }
+  .artifact-modal pre.modal-code code.hljs { background: #23272F; padding: 0; }
+  .artifact-modal .modal-loading { color: #C9C4B8; font-size: 14px; padding: 24px; }
+  .artifact-modal .modal-note { color: #E5E0D6; font-size: 14.5px; line-height: 1.7;
+    max-width: 560px; text-align: center; background: rgba(255,255,255,.06);
+    border-radius: 10px; padding: 26px 30px; }
+  .artifact-modal .modal-actions { margin-top: 16px; text-align: center; }
+  .artifact-modal .modal-btn { display: inline-block; background: #8A7E63; color: #F7F4EC;
+    padding: 8px 22px; border-radius: 20px; font-size: 13.5px; text-decoration: none; }
+  .artifact-modal .modal-btn:hover { background: #A29578; }
   /* 思考中 */
   .thinking { display: flex; align-items: center; gap: 8px; }
   .thinking .dot { width: 6px; height: 6px; border-radius: 50%;
@@ -247,7 +285,7 @@
     gap: 10px;
     align-items: flex-end;
   }
-  /* 附件待发条：粘贴/拖入/选择的图片与文件先挂这里，发送时一起给白绫 */
+  /* 附件待发条：粘贴/拖入/选择的图片与文件先挂这里，发送时一起给素月 */
   .attach-bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 0 4px; }
   .attach-item {
     display: inline-flex; align-items: center; gap: 6px;
@@ -387,7 +425,7 @@
     header .badges { display: none; }
   }
 
-/* ===== 白绫形象右栏 ===== */
+/* ===== 素月形象右栏 ===== */
 .layout{display:flex;flex:1;min-height:0}
 .chat-col{flex:1;min-width:0;display:flex;flex-direction:column}
 aside#persona{width:320px;flex-shrink:0;background:#FAF6EE;border-left:1px solid #ECE5D4;
@@ -460,7 +498,7 @@ aside#persona{width:320px;flex-shrink:0;background:#FAF6EE;border-left:1px solid
 <body>
 <header>
   <div>
-    <span class="title">白绫 Bailing</span>
+    <span class="title">素月 Suyue</span>
     <span class="sub" style="margin-left:8px;">自我完善 AI 智能体 · 本地运行</span>
   </div>
   <div class="badges" id="badges">
@@ -564,10 +602,10 @@ aside#persona{width:320px;flex-shrink:0;background:#FAF6EE;border-left:1px solid
 <footer>
   <div id="attachBar" class="attach-bar" style="display:none"></div>
   <div class="input-row">
-    <button id="fileBtn" class="file-btn" title="传一份文本文件给白绫" onclick="document.getElementById('fileInput').click()">
+    <button id="fileBtn" class="file-btn" title="传一份文本文件给素月" onclick="document.getElementById('fileInput').click()">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20"/><path d="M9 7.5h6"/><path d="M9 11h6"/></svg>
     </button>
-    <textarea id="input" placeholder="和白绫说点什么...（Enter 发送 / Shift+Enter 换行，可直接粘贴图片/拖入文件）"></textarea>
+    <textarea id="input" placeholder="和素月说点什么...（Enter 发送 / Shift+Enter 换行，可直接粘贴图片/拖入文件）"></textarea>
     <button id="send" onclick="send()">发送</button>
     <span class="hint">Esc 清空</span>
   </div>
@@ -578,7 +616,7 @@ aside#persona{width:320px;flex-shrink:0;background:#FAF6EE;border-left:1px solid
   <aside id="persona" data-state="idle">
     <div class="p-card p-portrait">
       <canvas id="pfx"></canvas>
-      <img id="pImg" src="assets/persona/emo_neutral.png" alt="白绫">
+      <img id="pImg" src="assets/persona/emo_neutral.png" alt="素月">
     <div class="p-emo" id="pEmoBadge" title="此刻心情"><img id="pEmo" src="assets/persona/head_neutral.png" alt="心情"></div>
     </div>
 
@@ -602,13 +640,14 @@ aside#persona{width:320px;flex-shrink:0;background:#FAF6EE;border-left:1px solid
       </div>
     </div>
     <div class="p-card p-id">
-      <h3>白绫 · Bailing</h3>
+      <h3>素月 · Suyue</h3>
       <p>温柔书卷气的古风女子，AI 智能体的拟人化形象。成熟 · 古风 · 女性，以书卷为伴，安静从容。</p>
     </div>
   </aside>
 </div>
 
 
+<script src="assets/highlight.min.js"></script>
 <script>
 "use strict";
 var chat = document.getElementById("chat");
@@ -624,17 +663,39 @@ function renderMd(text) {
   text = escapeHtml(text);
   var blocks = [];
   text = text.replace(/```([\s\S]*?)```/g, function(m,c){
-    blocks.push("<pre><code>"+c.replace(/^\n|\n$/g,"").replace(/^[a-zA-Z0-9_+\-.]+\n/,"")+"</code></pre>");
+    c = c.replace(/^\n|\n$/g,"");
+    var lang = "", nl = c.indexOf("\n");
+    var first = nl >= 0 ? c.slice(0, nl) : c;
+    if (/^[a-zA-Z0-9_+\-.]{1,24}$/.test(first)) { lang = first; c = nl >= 0 ? c.slice(nl + 1) : ""; }
+    blocks.push({lang: lang, code: c});
     return "\u0000B"+(blocks.length-1)+"\u0000";
   });
   function inline(t){
     t = t.replace(/`([^`]+)`/g, "<code>$1</code>");
+    /* 图片：![alt](src) → <img>（本地产物路径转 /files/ws|up 可访问 URL，后端已提供静态服务） */
+    t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, function(m, alt, src){
+      var url = resolveArtifactSrc(src);
+      return '<img src="'+url+'" alt="'+alt+'" loading="lazy" class="chat-img"'
+           + ' title="点击查看大图" style="cursor:zoom-in"'
+           + ' onclick="openArtifactModal(this.src)"'
+           + ' onerror="this.style.display=\'none\'">';
+    });
     t = t.replace(/\[([^\]]+)\]\(((?:https?:|mailto:|\/|#)[^)\s]*)\)/g, function(m,txt,h){
       return '<a href="'+h+'" target="_blank" rel="noopener noreferrer">'+txt+'</a>';
     });
     t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
     t = t.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
     return t;
+  }
+  /* 本地产物路径 → 可访问 URL：workspace/... → /files/ws/...；webui/uploads 或 uploads/... → /files/up/... */
+  function resolveArtifactSrc(src){
+    src = String(src).replace(/\\/g, "/");
+    if (/^https?:\/\//i.test(src) || src.indexOf("/files/") === 0) return src;
+    var m = src.match(/workspace\/(.+)$/);
+    if (m) return "/files/ws/" + m[1];
+    m = src.match(/(?:webui\/)?uploads\/(.+)$/);
+    if (m) return "/files/up/" + m[1];
+    return src;
   }
   var html = "", inUl = false, inOl = false, i;
   function closeLists(){ if(inUl){html+="</ul>";inUl=false;} if(inOl){html+="</ol>";inOl=false;} }
@@ -681,7 +742,12 @@ function renderMd(text) {
     closeLists();
     if(raw.trim()==="") continue;
     if(/^\u0000B\d+\u0000$/.test(raw.trim())){
-      html += raw.replace(/\u0000B(\d+)\u0000/g,function(m,j){return blocks[+j];});
+      html += raw.replace(/\u0000B(\d+)\u0000/g,function(m,j){
+        var b = blocks[+j];
+        var cls = b.lang ? ' class="language-'+b.lang+'"' : '';
+        return '<div class="code-wrap"><button class="code-copy" type="button" title="复制代码">复制</button>'
+             + '<pre><code'+cls+'>'+b.code+'</code></pre></div>';
+      });
     } else {
       html += inline(raw) + "<br>";
     }
@@ -699,7 +765,7 @@ function buildMsg(role, html, ts) {
   wrap.className = "msg-wrap " + role;
   var av = document.createElement("div");
   av.className = "avatar";
-  av.textContent = role === "user" ? "我" : "绫";
+  av.textContent = role === "user" ? "我" : "月";
   var b = document.createElement("div");
   b.className = "bubble";
   b.innerHTML = html;
@@ -714,13 +780,41 @@ function buildMsg(role, html, ts) {
 function addMsg(role, html, ts) {
   var b = buildMsg(role, html, ts);
   chat.appendChild(b.parentNode);
+  hljsInit(b.parentNode);
   maybeScroll();
   return b;
 }
 
+/* 代码高亮：对新插入容器的代码块应用 highlight.js（跳过已高亮的） */
+function hljsInit(container){
+  if (!container || !window.hljs) return;
+  var codes = container.querySelectorAll('pre code[class*="language-"]');
+  for (var i = 0; i < codes.length; i++){
+    if (!codes[i].classList.contains("hljs")) hljs.highlightElement(codes[i]);
+  }
+}
+/* 代码复制：事件委托 + 剪贴板 API，降级 execCommand */
+document.addEventListener("click", function(e){
+  var btn = e.target && e.target.closest ? e.target.closest(".code-copy") : null;
+  if (!btn) return;
+  var code = btn.parentNode.querySelector("code");
+  var txt = code ? code.innerText : "";
+  var done = function(){ var o = btn.textContent; btn.textContent = "已复制"; setTimeout(function(){ btn.textContent = o; }, 1200); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(done, function(){ fallbackCopy(txt, done); });
+  } else fallbackCopy(txt, done);
+});
+function fallbackCopy(txt, done){
+  var ta = document.createElement("textarea");
+  ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand("copy"); done(); } catch(e) {}
+  document.body.removeChild(ta);
+}
+
 /* ===== 历史恢复：刷新/重开页面不再"从新开始" =====
-   服务端把每轮 user 提问 + 白绫回复落盘（data/session/chat_history.jsonl）；
-   页面加载时拉回来渲染，服务重启后同一份记录还会重建白绫的工作记忆。 */
+   服务端把每轮 user 提问 + 素月回复落盘（data/session/chat_history.jsonl）；
+   页面加载时拉回来渲染，服务重启后同一份记录还会重建素月的工作记忆。 */
 var HIST_LIMIT = 20;
 function renderHistory(list, before) {
   var frag = document.createDocumentFragment();
@@ -731,6 +825,8 @@ function renderHistory(list, before) {
     if (isUser && m.attachments && m.attachments.length) renderUserAttach(b, m.attachments);
     frag.appendChild(b.parentNode);
   });
+  /* 注意：appendChild(frag) 会清空 frag，必须先高亮再插入 */
+  hljsInit(frag);
   if (before) chat.insertBefore(frag, before); else chat.appendChild(frag);
 }
 function addDivider(text, before) {
@@ -740,7 +836,7 @@ function addDivider(text, before) {
   if (before) chat.insertBefore(d, before); else chat.appendChild(d);
 }
 function greet() {
-  addMsg("bailing", renderMd("你好，我是**白绫**。\n\n我在这里运行，可以和我对话，也可以让我执行任务。\n\n- 直接发消息和我聊天\n- 让我查资料、跑命令、处理文件都可以\n\n开始吧。"));
+  addMsg("bailing", renderMd("你好，我是**素月**。\n\n我在这里运行，可以和我对话，也可以让我执行任务。\n\n- 直接发消息和我聊天\n- 让我查资料、跑命令、处理文件都可以\n\n开始吧。"));
 }
 function loadHistoryOrGreet() {
   fetch("/api/history?limit=" + HIST_LIMIT).then(function(r){ return r.json(); }).then(function(d){
@@ -763,10 +859,10 @@ function showThinking() {
   var wrap = document.createElement("div");
   wrap.className = "msg-wrap bailing";
   var av = document.createElement("div");
-  av.className = "avatar"; av.textContent = "绫";
+  av.className = "avatar"; av.textContent = "月";
   var b = document.createElement("div");
   b.className = "bubble thinking";
-  b.innerHTML = '<span>白绫思考中</span><span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+  b.innerHTML = '<span>素月思考中</span><span class="dot"></span><span class="dot"></span><span class="dot"></span>';
   wrap.appendChild(av); wrap.appendChild(b);
   chat.appendChild(wrap);
   maybeScroll();
@@ -887,7 +983,7 @@ function addTaskPanel(goal) {
   var wrap = document.createElement("div");
   wrap.className = "msg-wrap bailing";
   var av = document.createElement("div");
-  av.className = "avatar"; av.textContent = "绫";
+  av.className = "avatar"; av.textContent = "月";
   var b = document.createElement("div");
   b.className = "bubble task-card";
   b.innerHTML =
@@ -1145,11 +1241,59 @@ function renderTaskDone(panel, reply, artifacts) {
 
 /* 产物卡片：图片内联预览；文件/PDF 提供下载与预览 */
 /* 大图查看（对话内遮罩，不跳新页） */
-function openArtifactModal(src) {
+/* 统一预览弹层：图片→大图；PDF→iframe；文本/代码→拉取展示；Office→提示下载 */
+var _IMG_EXTS = ["png","jpg","jpeg","gif","webp","bmp","svg","avif"];
+var _CODE_EXTS = ["txt","md","markdown","log","json","jsonl","csv","yaml","yml","ini","conf","toml","xml",
+  "html","css","js","mjs","ts","py","go","java","c","h","cpp","hpp","rs","sh","ps1","bat","sql",
+  "vue","jsx","tsx","rb","php","lua","ipynb"];
+var _OFFICE_EXTS = ["doc","docx","xls","xlsx","ppt","pptx"];
+/* 文件扩展名 → highlight.js 语言别名（无映射则 plaintext 不高亮） */
+var _LANG_BY_EXT = {
+  py:"python", js:"javascript", mjs:"javascript", jsx:"javascript", ts:"typescript", tsx:"typescript",
+  go:"go", rs:"rust", java:"java", c:"c", h:"c", cpp:"cpp", hpp:"cpp", css:"css",
+  html:"xml", xml:"xml", vue:"xml", json:"json", jsonl:"json", ipynb:"json",
+  md:"markdown", markdown:"markdown", yml:"yaml", yaml:"yaml",
+  sh:"bash", bash:"bash", ps1:"powershell", bat:"dos", sql:"sql", php:"php", lua:"lua", rb:"ruby",
+  toml:"ini", ini:"ini", conf:"ini", log:"plaintext", txt:"plaintext", csv:"plaintext"
+};
+function langForFile(nm){
+  var ext = String(nm).split(".").pop().toLowerCase();
+  return _LANG_BY_EXT[ext] || "plaintext";
+}
+function openArtifactModal(src, name) {
   var m = document.createElement("div");
   m.className = "artifact-modal";
-  m.innerHTML = '<img src="'+src+'" alt="">';
-  m.onclick = function(){ m.remove(); };
+  var path = String(src).split("?")[0];
+  var ext = (path.split(".").pop() || "").toLowerCase();
+  var nm = name || path.split("/").pop() || "file";
+  if (_IMG_EXTS.indexOf(ext) >= 0) {
+    m.innerHTML = '<img src="'+src+'" alt="">';
+  } else if (ext === "pdf") {
+    m.innerHTML = '<iframe class="modal-pdf" src="'+src+'"></iframe>';
+  } else if (_CODE_EXTS.indexOf(ext) >= 0) {
+    m.innerHTML = '<div class="modal-loading">加载中…</div>';
+    fetch(src).then(function(r){ return r.ok ? r.text() : Promise.reject(r.status); })
+      .then(function(txt){
+        var load = m.querySelector(".modal-loading");
+        if (load) {
+          load.outerHTML = '<pre class="modal-code"><code class="language-'+langForFile(nm)+'">'
+            + escapeHtml(txt) + '</code></pre>';
+          hljsInit(m);
+        }
+      })
+      .catch(function(){
+        var load = m.querySelector(".modal-loading");
+        if (load) load.outerHTML = '<div class="modal-note">读取失败或文件过大，请下载后查看。</div>';
+      });
+  } else if (_OFFICE_EXTS.indexOf(ext) >= 0) {
+    m.innerHTML = '<div class="modal-note">该文件类型（.'+ext+'）浏览器无法在线预览，'
+      + '请下载后用 Office / WPS 打开。</div>'
+      + '<div class="modal-actions"><a class="modal-btn" href="'+src+'" download="'+nm+'">下载文件</a></div>';
+  } else {
+    m.innerHTML = '<div class="modal-note">该文件类型无法在线预览，请下载后查看。</div>'
+      + '<div class="modal-actions"><a class="modal-btn" href="'+src+'" download="'+nm+'">下载文件</a></div>';
+  }
+  m.onclick = function(e){ if (e.target === m) m.remove(); };
   document.body.appendChild(m);
 }
 
@@ -1161,20 +1305,30 @@ function toggleArtifactPreview(btn, url, name) {
   var body = document.createElement("div");
   body.className = "artifact-preview";
   var isPdf = /\.pdf(\?|$)/i.test(url);
+  var path0 = String(url).split("?")[0];
+  var ext0 = (path0.split(".").pop() || "").toLowerCase();
   if (isPdf) {
     body.innerHTML = '<iframe src="'+url+'"></iframe>';
+  } else if (_OFFICE_EXTS.indexOf(ext0) >= 0) {
+    body.innerHTML = '<pre style="color:#B45309; white-space:normal;">'
+      + 'Office 文件（.'+ext0+'）无法在浏览器内预览，请点击"下载"后用 Office / WPS 打开。</pre>';
   } else {
-    body.innerHTML = '<pre class="preview-loading">加载中…</pre>';
+    var lang0 = langForFile(name || url);
+    body.innerHTML = '<pre class="code-prev preview-loading">加载中…</pre>';
     fetch(url).then(function(r){ return r.ok ? r.text() : Promise.reject(r.status); })
       .then(function(txt){
         var shown = txt.slice(0, 3000);
-        body.innerHTML = '<pre>'+escapeHtml(shown)+'</pre>';
+        body.innerHTML = '<pre class="code-prev"><code class="language-'+lang0+'">'
+          + escapeHtml(shown) + '</code></pre>';
+        hljsInit(body);
         if (txt.length > 3000) {
           var more = document.createElement("div");
           more.className = "preview-more";
           more.textContent = "展开全文（共 " + txt.length + " 字）";
           more.onclick = function(){
-            body.innerHTML = '<pre>'+escapeHtml(txt)+'</pre>';
+            body.innerHTML = '<pre class="code-prev"><code class="language-'+lang0+'">'
+              + escapeHtml(txt) + '</code></pre>';
+            hljsInit(body);
             body.scrollTop = 0;
           };
           body.appendChild(more);
@@ -1316,7 +1470,7 @@ function toast(msg) {
   t.textContent = msg; t.classList.add("show");
   clearTimeout(toast._tm); toast._tm = setTimeout(function(){ t.classList.remove("show"); }, 2600);
 }
-/* ===== 附件：粘贴图片 / 拖入文件 / 选择文件 → 待发条 → 随消息发给白绫 ===== */
+/* ===== 附件：粘贴图片 / 拖入文件 / 选择文件 → 待发条 → 随消息发给素月 ===== */
 var _pendingAtts = [];   // 已上传待发 [{kind,name,path,content,file}]
 var _uploading = [];     // 上传中的 Promise
 
@@ -1477,7 +1631,7 @@ function send() {
       if (d.ok) {
         pollTask(panel, d.task_id);
       } else if (o.status === 503) {
-        renderTaskError(panel, "白绫还在初始化中，请稍候再试。");
+        renderTaskError(panel, "素月还在初始化中，请稍候再试。");
         sendBtn.disabled = false;
         input.focus();
       } else {
@@ -1493,14 +1647,14 @@ function send() {
   });
 }
 
-/* 状态栏：轮询直至白绫就绪 */
+/* 状态栏：轮询直至素月就绪 */
 var statusTimer = null;
 function loadStatus() {
   fetch("/api/status").then(function(r){return r.json();}).then(function(d){
     var b = document.getElementById("badges");
     if (!d.ok) { b.innerHTML = '<span class="badge gray">状态未知</span>'; return; }
     if (!d.ready) {
-      b.innerHTML = '<span class="badge gray">白绫初始化中...</span>';
+      b.innerHTML = '<span class="badge gray">素月初始化中...</span>';
       if (!statusTimer) statusTimer = setInterval(loadStatus, 2000);
       return;
     }
@@ -1854,7 +2008,7 @@ loadHistoryOrGreet();
 loadStatus();
 input.focus();
 
-/* ===== 白绫形象：状态联动 + 粒子动画 ===== */
+/* ===== 素月形象：状态联动 + 粒子动画 ===== */
 var personaEl = document.getElementById("persona");
 var pStateText = document.getElementById("pStateText");
 var pfx = document.getElementById("pfx");
@@ -2003,7 +2157,7 @@ function pollActivity(){
 }
 setInterval(pollActivity, 2000); pollActivity();
 
-var GREETS = ["你好呀，白绫。", "白绫，在吗？", "今天辛苦了，白绫。", "白绫，和我说说话吧。"];
+var GREETS = ["你好呀，素月。", "素月，在吗？", "今天辛苦了，素月。", "素月，和我说说话吧。"];
 function quickSend(text){
   if (typeof text === "string" && text) { input.value = text; input.style.height = "auto"; input.focus(); return; }
   var g = GREETS[Math.floor(Math.random() * GREETS.length)];

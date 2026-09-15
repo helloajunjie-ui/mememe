@@ -1,4 +1,4 @@
-"""白绫（Bailing）CLI 入口。
+"""素月（Bailing）CLI 入口。
 
 用法：
     python main.py                 # 交互模式
@@ -12,7 +12,7 @@ import sys
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="白绫 - 自我完善 AI 智能体")
+    parser = argparse.ArgumentParser(description="素月 - 自我完善 AI 智能体")
     parser.add_argument("--config", default="config.yaml", help="配置文件路径")
     parser.add_argument("--task", help="单次任务模式：传入一个任务即执行并退出")
     parser.add_argument("--check", action="store_true", help="环境/工具自检模式")
@@ -26,22 +26,22 @@ def main() -> None:
         _run_check(agent)
         agent.close()
     if getattr(agent, "exit_reload", False):
-        print("（白绫代码已更新，后台自动重启...）")
+        print("（素月代码已更新，后台自动重启...）")
         sys.exit(77)
         return
 
     mode = agent.boot()
 
     if args.task:
-        print("\n白绫 >", agent.turn(args.task))
+        print("\n素月 >", agent.turn(args.task))
         agent.close()
         if getattr(agent, "exit_reload", False):
-            print("（白绫代码已更新，后台自动重启...）")
+            print("（素月代码已更新，后台自动重启...）")
             sys.exit(77)
         return
 
     # 交互模式
-    print(f"\n白绫已就绪（启动模式: {mode}）。输入 exit / quit 退出。\n")
+    print(f"\n素月已就绪（启动模式: {mode}）。输入 exit / quit 退出。\n")
     while True:
         try:
             user = input("你 > ")
@@ -57,7 +57,7 @@ def main() -> None:
         except KeyboardInterrupt:
             print("\n（已中断本轮）")
             continue
-        print(f"白绫 > {reply}")
+        print(f"素月 > {reply}")
     agent.close()
 
 

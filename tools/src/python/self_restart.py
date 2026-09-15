@@ -1,7 +1,7 @@
-"""内置工具：self_restart —— 请求白绫无感冷启动（保存会话快照 → 后台自动重启）。
+"""内置工具：self_restart —— 请求素月无感冷启动（保存会话快照 → 后台自动重启）。
 
-用途：核心代码（core/*.py、main.py、config.yaml）更新后，白绫主动请求重启以生效；
-或用户明确说"重启白绫/更新后重启"。写重启标志文件 data/restart.flag，
+用途：核心代码（core/*.py、main.py、config.yaml）更新后，素月主动请求重启以生效；
+或用户明确说"重启素月/更新后重启"。写重启标志文件 data/restart.flag，
 agent 本轮结束时检测到即保存会话快照并以退出码 77 退出，launcher 自动拉起新进程。
 
 与热更新的关系：工具代码（tools/src/python/*.py）更新走热更新（reload_if_changed），
@@ -18,7 +18,7 @@ _FLAG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..
 
 @tool(
     "self_restart",
-    "请求白绫无感冷启动：核心代码（core/main/config）更新后调用，保存会话快照并后台自动重启，"
+    "请求素月无感冷启动：核心代码（core/main/config）更新后调用，保存会话快照并后台自动重启，"
     "前端最多卡一下。工具层更新（tools/*.py）不需要重启（热更新自动生效）。"
     "调用前先向用户说明：将自动重启以加载新代码，当前对话上下文会无缝续接。",
     {

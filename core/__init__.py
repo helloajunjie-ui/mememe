@@ -1,4 +1,4 @@
-# 白绫核心包
+# 素月核心包
 
 # ===== Windows 子进程静默补丁 =====
 # 背景：Windows 下 subprocess 创建控制台子进程（powershell/git/go/wmic 等）时，

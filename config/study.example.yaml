@@ -1,4 +1,4 @@
-# 白绫"自主时间"配置模板（公开示例，复制为 config/study.yaml 后按需修改）
+# 素月"自主时间"配置模板（公开示例，复制为 config/study.yaml 后按需修改）
 study:
   enabled: true          # 总开关
   window:                # 自主时间窗口（用户可改，支持跨天）

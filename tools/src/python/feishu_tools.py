@@ -181,14 +181,14 @@ def feishu_send_text(receive_id: str, text: str, receive_id_type: str = "open_id
         "properties": {
             "receive_id": {"type": "string", "description": "接收方 ID（open_id/user_id/chat_id）"},
             "text": {"type": "string", "description": "消息正文内容"},
-            "title": {"type": "string", "description": "消息标题，默认'白绫通知'"},
+            "title": {"type": "string", "description": "消息标题，默认'素月通知'"},
             "receive_id_type": {"type": "string", "description": "receive_id 类型，默认 open_id"},
             "account": _ACC,
         },
         "required": ["receive_id", "text"],
     },
 )
-def feishu_send_post(receive_id: str, text: str, title: str = "白绫通知",
+def feishu_send_post(receive_id: str, text: str, title: str = "素月通知",
                      receive_id_type: str = "open_id", account: str = "") -> dict:
     try:
         from lark_oapi.api.im.v1 import CreateMessageRequest, CreateMessageRequestBody

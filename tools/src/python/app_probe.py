@@ -1,6 +1,6 @@
-"""内置工具：app_probe —— 软件安装目录探查（白绫核心能力，独立于 MCP 服务）。
+"""内置工具：app_probe —— 软件安装目录探查（素月核心能力，独立于 MCP 服务）。
 
-定位：白绫核心工具 = 沟通 + 日常命令。探查本机装了什么软件是日常能力，
+定位：素月核心工具 = 沟通 + 日常命令。探查本机装了什么软件是日常能力，
 用于「判定能否执行某项任务 / 决定用 MCP 哪个接口」的前置步骤，不依赖 MCP 服务。
 
 与 sys_probe 的区别：
@@ -8,7 +8,7 @@
 - app_probe：目标软件可执行文件路径级定位（实时、毫秒级），适合"查某个软件装没装、在哪"。
 
 与 MCP 的关系（完全解耦）：
-- app_probe 只回答"本机有什么"；用哪个 MCP 接口由白绫结合 mcp_list（接口目录）判定；
+- app_probe 只回答"本机有什么"；用哪个 MCP 接口由素月结合 mcp_list（接口目录）判定；
   判定后 mcp_connect（激活）才与 MCP 服务通信。
 - 调用链：app_probe（核心，探查）→ mcp_list（MCP 目录）→ mcp_connect（MCP 激活）。
 
@@ -126,7 +126,7 @@ def _probe_all(apps: list | None = None) -> list:
 
 @tool(
     "app_probe",
-    "软件安装目录探查（白绫核心能力，独立于 MCP）：实时定位本机关键软件的可执行文件路径和版本号"
+    "软件安装目录探查（素月核心能力，独立于 MCP）：实时定位本机关键软件的可执行文件路径和版本号"
     "（办公 LibreOffice/Office/WPS、3D Blender/Godot、开发 Git/Node/Python/Go/VS Code、"
     "浏览器 Chrome/Edge、媒体 ffmpeg）。用于「判定本机装了什么、版本是否达标 → 决定用 MCP 哪个接口」。"
     "与 sys_probe 区别：sys_probe 是注册表全量清单（快照），本工具是目标软件路径+版本实时定位。"

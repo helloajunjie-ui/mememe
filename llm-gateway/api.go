@@ -1,7 +1,7 @@
 package main
 
 // api.go —— HTTP 管理 API（路径与现有前端兼容，未来前端切 base 即可无缝使用）
-// 注册两组路径：/admin/*（网关语义）+ /api/*（与白绫 webui 现有前端路径对齐）
+// 注册两组路径：/admin/*（网关语义）+ /api/*（与素月 webui 现有前端路径对齐）
 
 import (
 	"encoding/json"

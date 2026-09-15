@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""白绫无感冷启动 launcher（后台常驻监督进程）。
+"""素月无感冷启动 launcher（后台常驻监督进程）。
 
 用法：
     python launcher.py                                # 默认拉起 webui/server.py（Web 界面）
@@ -7,7 +7,7 @@
     python launcher.py --entry main.py --task "..."   # --entry 之后的参数透传给入口
 
 机制：
-- 拉起白绫入口进程，工作目录固定为项目根。
+- 拉起素月入口进程，工作目录固定为项目根。
 - 入口退出码 77 = "代码已更新，请求重启" → 立即重新拉起（新代码生效，前端最多卡一下）。
 - 其他退出码 = 正常结束（含托盘退出、崩溃）→ launcher 一并退出。
 - 熔断：RESTART_WINDOW 秒内连续重启超过 MAX_RESTARTS 次 → 停止拉起并落日志（防无限重启循环）。
@@ -72,7 +72,7 @@ def main() -> int:
     attempt = 0
     while True:
         attempt += 1
-        log(f"启动白绫（第 {attempt} 次拉起，入口 {rel}）")
+        log(f"启动素月（第 {attempt} 次拉起，入口 {rel}）")
         try:
             rc = subprocess.call([sys.executable, entry] + rest, cwd=ROOT)
         except Exception as e:  # noqa: BLE001
@@ -86,7 +86,7 @@ def main() -> int:
                 return 1
             log("检测到代码更新，后台自动重启（无感冷启动）...")
             continue
-        log(f"白绫退出（退出码 {rc}），launcher 结束。")
+        log(f"素月退出（退出码 {rc}），launcher 结束。")
         return rc
 
 

@@ -1,6 +1,6 @@
-# 白绫（Bailing）主配置
+# 素月（Bailing）主配置
 agent:
-  name: "白绫"
+  name: "素月"
   alias: "Bailing"
   version: "0.1.0"
   timezone: "Asia/Shanghai"

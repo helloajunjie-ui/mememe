@@ -123,7 +123,7 @@ def run(include_docker: bool = True) -> dict:
                    if results.get(k, {}).get("ok") and isinstance(results[k]["val"], (int, float))],
                   default=None)
         if top and top[0] > 0:
-            card["清理建议"] = f"最大头是{top[1]}（{top[0]:.1f}GB）；确认后可用受控方式清理，白绫不会自动删除。"
+            card["清理建议"] = f"最大头是{top[1]}（{top[0]:.1f}GB）；确认后可用受控方式清理，素月不会自动删除。"
 
     summary = " | ".join([f"{k} {v}" for k, v in caches.items() if v not in ("无", "0")][:6])
     return {"ok": True, "summary": summary or "（缓存统计完成，无显著可清理项）", "card": card,

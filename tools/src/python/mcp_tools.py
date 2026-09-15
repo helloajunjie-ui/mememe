@@ -1,7 +1,7 @@
 """内置工具：MCP 软件接口管理（mcp_list / mcp_connect / mcp_disconnect / mcp_scan）。
 
 架构（v2.7 起）：MCP 独立为服务（mcp-service/server.py，端口 8767），统一管理所有
-软件接口（Blender/Godot/filesystem/playwright 等）的连接、激活与调用。白绫侧只做
+软件接口（Blender/Godot/filesystem/playwright 等）的连接、激活与调用。素月侧只做
 HTTP 调用，MCP 工具**不注册进核心工具库**，按需激活注入：
 
   流程：mcp_list（看目录）→ mcp_connect（激活，工具 schema 自动注入）
@@ -70,7 +70,7 @@ def run_connect(name: str) -> dict:
         return {"ok": False, "error": "MCP 服务无法启动，请检查 mcp-service 目录"}
     r = mcp.activate(name)
     if not r.get("ok"):
-        # 激活失败：附带依赖评估（缺什么/多大/多久/环境影响），供白绫通知用户
+        # 激活失败：附带依赖评估（缺什么/多大/多久/环境影响），供素月通知用户
         deps = mcp.assess_deps(name)
         plan = deps.get("plan") or {}
         if plan.get("type") == "manual":
@@ -80,7 +80,7 @@ def run_connect(name: str) -> dict:
                 "error": f"激活 {name} 失败: {r.get('error')}",
                 "need_user_install": True,
                 "note": f"{name} 是大型软件（无法自动安装）。请告知用户：需要自行下载安装 "
-                        f"（安装包通常较大，按官方流程安装），安装完成后告诉白绫再重新激活。",
+                        f"（安装包通常较大，按官方流程安装），安装完成后告诉素月再重新激活。",
             }
         return {
             "ok": False,

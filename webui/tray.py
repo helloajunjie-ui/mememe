@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""白绫系统托盘 —— 常驻入口。
+"""素月系统托盘 —— 常驻入口。
 
 解决"网页关了找不到她 / 不知道怎么停止"的问题：
 - 托盘图标常驻（服务启动即有，与浏览器无关）
 - 悬停气泡（tooltip）实时显示她的状态：运行模式 / 记忆数 / 方法论数 / 情绪
-- 左键单击 = 打开网页；右键菜单 = 打开网页 / 状态（实时刷新）/ 退出白绫
+- 左键单击 = 打开网页；右键菜单 = 打开网页 / 状态（实时刷新）/ 退出素月
 - 状态直接显示在菜单里（不依赖 Windows 通知气泡——旧式 balloon 常被系统抑制）
 - 退出托盘 = 停止服务（干净的收尾：保存状态、关闭 Agent）
 
@@ -52,16 +52,16 @@ def _load_font(size: int):
 
 
 def make_icon() -> "Image.Image":
-    """生成托盘图标：蓝底圆角方块 + 白色"绫"字。"""
+    """生成托盘图标：蓝底圆角方块 + 白色"月"字。"""
     img = Image.new("RGBA", (_ICON_SIZE, _ICON_SIZE), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     d.rounded_rectangle([0, 0, _ICON_SIZE - 1, _ICON_SIZE - 1],
                         radius=14, fill=(59, 130, 246, 255))
     font = _load_font(40)
-    bbox = d.textbbox((0, 0), "绫", font=font)
+    bbox = d.textbbox((0, 0), "月", font=font)
     w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
     d.text(((_ICON_SIZE - w) / 2 - bbox[0], (_ICON_SIZE - h) / 2 - bbox[1]),
-           "绫", font=font, fill=(255, 255, 255, 255))
+           "月", font=font, fill=(255, 255, 255, 255))
     return img
 
 
@@ -97,7 +97,7 @@ def _status_text() -> str:
     try:
         srv = _srv()
         if srv is None or not srv._ready:
-            return "白绫 Bailing · 初始化中..."
+            return "素月 Suyue · 初始化中..."
         a = srv.get_agent()
         emo = ""
         try:
@@ -113,14 +113,14 @@ def _status_text() -> str:
                         "NORMAL_BOOT": "正常启动"}.get(bm, bm) + " · "
         except Exception:  # noqa: BLE001
             pass
-        parts = [f"白绫 Bailing · {mode}运行中",
+        parts = [f"素月 Suyue · {mode}运行中",
                  f"记忆 {srv.memory_count()}", f"方法论 {srv.method_count()}"]
         if emo:
             parts.append(f"情绪 {emo}")
         parts.insert(0, f"状态：{_agent_activity()}")
         return " · ".join(parts)
     except Exception:  # noqa: BLE001
-        return "白绫 Bailing"
+        return "素月 Suyue"
 
 
 def _uptime() -> str:
@@ -210,9 +210,9 @@ def _full_status() -> str:
                     pass
             else:
                 line.append("初始化中")
-        return "白绫 Bailing\n" + " · ".join(x for x in line if x)
+        return "素月 Suyue\n" + " · ".join(x for x in line if x)
     except Exception:  # noqa: BLE001
-        return "白绫 Bailing"
+        return "素月 Suyue"
 
 
 def _build_menu(url: str, on_quit):
@@ -224,7 +224,7 @@ def _build_menu(url: str, on_quit):
     def _show_status(icon, item):
         # 尽力而为的通知气泡（部分系统抑制旧式 balloon，菜单本身已显示状态）
         try:
-            icon.notify(_full_status(), "白绫 Bailing")
+            icon.notify(_full_status(), "素月 Suyue")
         except Exception:  # noqa: BLE001
             pass
 
@@ -242,7 +242,7 @@ def _build_menu(url: str, on_quit):
         items.append(pystray.Menu.SEPARATOR)
         for line in status_lines:
             items.append(_MI("● " + line, _show_status, enabled=True))
-    items += [pystray.Menu.SEPARATOR, _MI("退出白绫", _quit)]
+    items += [pystray.Menu.SEPARATOR, _MI("退出素月", _quit)]
     return pystray.Menu(*items)
 
 
