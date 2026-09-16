@@ -102,9 +102,47 @@ def _read_version(path: str, args: list) -> str:
     return m.group(1) if m else ""
 
 
+def _parse_display_icon(raw: str) -> str:
+    """解析卸载项 DisplayIcon 值 -> 可执行文件路径。
+
+    形如 '"C:\\a\\b.exe",0' / 'C:\\a\\b.exe,0' / 'C:\\a\\b.exe'。
+    非 exe、路径不存在、或落在 Windows Installer 缓存目录 -> 空串（不可信，不猜）。
+    """
+    if not raw:
+        return ""
+    s = raw.strip()
+    for c in (s, re.sub(r",\s*-?\d+\s*$", "", s)):
+        c = c.strip().strip('"').strip()
+        if not c.lower().endswith(".exe") or not os.path.exists(c):
+            continue
+        if "\\windows\\installer\\" in c.lower():
+            continue
+        return c
+    return ""
+
+
+def _same_family(path: str, exe_file: str) -> bool:
+    """DisplayIcon 是否真指向目标本体（防拿到 unins000.exe 这类卸载器）。
+
+    判据：stem 同名，或一方是另一方去掉 launcher/stub 等后缀后的名字（空串不参与比较）。
+    """
+    stem = os.path.splitext(os.path.basename(path))[0].lower()
+    want = os.path.splitext(exe_file)[0].lower()
+    if stem == want:
+        return True
+    a = _strip_launcher(stem)
+    if a and a == want:
+        return True
+    b = _strip_launcher(want)
+    if b and b == stem:
+        return True
+    return False
+
+
 def _from_registry(exe: str, name: str = "") -> str:
     """注册表权威定位（抗升级/换盘/换目录）：①App Paths 的默认值即官方注册的全路径；
-    ②卸载项 InstallLocation 兜底：DisplayName 含软件名时，在安装目录内递归找 exe。
+    ②卸载项 DisplayIcon 直接给出 exe 路径（覆盖率高、最精准，需校验真指向本体）；
+    ③卸载项 InstallLocation 兜底：DisplayName 含软件名时，在安装目录内递归找 exe。
     仅 Windows 生效；读不到返回空串（如实）。"""
     if os.name != "nt":
         return ""
@@ -147,6 +185,13 @@ def _from_registry(exe: str, name: str = "") -> str:
                     dn, _ = winreg.QueryValueEx(sk, "DisplayName")
                     if not any(t in dn.lower() for t in tokens):
                         continue
+                    try:
+                        di, _ = winreg.QueryValueEx(sk, "DisplayIcon")
+                    except OSError:
+                        di = ""
+                    icon_exe = _parse_display_icon(di)
+                    if icon_exe and _same_family(icon_exe, exe_file):
+                        return icon_exe
                     loc, _ = winreg.QueryValueEx(sk, "InstallLocation")
             except OSError:
                 continue
