@@ -331,6 +331,11 @@ def _inspect_exe(path: str) -> dict:
     return info
 
 
+# 版本从安装文件读（避开 GUI 进程）：这类 GUI 启动器不带 --headless 会常驻不退，
+# 跑 --version 只会超时（实测 soffice.exe --version 挂死 >25s），版本必须从安装文件读。
+_VER_FROM_FILE: dict = {"LibreOffice": ("bootstrap.ini", "ProductKey")}
+
+
 def _file_hint(name: str):
     low = (name or "").lower()
     for k, v in _VER_FROM_FILE.items():
