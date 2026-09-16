@@ -96,3 +96,5 @@ data/restart.flag
 
 # 运行时探测状态（每次扫描都变，不入库）
 config/llm_health.json
+# ===== local model cache (176MB, never commit) =====
+.u2net/
