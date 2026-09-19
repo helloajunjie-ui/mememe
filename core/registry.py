@@ -420,6 +420,7 @@ class ToolRegistry:
                      "mcp_key_set", "mcp_key_list", "mcp_key_remove",
                      "mcp_deps", "mcp_install"],
         "文本处理": ["word_count"],
+        "图形输出": ["image_gen"],  # 无前缀特例
     }
 
     # ---- 功能域归类（单一真源）----
@@ -449,6 +450,8 @@ class ToolRegistry:
         ("ctx_", "上下文"),
         ("llm_", "模型"),
         ("vision_", "多模态"),
+        ("kb_", "知识库"),
+        ("qr_", "图形输出"),
         ("word_", "文本处理"),
     )
 
@@ -456,7 +459,7 @@ class ToolRegistry:
     _GROUP_ORDER = [
         "网络", "局域网", "个人云", "飞书",
         "文件系统", "工作区", "系统与执行",
-        "记忆与经验", "上下文", "文本处理",
+        "记忆与经验", "知识库", "上下文", "文本处理",
         "凭据库", "模型", "多模态", "图形输出",
         "自我维护", "工具工程",
         "MCP·godot", "MCP·blender", "MCP", "其他",
