@@ -363,6 +363,7 @@ class ToolRegistry:
         "fs_stat": "文件信息", "fs_delete": "删文件", "fs_move": "移动文件", "fs_copy": "复制文件",
         "memory_write": "写记忆", "memory_search": "查记忆", "method_learn": "沉淀方法论",
         "ctx_search": "上下文检索",
+        "archify_render": "架构图渲染",
         "sys_probe": "综合探查", "sys_check": "系统巡检", "net_quality": "网络质量", "disk_report": "磁盘报告",
         "git_multi_status": "仓库状态", "app_probe": "软件探查", "proc_list": "进程列表", "proc_kill": "结束进程",
         "self_restart": "请求重启",
@@ -456,7 +457,7 @@ class ToolRegistry:
         "网络", "局域网", "个人云", "飞书",
         "文件系统", "工作区", "系统与执行",
         "记忆与经验", "上下文", "文本处理",
-        "凭据库", "模型", "多模态",
+        "凭据库", "模型", "多模态", "图形输出",
         "自我维护", "工具工程",
         "MCP·godot", "MCP·blender", "MCP", "其他",
     ]
@@ -464,6 +465,7 @@ class ToolRegistry:
     # 世界书触发关键词（手动配置，覆盖用户自然语言说法；自动提取仅作兜底）
     _TOOL_KEYWORDS = {
         "net_search": ["搜索", "查一下", "查找", "查询", "检索", "搜", "资讯", "了解下"],
+        "archify_render": ["画架构图", "架构图", "流程图", "时序图", "数据流图", "生命周期图", "画个图", "示意图", "出图"],
         "net_fetch": ["抓取", "打开网页", "读取网页", "网址", "网页内容", "链接内容"],
         "net_download": ["下载", "下载视频", "保存文件", "拉文件", "下个"],
         "cmd_run": ["执行命令", "运行命令", "命令行", "powershell", "cmd", "终端"],

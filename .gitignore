@@ -98,3 +98,6 @@ data/restart.flag
 config/llm_health.json
 # ===== local model cache (176MB, never commit) =====
 .u2net/
+
+# 第三方依赖（可重新拉取，不入公开仓库；如 archify 图渲染器）
+tools/vendor/

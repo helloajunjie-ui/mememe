@@ -37,7 +37,8 @@ _SCAN_FILES = ["main.py", "config.yaml", ".gitignore", "data/persona.yaml"]  # �
 # 注：data/self.yaml 未纳入——boot_count 每次启动自增属正常变动，纳入会制造常态告警噪音。
 _SCAN_DIRS = ["core", "tools", "webui"]  # 含最暴露的 HTTP 接口面
 _EXTENSIONS = {".py", ".go", ".yaml", ".yml", ".html"}
-_EXCLUDE_DIRS = {".venv", "__pycache__", ".git", "bin", "templates_external"}
+# 注：tools/vendor = 第三方依赖（可重新拉取，非本体代码），排除以免基线误报"新增篡改"。
+_EXCLUDE_DIRS = {".venv", "__pycache__", ".git", "bin", "templates_external", "vendor"}
 
 
 def _iter_body_files():
