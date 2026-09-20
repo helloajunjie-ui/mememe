@@ -152,15 +152,18 @@ def kill_job(job_id: str) -> dict:
 
 
 def list_jobs() -> dict:
+    """状态条只返回 running 的 job（完成/出错/killed 的不显示）。
+    完成通知已由前端状态变化检测插对话区，状态条不放历史。"""
     out = []
     with _LOCK:
         for j in _JOBS.values():
             _refresh_status(j)
-            out.append({
-                "job_id": j["job_id"], "pid": j["pid"], "status": j["status"],
-                "started_at": j["started_at"],
-                "command": j["command"][:120],
-            })
+            if j["status"] == "running":
+                out.append({
+                    "job_id": j["job_id"], "pid": j["pid"], "status": j["status"],
+                    "started_at": j["started_at"],
+                    "command": j["command"][:120],
+                })
     return {"ok": True, "jobs": out, "count": len(out)}
 
 

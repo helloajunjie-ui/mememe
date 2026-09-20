@@ -205,7 +205,7 @@ class ToolRegistry:
         self.tools_dir = tools_dir
         self.tools: Dict[str, Dict] = {}      # name -> registry entry
         self._fns: Dict[str, Callable] = {}   # name -> python 函数（动态加载）
-        self._mod_mtime: Dict[str, float] = {}  # name -> 工具源码 mtime（热更新检测用）
+        self._mod_mtime: Dict[str, float] = {}  # 源码路径 -> mtime（热更新检测；按文件记，同文件多工具共享，避免重复 reload 清空模块级状态）
         self.mcp: Any = None                  # MCP 管理器（McpManager，agent 启动时注入）
 
     # ---------- 持久化 ----------
@@ -274,9 +274,9 @@ class ToolRegistry:
         }
         self._fns[name] = fn
         try:
-            self._mod_mtime[name] = os.path.getmtime(source_path)
+            self._mod_mtime[source_path] = os.path.getmtime(source_path)
         except OSError:
-            self._mod_mtime[name] = 0.0
+            self._mod_mtime[source_path] = 0.0
 
     # ---------- 工具热更新（源码 mtime 变化 → reload 模块，无需重启素月） ----------
     def reload_if_changed(self, name: str) -> bool:
@@ -290,7 +290,7 @@ class ToolRegistry:
             mtime = os.path.getmtime(src)
         except OSError:
             return False
-        if self._mod_mtime.get(name) == mtime:
+        if self._mod_mtime.get(src) == mtime:  # 按源文件比对：同文件多工具共享，reload 只发生一次
             return False
         mod_name = f"tools.src.python.{Path(src).stem}"
         try:
@@ -304,7 +304,7 @@ class ToolRegistry:
                 print(f"[registry] 热更新 {name} 失败: 模块中找不到入口函数 {entry}")
                 return False
             self._fns[name] = fn
-            self._mod_mtime[name] = mtime
+            self._mod_mtime[src] = mtime
             # 同步刷新 desc/parameters（工具元信息也变了时）
             meta = get_meta(fn)
             if meta:
@@ -714,6 +714,13 @@ class ToolRegistry:
                 srv = self.mcp.match_server(name)
                 if srv:
                     tool = name[len(f"mcp_{srv}_"):]
+                    # background=true → 走 mcp_job 后台执行，立即返回 job_id（兜底段=真实路径）
+                    bg = bool((args or {}).pop("background", False))
+                    if bg:
+                        from tools.src.python.mcp_job import start_mcp_job
+                        jid = start_mcp_job(srv, tool, args or {})
+                        return {"ok": True, "job_id": jid, "background": True,
+                                "note": "MCP 后台任务已发起，用 mcp_job_status 查结果"}
                     return self.mcp.call(srv, tool, args, cancel_event=cancel_event)
             return {"ok": False, "error": f"工具不存在: {name}"}
         impl = entry["impl"]
@@ -733,6 +740,12 @@ class ToolRegistry:
         if impl["type"] == "mcp":
             if self.mcp is None:
                 return {"ok": False, "error": f"MCP 管理器未初始化（server={impl.get('server')}）"}
+            bg = bool((args or {}).pop("background", False))
+            if bg:
+                from tools.src.python.mcp_job import start_mcp_job
+                jid = start_mcp_job(impl.get("server", ""), impl.get("tool", ""), args or {})
+                return {"ok": True, "job_id": jid, "background": True,
+                        "note": "MCP 后台任务已发起，用 mcp_job_status 查结果"}
             return self.mcp.call(impl.get("server", ""), impl.get("tool", ""), args, cancel_event=cancel_event)
         return {"ok": False, "error": f"未知工具类型: {impl['type']}"}
 
