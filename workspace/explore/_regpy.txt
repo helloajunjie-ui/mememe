@@ -1,0 +1,16 @@
+  203 |     def __init__(self, path: str = "data/registry.json", tools_dir: str = "tools"):
+  220 |     def save(self) -> None:
+  223 |             json.dump({"tools": self.tools}, f, ensure_ascii=False, indent=2)
+  228 |         src_dir = Path(self.tools_dir) / "src" / "python"
+  232 |         sys.path.insert(0, str(Path(self.tools_dir).parent))  # 让 "tools.base" 可导入
+  251 |         source_path = f"{self.tools_dir}/src/python/{fn.__module__.split('.')[-1]}.py"
+  263 |                 "source": source_path,
+  266 |                 "hash": self._hash_file(source_path),
+  277 |             self._mod_mtime[source_path] = os.path.getmtime(source_path)
+  279 |             self._mod_mtime[source_path] = 0.0
+  295 |         mod_name = f"tools.src.python.{Path(src).stem}"
+  316 |             print(f"[registry] 热更新工具 {name}（{Path(src).name}）")
+  323 |     def register_mcp(self, tool_name: str, server: str, tool: str,
+  771 |             payload = json.dumps({"args": args}, ensure_ascii=False)
+  795 |     print(json.dumps(reg.to_openai_schemas(), ensure_ascii=False, indent=2))
+== matched 15 (limit 30) in F:\me\self-agent\core\registry.py

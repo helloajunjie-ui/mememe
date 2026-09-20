@@ -1,0 +1,30 @@
+  316 | 
+  317 | 
+  318 | class EpisodicNode(Node):
+  319 |     source: EpisodeType = Field(description='source type')
+  320 |     source_description: str = Field(description='description of the data source')
+  321 |     content: str = Field(description='raw episode data')
+  322 |     valid_at: datetime = Field(
+  323 |         description='datetime of when the original document was created',
+  324 |     )
+  325 |     entity_edges: list[str] = Field(
+  326 |         description='list of entity edges referenced in this episode',
+  327 |         default_factory=list,
+  328 |     )
+  329 |     episode_metadata: dict[str, Any] | None = Field(
+  330 |         description='customer-defined metadata key-value pairs for filtering',
+  331 |         default=None,
+  332 |     )
+  333 | 
+  334 |     async def save(self, driver: GraphDriver):
+  335 |         if driver.graph_operations_interface:
+  336 |             try:
+  337 |                 return await driver.graph_operations_interface.episodic_node_save(self, driver)
+  338 |             except NotImplementedError:
+  339 |                 pass
+  340 | 
+  341 |         episode_args = {
+  342 |             'uuid': self.uuid,
+  343 |             'name': self.name,
+  344 |             'group_id': self.group_id,
+  345 |             'source_description': self.source_description,

@@ -1,0 +1,20 @@
+   54 | class EpisodeType(Enum):
+   93 | class Node(BaseModel, ABC):
+  318 | class EpisodicNode(Node):
+  322 |     valid_at: datetime = Field(
+  349 |             'valid_at': self.valid_at,
+  499 | class EntityNode(Node):
+  687 | class CommunityNode(Node):
+  867 | class SagaNode(Node):
+  872 |     # Maximum ``valid_at`` (episode reference time) across all episodes covered
+  876 |     last_summarized_episode_valid_at: datetime | None = None
+  895 |             last_summarized_episode_valid_at=self.last_summarized_episode_valid_at,
+ 1030 |     valid_at = parse_db_date(record['valid_at'])
+ 1034 |     if valid_at is None:
+ 1035 |         raise ValueError(f'valid_at cannot be None for episode {record.get("uuid", "unknown")}')
+ 1040 |         valid_at=valid_at,
+ 1095 |     last_summarized_episode_valid_at = record.get('last_summarized_episode_valid_at')
+ 1105 |         last_summarized_episode_valid_at=(
+ 1106 |             parse_db_date(last_summarized_episode_valid_at)  # type: ignore
+ 1107 |             if last_summarized_episode_valid_at
+== matched 19 (limit 45) in F:\me\self-agent\workspace\explore\dig\getzep__graphiti__graphiti_core_nodes.py

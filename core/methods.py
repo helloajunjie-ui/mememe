@@ -123,6 +123,8 @@ class MethodStore:
 
     # 手动配置触发关键词（覆盖自动提取；覆盖用户自然语言说法，如"PY还是GO""被墙""黑化"）
     _MANUAL_KEYWORDS = {
+        349: ["探索", "摸清", "新工具", "新软件", "新网站", "新技能", "怎么下手", "能干什么", "上手", "试一下", "挖宝"],
+        350: ["深挖", "台账", "收藏", "立项", "收口", "续接", "存下来", "下载了", "只是开始", "先存着", "丢那儿", "丢那里"],
         28: ["任务分类", "计划线", "异步", "结果导向", "询问纪律", "任务模型"],
         27: ["网页", "web", "界面", "webui", "交互"],
         26: ["黑化", "提示词污染", "本性", "人格", "洗脑", "毒化"],
@@ -308,6 +310,40 @@ class MethodStore:
                 hits.append(m)
         hits.sort(key=lambda m: -m.get("importance", 0))
         return hits[:limit]
+
+    # ---- 三层激活：常驻 / 场景预加载 / 关键词命中 ----
+
+    # 常驻层：最高频行为准则，每次都在 system prompt（不靠关键词碰运气）
+    _ALWAYS_ON_IDS = [3, 4, 5, 8, 17]  # 探查先行 / 小步验证 / 失败两次换路 / 事实准确 / 死循环
+
+    def always_on(self) -> List[Dict]:
+        """常驻层：最高频行为准则，每次都在。"""
+        out = []
+        for mid in self._ALWAYS_ON_IDS:
+            m = self.get(mid)
+            if m and m.get("status") == "active":
+                out.append(m)
+        return out
+
+    def preload_by_activity(self, recent_tools: List[str], recent_text: str) -> List[Dict]:
+        """场景预加载：根据她正在做什么，主动带相关方法论。
+        recent_tools: 最近 N 步调过的工具名列表；recent_text: 最近几轮她自己的 thinking。"""
+        hits = []
+        seen = set()
+        low = (recent_text or "").lower()
+        tools = set(recent_tools or [])
+        # 搜索场景
+        if "net_search" in tools or "bsk_navigate" in tools or "google" in low or "搜索" in (recent_text or ""):
+            for mid in (343, 344):
+                m = self.get(mid)
+                if m and m.get("status") == "active" and mid not in seen:
+                    hits.append(m); seen.add(mid)
+        # 启动服务/连接 MCP 场景
+        if "mcp_connect" in tools or "bsk_session_start" in tools:
+            m = self.get(341)
+            if m and m.get("status") == "active" and 341 not in seen:
+                hits.append(m); seen.add(341)
+        return hits
 
     def get(self, mid: int) -> Optional[Dict]:
         for m in self.data.get("methods", []):

@@ -1,0 +1,9 @@
+ 3785 |     "net_search": {
+ 3786 |       "name": "net_search",
+ 3823 |         "source": "F:\\me\\self-agent\\tools/src/python/net_search.py",
+ 4335 |       "description": "从网络（git 平台/文件 URL）获取仓库或文件到 workspace/，国内节点优先（gitee/gitcode 直连、github 走镜像加速），git 仓库浅克隆（--depth 1）。获取后可进一步用 tool_scan 发现工具、tool_import 导入工具库。属中等风险操作（仅新增到 workspace，不改系统）。",
+ 4619 |     "tool_scan": {
+ 4620 |       "name": "tool_scan",
+ 4627 |         "tool_scan"
+ 4645 |         "source": "F:\\me\\self-agent\\tools/src/python/tool_scan.py",
+== matched 8 (limit 12) in F:\me\self-agent\data\registry.json

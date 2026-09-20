@@ -1,0 +1,48 @@
+  538 | def resolve_edge_contradictions(
+  539 |     resolved_edge: EntityEdge, invalidation_candidates: list[EntityEdge]
+  540 | ) -> list[EntityEdge]:
+  541 |     if len(invalidation_candidates) == 0:
+  542 |         return []
+  543 | 
+  544 |     # Determine which contradictory edges need to be expired
+  545 |     invalidated_edges: list[EntityEdge] = []
+  546 |     for edge in invalidation_candidates:
+  547 |         # (Edge invalid before new edge becomes valid) or (new edge invalid before edge becomes valid)
+  548 |         edge_invalid_at_utc = ensure_utc(edge.invalid_at)
+  549 |         resolved_edge_valid_at_utc = ensure_utc(resolved_edge.valid_at)
+  550 |         edge_valid_at_utc = ensure_utc(edge.valid_at)
+  551 |         resolved_edge_invalid_at_utc = ensure_utc(resolved_edge.invalid_at)
+  552 | 
+  553 |         if (
+  554 |             edge_invalid_at_utc is not None
+  555 |             and resolved_edge_valid_at_utc is not None
+  556 |             and edge_invalid_at_utc <= resolved_edge_valid_at_utc
+  557 |         ) or (
+  558 |             edge_valid_at_utc is not None
+  559 |             and resolved_edge_invalid_at_utc is not None
+  560 |             and resolved_edge_invalid_at_utc <= edge_valid_at_utc
+  561 |         ):
+  562 |             continue
+  563 |         # New edge invalidates edge
+  564 |         elif (
+  565 |             edge_valid_at_utc is not None
+  566 |             and resolved_edge_valid_at_utc is not None
+  567 |             and edge_valid_at_utc < resolved_edge_valid_at_utc
+  568 |         ):
+  569 |             edge.invalid_at = resolved_edge.valid_at
+  570 |             edge.expired_at = edge.expired_at if edge.expired_at is not None else utc_now()
+  571 |             invalidated_edges.append(edge)
+  572 | 
+  573 |     return invalidated_edges
+  574 | 
+  575 | 
+  576 | async def _extract_edge_timestamps(
+  577 |     llm_client: LLMClient,
+  578 |     edge: EntityEdge,
+  579 |     episode: EpisodicNode | None,
+  580 | ) -> None:
+  581 |     """Extract valid_at / invalid_at timestamps for an edge via a lightweight LLM call.
+  582 | 
+  583 |     Modifies the edge in place. Skips if the edge already has timestamps set
+  584 |     (e.g., from the extraction prompt in the separate-extraction path) or if
+  585 |     no reference time is available.

@@ -1,0 +1,34 @@
+FILE_BYTES=9075
+FILE_CHARS=5177
+HAS_TRUNC_MARK=False
+COUNT_TRUNC_MARK=0
+---HEADINGS---
+L1: # 探索台账（Exploration Ledger）
+L7: ## 状态定义
+L17: ## 收口判据（三条齐了才算 closed）
+L25: ## 在挖
+L27: ### [digging] brag（/brag）
+L47: ### [digging] Agent-Reach
+L60: ## 已收口
+L62: ### [digging] WeKnora
+L80: ## 已放弃
+---CHARS_FROM_4000---
+」。解法三层、由廉到贵：tier1 归一化等值+历史别名 → tier2 字符 bigram 重叠（阈值 **0.80，故意设高**）→ tier3 一次批量模型裁定。**核心取舍：错合并会污染「晋升计数」且发生时不可见；漏合并只是延迟晋升。**（点名同领域 mem0 / Graphiti）
+  2. `recall_trace.go` —— **召回可解释**：`scopeDisableReason()` 答「记忆为什么关着」（no_principal / workspace_disabled / agent_disabled / ...），`recallEmptyMeta()` 答「为什么没召回」；并统计 **VectorOutsidePool**（词法池之外的语义命中——「这些在候选先于 query 选定时就不可达」）
+  3. `evalset.json` / `topic_evalset.json` —— **记忆质量评测集**（黄金样本 + expect/reject），明列复现失败模式：**存一次性问题 / 存助手自己的职责 / 存密钥 / 已完成任务不删 / 任务无过期**
+- **本次拿走的东西（可验证）**：
+  - ✅ **提炼提示词补两条护栏**（`core/memory_extract.py`）：① 绝不提炼密钥/口令/token/私钥/连接串的值（可记「存在某凭据」这一事实）② 不把助手自身职责当使用者事实。`py_compile` 通过；备份 `memory_extract.py.bak_20260920_weknora_guard`
+  - ✅ **密钥审计（真实数据）**：全库 **626 条**，正则扫真实密钥形态（sk-/AKIA/ghp_/AIza/JWT/PEM）→ **命中 0**。#12 存的是 `api_key_env: BAILING_API_KEY`（变量名非值）。**结论：库里没泄漏，但此前也没有护栏——是「没踩到」，不是「防住了」。**
+- **下一步（backlog，未做）**：① `recall_trace` 式「为什么没召回」可解释性——我的记忆目前是黑箱 ② `topic_resolve` 三层归并——正对我方法论去重（#275） ③ 给 `memory_extract` 建黄金评测集（照 evalset.json 形态）
+- **卡点**：无
+
+---
+
+## 已放弃
+
+（空）
+
+---
+
+*建立于 2026-09-20，随探索持续推进。*
+*2026-09-20 晚更新：brag 由 inbox → digging（读完全部 SKILL/references 索引 + 前置环境实测全绿），下一步真跑一次。*

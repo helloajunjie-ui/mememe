@@ -1,0 +1,31 @@
+  262 | 
+  263 | class EntityEdge(Edge):
+  264 |     name: str = Field(description='name of the edge, relation name')
+  265 |     fact: str = Field(description='fact representing the edge and nodes that it connects')
+  266 |     fact_embedding: list[float] | None = Field(default=None, description='embedding of the fact')
+  267 |     episodes: list[str] = Field(
+  268 |         default=[],
+  269 |         description='list of episode ids that reference these entity edges',
+  270 |     )
+  271 |     expired_at: datetime | None = Field(
+  272 |         default=None, description='datetime of when the node was invalidated'
+  273 |     )
+  274 |     valid_at: datetime | None = Field(
+  275 |         default=None, description='datetime of when the fact became true'
+  276 |     )
+  277 |     invalid_at: datetime | None = Field(
+  278 |         default=None, description='datetime of when the fact stopped being true'
+  279 |     )
+  280 |     reference_time: datetime | None = Field(
+  281 |         default=None, description='reference timestamp from the episode that produced this edge'
+  282 |     )
+  283 |     attributes: dict[str, Any] = Field(
+  284 |         default={}, description='Additional attributes of the edge. Dependent on edge name'
+  285 |     )
+  286 | 
+  287 |     async def generate_embedding(self, embedder: EmbedderClient):
+  288 |         start = time()
+  289 | 
+  290 |         text = self.fact.replace('\n', ' ')
+  291 |         self.fact_embedding = await embedder.create(input_data=[text])
+  292 | 

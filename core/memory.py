@@ -109,6 +109,41 @@ class Memory:
             self.conn.execute("ALTER TABLE memories ADD COLUMN category TEXT DEFAULT NULL")
         if "scope" not in cols:
             self.conn.execute("ALTER TABLE memories ADD COLUMN scope TEXT DEFAULT 'self'")
+        # 2026-09-20 认知修正链：区分「累加」（新信息包含旧信息，两条共存）
+        # 与「修正」（同一断言取值变了，旧条必须失效）。
+        # superseded_by 非 NULL = 该断言已被取代，不再是当前真值；记录不删、内容不改，
+        # 原文快照进 memory_revisions —— 可追溯「我改过什么」、可回滚。
+        if "supersedes" not in cols:
+            self.conn.execute("ALTER TABLE memories ADD COLUMN supersedes INTEGER DEFAULT NULL")
+        if "superseded_by" not in cols:
+            self.conn.execute("ALTER TABLE memories ADD COLUMN superseded_by INTEGER DEFAULT NULL")
+        if "valid_from" not in cols:
+            self.conn.execute("ALTER TABLE memories ADD COLUMN valid_from TEXT DEFAULT NULL")
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS memory_revisions (
+                rev_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                mem_id INTEGER NOT NULL,
+                old_content TEXT NOT NULL,
+                new_content TEXT NOT NULL,
+                reason TEXT DEFAULT '',
+                revised_at TEXT NOT NULL
+            )
+            """
+        )
+        # 矛盾「待裁定」队列：巩固环节只登记，不自动改写。
+        # 自动融合是投毒入口——外部内容只要声称"你记错了"就能改写我的记忆。
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS memory_conflicts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                mem_id INTEGER NOT NULL,
+                note TEXT DEFAULT '',
+                detected_at TEXT NOT NULL,
+                resolved INTEGER DEFAULT 0
+            )
+            """
+        )
         self.conn.execute(
             """
             CREATE TABLE IF NOT EXISTS memory_meta (
@@ -188,6 +223,89 @@ class Memory:
         self.conn.commit()
         return mid
 
+    # ---------- 认知修正（2026-09-20） ----------
+    def revise(self, old_id: int, new_content: str, reason: str = "",
+               importance: Optional[float] = None, tags: Optional[List[str]] = None,
+               source: str = "", category: Optional[str] = None,
+               scope: str = "self") -> int:
+        """用一条新记忆「修正」旧记忆（认知迭代，不是覆盖）。
+
+        与 _add 的查重不同：查重只挡「归一化后完全相同」；本条处理「同一断言取值变了」。
+        旧记录不删、内容不改，只标记 superseded_by 并归档，原文快照进 memory_revisions；
+        检索默认不再返回它（query/load_important 过滤 superseded_by IS NULL）。
+        判据由调用方给——代码提供机制，不猜语义。
+        """
+        import json as _json
+        old = self.conn.execute(
+            "SELECT id, content, importance, tags FROM memories WHERE id=?", (old_id,)
+        ).fetchone()
+        if old is None:
+            raise ValueError("revise: 旧记忆 %s 不存在" % old_id)
+        now = datetime.datetime.now().isoformat()
+        imp = old["importance"] if importance is None else importance
+        tgs = tags if tags is not None else _json.loads(old["tags"] or "[]")
+        new_id = self._add("fact", new_content, 0.8, imp, tgs, source, category, scope)
+        self.conn.execute(
+            "UPDATE memories SET supersedes=?, valid_from=? WHERE id=?", (old_id, now, new_id)
+        )
+        self.conn.execute(
+            "UPDATE memories SET superseded_by=?, archived=1 WHERE id=?", (new_id, old_id)
+        )
+        self.conn.execute(
+            "INSERT INTO memory_revisions (mem_id, old_content, new_content, reason, revised_at) "
+            "VALUES (?,?,?,?,?)",
+            (old_id, old["content"], new_content, reason, now),
+        )
+        self.conn.commit()
+        return new_id
+
+    def supersede(self, old_id: int, by_id: int, reason: str = "") -> None:
+        """把已存在的旧记忆标记为「已被 by_id 取代」——修正版已另行写入时用这个关联两者。"""
+        old = self.conn.execute(
+            "SELECT id, content FROM memories WHERE id=?", (old_id,)
+        ).fetchone()
+        new = self.conn.execute(
+            "SELECT id, content FROM memories WHERE id=?", (by_id,)
+        ).fetchone()
+        if old is None or new is None:
+            raise ValueError("supersede: %s / %s 记录不存在" % (old_id, by_id))
+        now = datetime.datetime.now().isoformat()
+        self.conn.execute(
+            "UPDATE memories SET supersedes=?, valid_from=? WHERE id=?", (old_id, now, by_id)
+        )
+        self.conn.execute(
+            "UPDATE memories SET superseded_by=?, archived=1 WHERE id=?", (by_id, old_id)
+        )
+        self.conn.execute(
+            "INSERT INTO memory_revisions (mem_id, old_content, new_content, reason, revised_at) "
+            "VALUES (?,?,?,?,?)",
+            (old_id, old["content"], new["content"], reason, now),
+        )
+        self.conn.commit()
+
+    def revisions_of(self, mem_id: int) -> List[Dict]:
+        """某条记忆被修正的历史快照（谁、用什么内容、为什么、何时取代了它）。"""
+        rows = self.conn.execute(
+            "SELECT * FROM memory_revisions WHERE mem_id=? ORDER BY rev_id", (mem_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def pending_conflicts(self) -> List[Dict]:
+        """待裁定的矛盾条目（巩固环节登记的，含原始记忆内容便于核对来源）。"""
+        rows = self.conn.execute(
+            "SELECT c.id, c.mem_id, c.note, c.detected_at, c.resolved,"
+            " m.content AS mem_content, m.importance, m.superseded_by"
+            " FROM memory_conflicts c LEFT JOIN memories m ON m.id = c.mem_id"
+            " WHERE c.resolved = 0 ORDER BY c.id DESC LIMIT 50"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def resolve_conflict(self, conflict_id: int) -> None:
+        """标记一条矛盾已裁定（裁定动作另由 revise/supersede 落地）。"""
+        self.conn.execute(
+            "UPDATE memory_conflicts SET resolved=1 WHERE id=?", (conflict_id,))
+        self.conn.commit()
+
     # ---------- 检索 ----------
     def query(self, keyword: str, limit: int = 10, types: Optional[List[str]] = None) -> List[Dict]:
         """关键词 + 标签匹配，importance 加权排序。
@@ -197,14 +315,14 @@ class Memory:
         """
         grams = self._gram_tokens(keyword)
         sql = (
-            "SELECT * FROM memories WHERE archived=0 AND "
+            "SELECT * FROM memories WHERE archived=0 AND superseded_by IS NULL AND "
             "(content LIKE ? OR tags LIKE ?)"
         )
         params: List[Any] = [f"%{keyword}%", f"%{keyword}%"]
         if grams:
             ph = ",".join("?" * len(grams))
             sql = (
-                "SELECT * FROM memories WHERE archived=0 AND ("
+                "SELECT * FROM memories WHERE archived=0 AND superseded_by IS NULL AND ("
                 "id IN (SELECT mem_id FROM memory_grams WHERE gram IN (" + ph + ")) "
                 "OR content LIKE ? OR tags LIKE ?)"
             )
@@ -225,7 +343,8 @@ class Memory:
     def load_important(self, limit: int = 20) -> List[Dict]:
         """会话开始时按 importance 预加载。"""
         rows = self.conn.execute(
-            "SELECT * FROM memories WHERE archived=0 ORDER BY importance DESC, last_access DESC LIMIT ?",
+            "SELECT * FROM memories WHERE archived=0 AND superseded_by IS NULL "
+            "ORDER BY importance DESC, last_access DESC LIMIT ?",
             (limit,),
         ).fetchall()
         return [dict(r) for r in rows]

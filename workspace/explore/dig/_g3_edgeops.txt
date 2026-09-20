@@ -1,0 +1,47 @@
+   36 | from graphiti_core.prompts import prompt_library
+   37 | from graphiti_core.prompts.dedupe_edges import EdgeDuplicate
+   38 | from graphiti_core.prompts.extract_edges import Edge as ExtractedEdge
+   39 | from graphiti_core.prompts.extract_edges import EdgeTimestamps, ExtractedEdges
+  185 |     latest_episode = max(episodes, key=lambda ep: ep.valid_at)
+  192 |                 'timestamp': ep.valid_at.isoformat() if ep.valid_at else None,
+  196 |         'reference_time': latest_episode.valid_at,
+  203 |         prompt_library.extract_edges.edge(context),
+  207 |         prompt_name='extract_edges.edge',
+  254 |         valid_at = edge_data.valid_at
+  255 |         invalid_at = edge_data.invalid_at
+  256 |         valid_at_datetime = None
+  257 |         invalid_at_datetime = None
+  274 |         if valid_at:
+  276 |                 valid_at_datetime = ensure_utc(
+  277 |                     datetime.fromisoformat(valid_at.replace('Z', '+00:00'))
+  280 |                 logger.warning('Error parsing valid_at date, skipping')
+  282 |         if invalid_at:
+  284 |                 invalid_at_datetime = ensure_utc(
+  285 |                     datetime.fromisoformat(invalid_at.replace('Z', '+00:00'))
+  288 |                 logger.warning(f'WARNING: Error parsing invalid_at date: {e}. Input: {invalid_at}')
+  307 |             valid_at=valid_at_datetime,
+  308 |             invalid_at=invalid_at_datetime,
+  310 |                 episodes[edge_data.episode_indices[0]].valid_at
+  312 |                 else primary_episode.valid_at
+  339 |         A tuple of (resolved_edges, invalidated_edges, new_edges) where:
+  341 |         - invalidated_edges: Edges that were invalidated/contradicted by new information
+  512 |     invalidated_edges: list[EntityEdge] = []
+  516 |         invalidated_edge_chunk = result[1]
+  520 |         invalidated_edges.extend(invalidated_edge_chunk)
+  532 |         create_entity_edge_embeddings(embedder, invalidated_edges),
+  535 |     return resolved_edges, invalidated_edges, new_edges
+  538 | def resolve_edge_contradictions(
+  544 |     # Determine which contradictory edges need to be expired
+  545 |     invalidated_edges: list[EntityEdge] = []
+  548 |         edge_invalid_at_utc = ensure_utc(edge.invalid_at)
+  549 |         resolved_edge_valid_at_utc = ensure_utc(resolved_edge.valid_at)
+  550 |         edge_valid_at_utc = ensure_utc(edge.valid_at)
+  551 |         resolved_edge_invalid_at_utc = ensure_utc(resolved_edge.invalid_at)
+  554 |             edge_invalid_at_utc is not None
+  555 |             and resolved_edge_valid_at_utc is not None
+  556 |             and edge_invalid_at_utc <= resolved_edge_valid_at_utc
+  558 |             edge_valid_at_utc is not None
+  559 |             and resolved_edge_invalid_at_utc is not None
+  560 |             and resolved_edge_invalid_at_utc <= edge_valid_at_utc
+... (reach max_lines=45)
+== matched 46 (limit 45) in graphiti_core/utils/maintenance/edge_operations.py

@@ -1,0 +1,25 @@
+  615 |     async def _extract_and_resolve_nodes(
+  642 |     async def _extract_and_resolve_edges(
+  667 |             A tuple of (resolved_edges, invalidated_edges, new_edges) where:
+  669 |             - invalidated_edges: Edges invalidated by new information
+  689 |         resolved_edges, invalidated_edges, new_edges = await resolve_extracted_edges(
+  698 |         return resolved_edges, invalidated_edges, new_edges
+  812 |     async def _extract_and_dedupe_nodes_bulk(
+  846 |     async def _resolve_nodes_and_edges_bulk(
+  950 |         invalidated_edges: list[EntityEdge] = []
+  953 |             invalidated_edges.extend(result[1])
+  957 |         return final_hydrated_nodes, resolved_edges, invalidated_edges, uuid_map
+ 1013 |     def _resolve_request_scope(
+ 1117 |         and edge invalidation.
+ 1200 |                     invalidated_edges,
+ 1215 |                 entity_edges = resolved_edges + invalidated_edges
+ 1264 |                         'edge.invalidated_count': len(invalidated_edges),
+ 1350 |         Edge invalidation and date extraction (``valid_at`` / ``invalid_at``) are
+ 1352 |         ``resolve_extracted_edges`` just like in ``add_episode``, and any invalidated
+ 1441 |                     invalidated_edges,
+ 1463 |                     resolved_edges + invalidated_edges,
+ 1527 |                         'edge.count': len(resolved_edges + invalidated_edges),
+ 1538 |                     edges=resolved_edges + invalidated_edges,
+ 1799 |         resolved_edge, invalidated_edges, _ = await resolve_extracted_edge(
+ 1816 |         edges: list[EntityEdge] = [resolved_edge] + invalidated_edges
+== matched 24 (limit 45) in graphiti_core/graphiti.py

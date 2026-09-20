@@ -1,0 +1,42 @@
+   10 | - Ensure that the answers are clear, concise, and directly address the question.
+   21 | 3. Track Plans and Intentions: Note upcoming events, trips, goals, and any plans the user has shared.
+   74 | 3. Track Plans and Intentions: Note upcoming events, trips, goals, and any plans the user has shared.
+  176 | DEFAULT_UPDATE_MEMORY_PROMPT = """You are a smart memory manager which controls the memory of a system.
+  177 | You can perform four operations: (1) add into the memory, (2) update the memory, (3) delete from the memory, and (4) no change.
+  182 | - ADD: Add it to the memory as a new element
+  183 | - UPDATE: Update an existing memory element
+  184 | - DELETE: Delete an existing memory element
+  189 | 1. **Add**: If the retrieved facts contain new information not present in the memory, then you have to add it by generating a new ID in the id field.
+  205 |                     "event" : "NONE"
+  210 |                     "event" : "ADD"
+  216 | 2. **Update**: If the retrieved facts contain information that is already present in the memory but the information is totally different, then you have to update it.
+  218 | Example (a) -- if the memory contains "User likes to play cricket" and the retrieved fact is "Loves to play cricket with friends", then update the memory with the retrieved facts.
+  219 | Example (b) -- if the memory contains "Likes cheese pizza" and the retrieved fact is "Loves cheese pizza", then you do not need to update it because they convey the same information.
+  220 | If the direction is to update the memory, then you have to update it.
+  246 |                     "event" : "UPDATE",
+  252 |                     "event" : "NONE"
+  257 |                     "event" : "UPDATE",
+  264 | 3. **Delete**: If the retrieved facts contain information that contradicts the information present in the memory, then you have to delete it. Or if the direction is to delete the memory, then you have to delete it.
+  285 |                     "event" : "NONE"
+  290 |                     "event" : "DELETE"
+  315 |                     "event" : "NONE"
+  320 |                     "event" : "NONE"
+  346 |      For the same numbered step, include additional context such as:
+  359 | 4. **Output Only the Summary**: The final output must consist solely of the structured summary with no additional commentary or preamble.
+  385 |       "[ '/blog/chatgpt-updates', '/blog/ai-and-education', '/blog/openai-api-announcement', '/blog/gpt-4-release', '/blog/safety-and-alignment' ]"
+  389 | 4. **Agent Action**: Visited URL "https://openai.com/blog/chatgpt-updates"
+  392 |    **Key Findings**: Extracted blog title "ChatGPT Updates – March 2025" and article content excerpt.
+  395 | 5. **Agent Action**: Extracted blog title and full article content from "https://openai.com/blog/chatgpt-updates"
+  397 |       "{ 'title': 'ChatGPT Updates – March 2025', 'content': 'We\'re introducing new updates to ChatGPT, including improved browsing capabilities and memory recall... (full content)' }"
+  401 | ... (Additional numbered steps for subsequent actions)
+  406 | def get_update_memory_messages(retrieved_old_memory_dict, response_content, custom_update_memory_prompt=None):
+  407 |     if custom_update_memory_prompt is None:
+  408 |         global DEFAULT_UPDATE_MEMORY_PROMPT
+  409 |         custom_update_memory_prompt = DEFAULT_UPDATE_MEMORY_PROMPT
+  414 |     Below is the current content of my memory which I have collected till now. You have to update it in the following format only:
+  427 |     return f"""{custom_update_memory_prompt}
+  431 |     The new retrieved facts are mentioned in the triple backticks. You have to analyze the new retrieved facts and determine whether these facts should be added, updated, or deleted in the memory.
+  442 |                 "id" : "<ID of the memory>",                # Use existing ID for updates/deletes, or new ID for additions
+  444 |                 "event" : "<Operation to be performed>",    # Must be "ADD", "UPDATE", "DELETE", or "NONE"
+... (reach max_lines=40)
+== matched 41 (limit 40) in mem0/configs/prompts.py

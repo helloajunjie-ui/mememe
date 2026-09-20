@@ -1,0 +1,32 @@
+   40 |     valid_at: str | None = Field(
+   44 |     invalid_at: str | None = Field(
+   59 | class EdgeTimestamps(BaseModel):
+   62 |     valid_at: str | None = Field(
+   66 |     invalid_at: str | None = Field(
+   72 | class BatchEdgeTimestamps(BaseModel):
+   75 |     timestamps: list[EdgeTimestamps] = Field(
+   76 |         ..., description='Timestamps for each fact, in the same order as the input facts'
+   83 |     extract_timestamps: PromptVersion
+   84 |     extract_timestamps_batch: PromptVersion
+   90 |     extract_timestamps: PromptFunction
+   91 |     extract_timestamps_batch: PromptFunction
+  108 |             '2. The CURRENT_MESSAGE may contain multiple episodes, each with its own timestamp. '
+  109 |             "Use each episode's timestamp to resolve temporal references within that episode. "
+  110 |             'REFERENCE_TIME is a fallback for when no per-episode timestamp is available.',
+  160 | 6. Use `REFERENCE_TIME` to resolve vague or relative temporal expressions (e.g., "last week"). When the CURRENT_MESSAGE contains multiple episodes with per-episode timestamps, prefer the timestamp of the specific episode the fact originates from.
+  171 | - If the fact is ongoing (present tense), set `valid_at` to the timestamp of the episode the fact originates from. If no per-episode timestamp is available, use REFERENCE_TIME.
+  172 | - If a change/termination is expressed, set `invalid_at` to the relevant timestamp.
+  210 |    - NEVER explain why a value is null. If unknown, set the field to null and stop.
+  215 | 4. The literal strings "null", "N/A", "Not specified", "unknown", "none", "not provided",
+  242 | def extract_timestamps(context: dict[str, Any]) -> list[Message]:
+  251 | (valid_at) and when it stopped being true (invalid_at).
+  255 | - If the fact is ongoing (present tense), set valid_at to REFERENCE TIME.
+  256 | - If a change or end is expressed, set invalid_at to the relevant time.
+  274 | def extract_timestamps_batch(context: dict[str, Any]) -> list[Message]:
+  283 | became true (valid_at) and when it stopped being true (invalid_at).
+  287 | - If the fact is ongoing (present tense), set valid_at to its REFERENCE TIME.
+  288 | - If a change or end is expressed, set invalid_at to the relevant time.
+  294 | Return one timestamps entry per fact, in the same order.
+  307 |     'extract_timestamps': extract_timestamps,
+... (reach max_lines=30)
+== matched 31 (limit 30) in graphiti_core/prompts/extract_edges.py

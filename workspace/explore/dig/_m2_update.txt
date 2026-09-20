@@ -1,0 +1,5 @@
+  760 |     def add(
+ 2038 |     def _update_memory(self, memory_id, data, existing_embeddings, metadata=None):
+ 2434 |     async def add(
+ 3733 |     async def _update_memory(self, memory_id, data, existing_embeddings, metadata=None):
+== matched 4 (limit 40) in mem0/memory/main.py

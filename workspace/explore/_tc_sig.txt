@@ -1,0 +1,11 @@
+   42 | def _load_py_module(name: str):
+  108 | def _create_python(name: str, code: str, test_args: dict = None) -> dict:
+  109 |     if "@tool" not in code or "def run(" not in code:
+  128 |         if m and m["name"] == name:
+  163 | def _parse_go_meta(code: str, name: str) -> tuple:
+  183 | def _register_go_disk(name: str, desc: str, schema: dict,
+  184 |                       binary: Path, source: Path) -> None:
+  215 | def _create_go(name: str, code: str, test_args: dict = None) -> dict:
+  217 |     if "package main" not in code or "func main(" not in code:
+  315 | def run(name: str, code: str, language: str = "python", test_args: dict = None) -> dict:
+== matched 10 (limit 25) in F:\me\self-agent\tools\src\python\tool_create.py

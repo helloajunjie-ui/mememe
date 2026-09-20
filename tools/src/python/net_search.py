@@ -41,6 +41,8 @@ except Exception as _e:  # noqa: BLE001
 
 @tool(
     "net_search",
+    "⚠️通道前置（调本工具前先想）：质量型/中文/专有名词搜索优先走 browserskill 真浏览器开 Google——"
+    "实测零拆词、中文新闻带来源+日期；本工具是多引擎聚合，专有名词易被拆词，宜快速探路或图片搜索。"
     "多引擎网络搜索（Bing/DuckDuckGo/Brave/Wikipedia 等聚合容错，单个引擎失败自动换源，透明报告），"
     "返回规范化结果：标题+链接+摘要+来源引擎。时效性内容（新闻/赛程/价格/动态）用它最合适。"
     "image=True 时走图片搜索（Bing Images）：返回原图 URL/缩略图/来源页，适合找图/配图/视觉素材。",

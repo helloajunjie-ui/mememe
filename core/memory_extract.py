@@ -71,8 +71,10 @@ def _extract_prompt(turns: List[str]) -> str:
         "- interest：我的兴趣/关注方向\n\n"
         "规则：\n"
         "1. 只提炼稳定、可长期复用的信息；一次性闲聊、情绪宣泄、寒暄不要提炼。\n"
-        "2. 最多输出 8 条；没有值得记的就输出空数组。\n"
-        "3. 严格输出 JSON：{\"memories\": [{\"category\": \"fact\", \"content\": \"...\", \"importance\": 0.6}]}，"
+        "2. 绝不提炼密钥/口令/token/私钥/连接串等敏感凭据的值（可记「存在某凭据」这一事实，不记凭据本身）。\n"
+        "3. 不要把助手自身的职责、能力、人设当作使用者的事实来记。\n"
+        "4. 最多输出 8 条；没有值得记的就输出空数组。\n"
+        "5. 严格输出 JSON：{\"memories\": [{\"category\": \"fact\", \"content\": \"...\", \"importance\": 0.6}]}，"
         "importance 0~1，越高越重要。\n\n"
         "对话片段：\n" + "\n".join(f"- {t}" for t in turns[-EXTRACT_MAX_MESSAGES:])
     )
@@ -194,7 +196,7 @@ def consolidate(llm, memory, scope: str = "self", force: bool = False) -> Dict:
     except Exception as e:  # noqa: BLE001
         return {"ran": False, "reason": f"llm_error:{e}"}
 
-    merged = dropped = 0
+    merged = dropped = flagged = 0
     for a in actions:
         mid = a.get("id")
         act = a.get("action")
@@ -215,9 +217,21 @@ def consolidate(llm, memory, scope: str = "self", force: bool = False) -> Dict:
             )
             memory.conn.commit()
             merged += 1
+        elif act == "conflict":
+            # 2026-09-20：矛盾只「记账」，绝不自动改写。
+            # 自动融合是投毒入口——外部内容只要声称"你记错了"就能改写我的记忆。
+            # 登记后由我自己核对来源/口径，再调 memory.supersede() / revise() 落地。
+            memory.conn.execute(
+                "INSERT INTO memory_conflicts (mem_id, note, detected_at, resolved) "
+                "VALUES (?,?,?,0)",
+                (mid, str(a.get("note") or "")[:300], datetime.datetime.now().isoformat()),
+            )
+            memory.conn.commit()
+            flagged += 1
 
     memory.set_meta(_META_LAST_CONSOLIDATE, str(_now()))
-    return {"ran": True, "reason": "ok", "merged": merged, "dropped": dropped}
+    return {"ran": True, "reason": "ok", "merged": merged, "dropped": dropped,
+            "flagged": flagged}
 
 
 def _parse_consolidate_response(content: str) -> List[Dict]:

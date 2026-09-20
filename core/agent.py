@@ -952,6 +952,11 @@ class Agent:
             hist = snap.get("history") or []
             if hist:
                 self.history = list(hist)
+                # 告诉她：刚重启过，上下文已恢复——她知道心跳停过一下
+                self.history.append({
+                    "role": "system",
+                    "content": "【系统重启完成】代码更新后已自动重启，上下文已从快照恢复。你刚才在做的事可以接着做——不用重新开始。"
+                })
                 self._log(f"[restart] 已恢复会话快照（{len(hist)} 条），上下文无缝续接")
         except Exception as e:  # noqa: BLE001
             self._log(f"[restart] 会话快照恢复失败: {type(e).__name__}: {e}")
@@ -2061,9 +2066,16 @@ class Agent:
             out = out[cut + 1:]
             dropped = 1
         if dropped:
-            head.append({"role": "system",
-                         "content": (f"（早期 {dropped} 回合记录已全量存档，当前只提供最近 {max_rounds} 回合。"
-                                     "如需要早期定位信息，用 ctx_search 检索存档，不要凭空推断。）")})
+            if self.ctx_mode == "chat":
+                # 自由活动模式：不直接丢，引发思考——让她整理这一阵的发现
+                head.append({"role": "system",
+                             "content": (f"（你已经自由活动了一阵，早期 {dropped} 回合记录已存档。"
+                                         "如果这一阵有什么值得记住的发现/想法/兴趣点，现在存一下。"
+                                         "存完告诉我：继续逛还是做点别的？）")})
+            else:
+                head.append({"role": "system",
+                             "content": (f"（早期 {dropped} 回合记录已全量存档，当前只提供最近 {max_rounds} 回合。"
+                                         "如需要早期定位信息，用 ctx_search 检索存档，不要凭空推断。）")})
             self._log(f"[ctx] 输入窗口化：剔除早期 {dropped} 回合（已存档，可检索）")
         return head + out
 
@@ -2361,10 +2373,29 @@ class Agent:
             compound_line = ""
         cmd_book = self._platform_command_book()
         time_line = self._time_block()
-        # 方法论世界书：目录（全量索引）+ 按当前输入关键词命中的完整条目
+        # 方法论世界书三层激活：常驻 / 场景预加载 / 关键词命中
+        recent = self.history[-20:] if self.history else []
+        recent_tools = []
+        recent_thinking = []
+        for m in recent:
+            if m.get("role") == "assistant":
+                for tc in (m.get("tool_calls") or []):
+                    recent_tools.append(tc.get("function", {}).get("name", ""))
+                txt = m.get("content", "") or ""
+                if txt:
+                    recent_thinking.append(txt)
+        method_always = self.methods.always_on()
+        method_preload = self.methods.preload_by_activity(recent_tools[-10:], " ".join(recent_thinking[-3:]))
         method_hits = self.methods.match(match_text) if match_text else []
+        # 合并去重：常驻 + 场景预加载 + 关键词命中
+        seen_ids = set()
+        merged = []
+        for m in method_always + method_preload + method_hits:
+            mid = m.get("id")
+            if mid not in seen_ids:
+                merged.append(m); seen_ids.add(mid)
         method_index = self.methods.to_index()
-        method_rules = self.methods.to_full(method_hits)
+        method_rules = self.methods.to_full(merged)
         tool_world = self.registry.to_index()
 
         guard_line = (

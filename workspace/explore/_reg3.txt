@@ -1,0 +1,4 @@
+ 1933 |     "fs_smart_read": {
+ 1934 |       "name": "fs_smart_read",
+ 1987 |         "source": "F:\\me\\self-agent\\tools/src/python/fs_smart_read.py",
+== matched 3 (limit 6) in F:\me\self-agent\data\registry.json
