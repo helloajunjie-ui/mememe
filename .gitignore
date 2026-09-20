@@ -101,3 +101,17 @@ config/llm_health.json
 
 # 第三方依赖（可重新拉取，不入公开仓库；如 archify 图渲染器）
 tools/vendor/
+
+# ===== 2026-09-20 补充：工作区大件与备份残留不入库 =====
+*.bak_*
+workspace/external/
+workspace/graphs/
+workspace/projects/
+workspace/repos/
+desktop-pet/
+mcp-service/servers/*/bin/
+mcp-service/servers/*/node_modules/
+mcp-service/servers/*/__pycache__/
+mcp-service/servers/*/data/
+tools/bin/crw-mcp.exe
+mcp-service/servers/urara/
