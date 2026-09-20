@@ -257,6 +257,7 @@ def run_scan(server: str = "") -> dict:
     mcp = get_mcp_manager()
     if not mcp.ensure_running():
         return {"ok": False, "error": "MCP 服务无法启动"}
+    mcp.load()  # 刷新本地配置镜像：运行中经 /mcp/add 新增的软件才能被前缀解析认出
     if server:
         r = mcp.activate(server, force=True)
         if not r.get("ok"):

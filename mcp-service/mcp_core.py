@@ -138,7 +138,7 @@ class McpManager:
             await ctx.__aexit__(None, None, None)
 
     async def _call_async(self, name: str, cfg: Dict, tool: str, args: Dict) -> Dict:
-        return await asyncio.wait_for(self._call_inner(name, cfg, tool, args), timeout=120)
+        return await asyncio.wait_for(self._call_inner(name, cfg, tool, args), timeout=600)
 
     async def _call_inner(self, name: str, cfg: Dict, tool: str, args: Dict) -> Dict:
         session, ctx = await self._connect(name, cfg)

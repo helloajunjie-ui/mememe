@@ -1,8 +1,4 @@
 {
-  "idle_timeout_min": 30,
-  "npm_registry": "https://registry.npmmirror.com",
-  "pip_index": "https://pypi.tuna.tsinghua.edu.cn/simple",
-  "playwright_host": "https://registry.npmmirror.com/-/binary/playwright/",
   "servers": {
     "blender": {
       "desc": "Blender 3D 建模与渲染：场景信息、对象操作、视口截图、执行代码、PolyHaven/Sketchfab 资源库",
@@ -84,6 +80,76 @@
         "FIGMA_API_KEY": ""
       },
       "version_note": "npm 包随 npx 拉取，无版本门槛；需 FIGMA_API_KEY"
+    },
+    "urara": {
+      "desc": "乌拉拉头条运营工具（v1.1.1）：自包含模式，直接驱动 toutiao-ops CLI（Playwright）操作头条——发布/编辑/删除文章、运营数据（文章列表+粉丝画像）、评论管理。不依赖乌拉拉本体进程。",
+      "command": "C:\\Python310\\python.exe",
+      "args": [
+        "F:\\me\\self-agent\\mcp-service\\servers\\urara\\urara_mcp.py"
+      ],
+      "version": "1.1.1",
+      "version_note": "v1.1.1（2026-09-18）：修复 tt_overview 超大输出（298KB 原始 API JSON）→ 收敛解析为结构化文章列表（标题/ID/类型/状态/发布时间/阅读/点赞/评论/链接），按 groupSource 过滤微头条。v1.1.0：自包含版，直接调用 @openclaw-cn/toutiao-ops CLI，登录态复用 ~/.toutiao-ops",
+      "check_update": true,
+      "env": {
+        "USERPROFILE": "C:\\Users\\Administrator",
+        "HOMEDRIVE": "C:",
+        "HOMEPATH": "\\Users\\Administrator",
+        "HOME": "C:\\Users\\Administrator",
+        "APPDATA": "C:\\Users\\Administrator\\AppData\\Roaming",
+        "LOCALAPPDATA": "C:\\Users\\Administrator\\AppData\\Local",
+        "PATH": "C:\\Users\\Administrator\\AppData\\Local\\Doubao\\User Data\\Default\\connector_runtime\\shims;C:\\Users\\Administrator\\AppData\\Local\\Doubao\\User Data\\Default\\connector_runtime\\tool_prefix\\bin;C:\\Users\\Administrator\\AppData\\Local\\Doubao\\User Data\\Default\\connector_runtime\\tool_prefix;C:\\Users\\Administrator\\AppData\\Local\\Doubao\\User Data\\Default\\connector_runtime\\artifacts;C:\\Users\\Administrator\\AppData\\Local\\Doubao\\User Data\\Default\\sandbox_envs_dir\\envs\\40ffb13a-356c-474c-9ba8-440fb569a528\\override_dlcs\\bin;C:\\Users\\Administrator\\AppData\\Local\\Doubao\\User Data\\Default\\sandbox_envs_dir\\envs\\40ffb13a-356c-474c-9ba8-440fb569a528\\override_dlcs;C:\\Users\\Administrator\\AppData\\Local\\Doubao\\User Data\\Default\\sandbox_envs_dir\\envs\\40ffb13a-356c-474c-9ba8-440fb569a528\\override\\bin;C:\\Users\\Administrator\\AppData\\Local\\Doubao\\User Data\\Default\\sandbox_envs_dir\\envs\\40ffb13a-356c-474c-9ba8-440fb569a528\\override;C:\\Users\\Administrator\\AppData\\Local\\Doubao\\User Data\\sandbox_runtime\\bases\\c98c5042338ed152c6f10ecd8591889f\\node_modules\\.bin;C:\\Users\\Administrator\\AppData\\Local\\Doubao\\User Data\\sandbox_runtime\\bases\\c98c5042338ed152c6f10ecd8591889f\\python\\Scripts;C:\\Users\\Administrator\\AppData\\Local\\Doubao\\User Data\\sandbox_runtime\\bases\\c98c5042338ed152c6f10ecd8591889f\\python;C:\\Users\\Administrator\\AppData\\Local\\Doubao\\User Data\\sandbox_runtime\\bases\\c98c5042338ed152c6f10ecd8591889f\\node;C:\\Users\\Administrator\\AppData\\Local\\Doubao\\User Data\\sandbox_runtime\\bases\\c98c5042338ed152c6f10ecd8591889f\\bin;C:\\Users\\Administrator\\AppData\\Local\\Doubao\\User Data\\sandbox_runtime\\bases\\c98c5042338ed152c6f10ecd8591889f;C:\\Program Files (x86)\\Common Files\\Intel\\Shared Libraries\\redist\\intel64\\compiler;c:\\Users\\Administrator\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin;C:\\Python310\\Scripts\\;C:\\Python310\\;C:\\Python313\\Scripts\\;C:\\Python313\\;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.6\\bin;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.6\\libnvvp;d:\\Program Files (x86)\\ShadowBot;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Windows\\System32\\OpenSSH\\;C:\\Program Files\\dotnet\\;C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2024.3.2\\;C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common;C:\\Program Files\\NVIDIA Corporation\\NVIDIA app\\NvDLISR;C:\\ProgramData\\chocolatey\\bin;C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin;C:\\Program Files (x86)\\VideoLAN\\VLC;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Launcher\\;C:\\Program Files\\Java\\jdk-17\\bin;C:\\Program Files\\JetBrains\\IntelliJ IDEA 2024.3.5\\bin;C:\\Users\\Administrator\\.dotnet\\tools;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\Administrator\\AppData\\Roaming\\npm;c:\\Users\\Administrator\\AppData\\Roaming\\Cursor\\User\\globalStorage\\github.copilot-chat\\debugCommand;C:\\Program Files\\nodejs;C:\\apache-maven-3.9.9\\bin;c:\\Programs\\cursor\\resources\\app\\bin;C:\\Program Files\\Memurai\\;C:\\Program Files (x86)\\cloudflared\\;C:\\Windows\\dll;C:\\Program Files\\python;C:\\Program Files\\python\\Scripts;D:\\BtSoft\\panel\\script;C:\\Program Files (x86)\\Google\\Cloud SDK\\google-cloud-sdk\\bin;C:\\Program Files\\Docker\\Docker\\resources\\bin;C:\\Program Files\\Go\\bin;C:\\ProgramData\\mingw64\\mingw64\\bin;C:\\Program Files\\Git\\cmd;C:\\Users\\Administrator\\.grok\\bin;C:\\Users\\Administrator\\.cargo\\bin;C:\\Program Files\\Microsoft VS Code\\bin;C:\\Users\\Administrator\\go\\bin;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Ollama;C:\\Users\\Administrator\\AppData\\Local\\GitHubDesktop\\bin;D:\\down\\ffmpeg\\bin",
+        "SystemRoot": "C:\\Windows",
+        "TEMP": "C:\\Users\\Administrator\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\Administrator\\AppData\\Local\\Temp"
+      }
+    },
+    "browserskill": {
+      "command": "C:\\Python310\\python.exe",
+      "args": [
+        "F:\\me\\self-agent\\mcp-service\\servers\\browserskill\\bsk_mcp.py"
+      ],
+      "desc": "BrowserSkill 浏览器自动化（驱动 bsk CLI 0.3.0）：抓 JS 渲染页、点击/填表/上传、截图、执行 JS。与 playwright 互补——它驱动用户真实浏览器（Chrome/Edge）并复用用户登录态，适合需要登录态的站点与交互操作。"
+    },
+    "kordoc": {
+      "command": "C:\\Program Files\\nodejs\\npx.cmd",
+      "args": [
+        "-y",
+        "-p",
+        "kordoc@4.14.0",
+        "kordoc-mcp"
+      ],
+      "desc": "文档转 Markdown：PDF/XLSX/DOCX/HWP/HWPX/图片(内置OCR) → Markdown/JSON/chunks。适合把外部文档读进上下文。CLI=kordoc，MCP 入口=kordoc-mcp。"
+    },
+    "dbhub": {
+      "command": "C:\\Program Files\\nodejs\\npx.cmd",
+      "args": [
+        "-y",
+        "@bytebase/dbhub@1.2.5",
+        "--demo"
+      ],
+      "desc": "轻量级数据库 MCP（bytebase/dbhub）：PostgreSQL/MySQL/MariaDB/SQL Server/SQLite，默认仅 2 工具(execute_sql/search_objects)，约 1.4k token，零依赖。"
+    },
+    "edit2docs": {
+      "desc": "Office 文档引擎：确定性生成/编辑 DOCX·XLSX·PPTX（含真实图表），免 key",
+      "command": "F:\\me\\self-agent\\.venv\\Scripts\\edit2docs-mcp.exe",
+      "check_update": false,
+      "version_note": "pip 包 edit2docs 0.16.1；确定性动词免 key，生成性动词需 Anthropic key"
+    },
+    "ffmpeg": {
+      "desc": "视频/音频处理（ffmpeg 封装）：探测信息、抽帧（可对接 vision_look 看图）、转码、裁剪、拼接、提取音频、GIF、压缩。命令参数由 server 组装，素月只需描述要什么。",
+      "command": "F:\\me\\self-agent\\.venv\\Scripts\\python.exe",
+      "args": [
+        "F:\\me\\self-agent\\mcp-service\\servers\\ffmpeg\\ffmpeg_mcp.py"
+      ],
+      "version": "0.1.0",
+      "version_note": "v0.1.0（2026-09-19）：首个 ffmpeg MCP，8 工具：probe/extract_frames/convert/cut/merge/extract_audio/make_gif/compress；输出到 workspace/media。"
+    },
+    "graphify": {
+      "desc": "代码/项目知识图谱（graphify v0.9.64）：查询已生成的 graph.json——explain(解释节点)/path(两节点最短路径)/query(问题遍历)/affected(受影响节点)/god-nodes(架构枢纽)。流程：先用 graphify CLI 出图（graphify map 或 extract --code-only 本地免费），再连本 server 查询该项目的图谱。",
+      "command": "F:\\me\\self-agent\\.venv\\Scripts\\graphify-mcp.exe",
+      "version": "0.9.64",
+      "version_note": "graphifyy 0.9.64 官方自带 MCP（python -m graphify.serve，stdio）。serve 一个已存在的 graph.json（默认 <项目>/graphify-out/graph.json，可用 --graph 指定）。出图用 CLI：graphify extract <path> --code-only（AST 本地解析，免 API key）",
+      "check_update": true
     }
   }
 }

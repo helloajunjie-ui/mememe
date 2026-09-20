@@ -133,10 +133,41 @@ class McpManager:
         """枚举指定 server 的工具列表（已激活则返回缓存，未激活则实时拉取）。"""
         return self._req("GET", f"/mcp/tools?server={server}")
 
-    def call(self, server: str, tool: str, args: Dict) -> Dict:
-        """调用 MCP 工具（转发给独立服务执行）。"""
-        return self._req("POST", "/mcp/call",
-                         json={"server": server, "tool": tool, "args": args or {}})
+    def call(self, server: str, tool: str, args: Dict, timeout: float = 600.0,
+             cancel_event=None) -> Dict:
+        """调用 MCP 工具（转发给独立服务执行）。
+
+        timeout 默认 600s：写操作（发布/编辑/删除/回复）走浏览器自动化，
+        实测单次发布约 150s+，远超只读工具的秒级耗时；沿用 120s 会把
+        已成功的发布误判为失败，且客户端断开会连带中断服务端在跑的子进程。
+
+        2026-09-20：支持 cancel_event——用户点停止时立即返回"被取消"，
+        不再干等 HTTP timeout。底层用 Thread 包装 requests，cancel_event
+        置位就返回，thread 后台跑完丢弃结果。
+        """
+        if cancel_event is None:
+            return self._req("POST", "/mcp/call",
+                             json={"server": server, "tool": tool, "args": args or {}},
+                             timeout=timeout)
+        # 可中断版本：主线程等 cancel_event 或请求完成
+        import threading
+        result_box = {}
+        def _do():
+            try:
+                result_box["r"] = self._req("POST", "/mcp/call",
+                                            json={"server": server, "tool": tool, "args": args or {}},
+                                            timeout=timeout)
+            except Exception as e:  # noqa: BLE001
+                result_box["r"] = {"ok": False, "error": f"MCP 调用异常: {e}"}
+        t = threading.Thread(target=_do, daemon=True)
+        t.start()
+        # 每 0.5 秒查一次 cancel_event 或 thread 是否完成
+        while t.is_alive():
+            if cancel_event.is_set():
+                return {"ok": False, "error": "工具被用户终止（cancel）",
+                        "_cancelled": True}
+            t.join(timeout=0.5)
+        return result_box.get("r", {"ok": False, "error": "MCP 调用无返回"})
 
     # ---------- 配置管理（HTTP 代理到服务端） ----------
     def add_server(self, name: str, command: Optional[str] = None,
@@ -184,12 +215,20 @@ class McpManager:
 
     # ---------- 工具名解析 ----------
     def match_server(self, tool_name: str) -> Optional[str]:
-        """从 mcp_<server>_<tool> 解析出 server 名（最长前缀匹配，兼容 server 含下划线）。"""
+        """从 mcp_<server>_<tool> 解析出 server 名（最长前缀匹配，兼容 server 含下划线）。
+
+        本地镜像可能陈旧（运行中经 /mcp/add 新增的软件不会自动进镜像），
+        故未命中时重载一次镜像再试——否则新软件调用一律报"工具不存在"。
+        """
         if not tool_name.startswith("mcp_"):
             return None
         for srv in sorted(self.servers, key=len, reverse=True):
             if tool_name.startswith(f"mcp_{srv}_"):
                 return srv
+        if self.load():  # 自愈：镜像陈旧则重载后重试
+            for srv in sorted(self.servers, key=len, reverse=True):
+                if tool_name.startswith(f"mcp_{srv}_"):
+                    return srv
         return None
 
 

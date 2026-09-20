@@ -4,6 +4,15 @@
 - 工作记忆（会话内，由 agent 维护）+ 长期记忆（SQLite 持久化）。
 - 检索：关键词 + 标签匹配 + importance 加权排序（v1 不做 embedding）。
 - 统一 Schema：id/type/content/confidence/importance/created_at/last_access/access_count/tags/source。
+
+2026-09-19 升级：2-gram 倒排检索（memory_grams 表）——中文任意 2 字词/多词 OR 可命中，
+原 LIKE 整串保留为兜底；写入同步维护倒排，启动自动回填。
+
+2026-09-19 升级 2（WeKnora 借鉴，#285）：
+- category 列：profile / preference / fact / task / interest（旧数据 NULL，兼容 fact/episode 双型）。
+- scope 列：记忆作用域（默认 'self'=本实例；架构上由调用方派生，不信任外部传入）。
+- memory_meta 表：记忆系统元数据（last_extract_at / last_consolidate_at），供自动提取与巩固节奏控制。
+- count_active()：active 记忆条数（巩固触发门槛用）。
 """
 from __future__ import annotations
 
@@ -21,8 +30,62 @@ class Memory:
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self._init_schema()
+        try:
+            self._reindex_grams()
+        except Exception:  # noqa: BLE001  旧库无 gram 表时静默（_init_schema 已建表）
+            pass
+
+    @staticmethod
+    def _gram_tokens(text: str):
+        """2-gram 倒排分词：中文连续串拆相邻 2 字，英文/数字整词 lowercase。"""
+        if not text:
+            return []
+        import re as _re
+        toks = []
+        # 英文/数字词（含点号版本号）
+        for w in _re.findall(r"[a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)*", text):
+            toks.append(w.lower())
+        # 中文连续串拆 2-gram
+        for seg in _re.findall(r"[\u4e00-\u9fff]+", text):
+            if len(seg) == 1:
+                toks.append(seg)
+            for i in range(len(seg) - 1):
+                toks.append(seg[i:i + 2])
+        return list(dict.fromkeys(toks))
+
+    def _reindex_grams(self):
+        """回填/补齐 gram 倒排表（幂等：只补缺失记忆的 gram）。"""
+        rows = self.conn.execute("SELECT id, content, tags FROM memories").fetchall()
+        done = 0
+        for r in rows:
+            mid = r["id"]
+            exists = self.conn.execute(
+                "SELECT 1 FROM memory_grams WHERE mem_id=? LIMIT 1", (mid,)
+            ).fetchone()
+            if exists:
+                continue
+            text = "%s %s" % (r["content"], r["tags"])
+            grams = self._gram_tokens(text)
+            self.conn.executemany(
+                "INSERT OR IGNORE INTO memory_grams (mem_id, gram) VALUES (?,?)",
+                [(mid, g) for g in grams],
+            )
+            done += 1
+        if done:
+            self.conn.commit()
+        return done
 
     def _init_schema(self) -> None:
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS memory_grams (
+                mem_id INTEGER NOT NULL,
+                gram TEXT NOT NULL,
+                PRIMARY KEY (mem_id, gram)
+            )
+            """
+        )
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_grams_gram ON memory_grams(gram)")
         self.conn.execute(
             """
             CREATE TABLE IF NOT EXISTS memories (
@@ -40,39 +103,112 @@ class Memory:
             )
             """
         )
+        # 2026-09-19 升级 2：列不存在则补列（旧库平滑升级，不丢数据）
+        cols = {r[1] for r in self.conn.execute("PRAGMA table_info(memories)").fetchall()}
+        if "category" not in cols:
+            self.conn.execute("ALTER TABLE memories ADD COLUMN category TEXT DEFAULT NULL")
+        if "scope" not in cols:
+            self.conn.execute("ALTER TABLE memories ADD COLUMN scope TEXT DEFAULT 'self'")
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS memory_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
         self.conn.commit()
 
     # ---------- 写入 ----------
     def add_fact(self, content: str, confidence: float = 0.8, importance: float = 0.6,
-                 tags: Optional[List[str]] = None, source: str = "") -> int:
-        return self._add("fact", content, confidence, importance, tags, source)
+                 tags: Optional[List[str]] = None, source: str = "",
+                 category: Optional[str] = None, scope: str = "self") -> int:
+        return self._add("fact", content, confidence, importance, tags, source, category, scope)
 
     def add_episode(self, content: str, importance: float = 0.5,
-                    tags: Optional[List[str]] = None, source: str = "") -> int:
-        return self._add("episode", content, 0.0, importance, tags, source)
+                    tags: Optional[List[str]] = None, source: str = "",
+                    category: Optional[str] = None, scope: str = "self") -> int:
+        return self._add("episode", content, 0.0, importance, tags, source, category, scope)
+
+    def add_categorized(self, category: str, content: str, importance: float = 0.6,
+                        tags: Optional[List[str]] = None, source: str = "",
+                        scope: str = "self") -> int:
+        """按五类语义分类写入（WeKnora 借鉴：#285 profile/preference/fact/task/interest）。
+
+        底层仍存 type=fact，category 记录语义类；检索与统计可按 category 过滤。
+        """
+        return self._add("fact", content, 0.8, importance, tags, source, category, scope)
 
     def _add(self, type_: str, content: str, confidence: float, importance: float,
-             tags: Optional[List[str]], source: str) -> int:
+             tags: Optional[List[str]], source: str,
+             category: Optional[str] = None, scope: str = "self") -> int:
         now = datetime.datetime.now().isoformat()
         import json
 
+        # 2026-09-19 P2：写入查重合并——归一化内容（去首尾空白/压缩内部空白）完全相同则合并，
+        # 保留原记录：importance 取高、tags 并集、访问计数 +1、来源不变（防重复堆库）。
+        norm = " ".join(content.split())
+        dup = self.conn.execute(
+            "SELECT id, importance, tags FROM memories WHERE archived=0 AND scope=? AND content=?",
+            (scope, norm),
+        ).fetchone()
+        if dup:
+            old_tags = json.loads(dup["tags"] or "[]")
+            merged = list(dict.fromkeys(old_tags + (tags or [])))
+            # category 若新值更具体则升级（旧 NULL → 新值）
+            if category:
+                self.conn.execute(
+                    "UPDATE memories SET category=COALESCE(category,?), "
+                    "importance=MAX(importance,?), access_count=access_count+1, "
+                    "last_access=?, tags=? WHERE id=?",
+                    (category, importance, now, json.dumps(merged, ensure_ascii=False), dup["id"]),
+                )
+            else:
+                self.conn.execute(
+                    "UPDATE memories SET importance=MAX(importance,?), access_count=access_count+1, "
+                    "last_access=?, tags=? WHERE id=?",
+                    (importance, now, json.dumps(merged, ensure_ascii=False), dup["id"]),
+                )
+            self.conn.commit()
+            return dup["id"]
+
         cur = self.conn.execute(
-            "INSERT INTO memories (type, content, confidence, importance, created_at, last_access, tags, source) "
-            "VALUES (?,?,?,?,?,?,?,?)",
-            (type_, content, confidence, importance, now, now, json.dumps(tags or [], ensure_ascii=False), source),
+            "INSERT INTO memories (type, content, confidence, importance, created_at, last_access, tags, source, category, scope) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (type_, norm, confidence, importance, now, now, json.dumps(tags or [], ensure_ascii=False),
+             source, category, scope),
+        )
+        mid = cur.lastrowid
+        grams = self._gram_tokens("%s %s" % (norm, json.dumps(tags or [], ensure_ascii=False)))
+        self.conn.executemany(
+            "INSERT OR IGNORE INTO memory_grams (mem_id, gram) VALUES (?,?)",
+            [(mid, g) for g in grams],
         )
         self.conn.commit()
-        return cur.lastrowid
+        return mid
 
     # ---------- 检索 ----------
     def query(self, keyword: str, limit: int = 10, types: Optional[List[str]] = None) -> List[Dict]:
-        """关键词 + 标签匹配，importance 加权排序。"""
-        kw = f"%{keyword}%"
+        """关键词 + 标签匹配，importance 加权排序。
+
+        2026-09-19 升级：2-gram 倒排优先（中文任意 2 字词/多词 OR 可命中），
+        原 LIKE 整串保留为兜底，保证旧行为不回退。
+        """
+        grams = self._gram_tokens(keyword)
         sql = (
             "SELECT * FROM memories WHERE archived=0 AND "
             "(content LIKE ? OR tags LIKE ?)"
         )
-        params: List[Any] = [kw, kw]
+        params: List[Any] = [f"%{keyword}%", f"%{keyword}%"]
+        if grams:
+            ph = ",".join("?" * len(grams))
+            sql = (
+                "SELECT * FROM memories WHERE archived=0 AND ("
+                "id IN (SELECT mem_id FROM memory_grams WHERE gram IN (" + ph + ")) "
+                "OR content LIKE ? OR tags LIKE ?)"
+            )
+            params = list(grams) + [f"%{keyword}%", f"%{keyword}%"]
         if types:
             placeholders = ",".join("?" * len(types))
             sql += f" AND type IN ({placeholders})"
@@ -136,6 +272,43 @@ class Memory:
             "SELECT type, COUNT(*) as n FROM memories WHERE archived=0 GROUP BY type"
         )
         return {r["type"]: r["n"] for r in cur.fetchall()}
+
+    # ---------- 2026-09-19 升级 2：元数据 / 计数 / 作用域（WeKnora 借鉴） ----------
+    def count_active(self, scope: str = "self") -> int:
+        """当前作用域内 active 记忆条数（巩固触发门槛：<6 条不值得复核）。"""
+        cur = self.conn.execute(
+            "SELECT COUNT(*) as n FROM memories WHERE archived=0 AND scope=?",
+            (scope,),
+        )
+        return int(cur.fetchone()["n"])
+
+    def get_meta(self, key: str) -> Optional[str]:
+        row = self.conn.execute(
+            "SELECT value FROM memory_meta WHERE key=?", (key,)
+        ).fetchone()
+        return row["value"] if row else None
+
+    def set_meta(self, key: str, value: str) -> None:
+        now = datetime.datetime.now().isoformat()
+        self.conn.execute(
+            "INSERT INTO memory_meta (key, value, updated_at) VALUES (?,?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+            (key, str(value), now),
+        )
+        self.conn.commit()
+
+    def query_by_category(self, category: str, limit: int = 10,
+                          scope: str = "self") -> List[Dict]:
+        """按语义分类检索（profile/preference/fact/task/interest）。"""
+        rows = self.conn.execute(
+            "SELECT * FROM memories WHERE archived=0 AND scope=? AND category=? "
+            "ORDER BY importance DESC, last_access DESC LIMIT ?",
+            (scope, category, limit),
+        ).fetchall()
+        results = [dict(r) for r in rows]
+        for r in results:
+            self._touch(r["id"])
+        return results
 
     def close(self) -> None:
         self.conn.close()

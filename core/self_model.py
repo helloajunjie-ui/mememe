@@ -112,8 +112,12 @@ class SelfModel:
         self.save()
 
     # ---------- 注入 prompt ----------
-    def snapshot(self) -> str:
-        """生成自我模型的 prompt 快照文本。"""
+    def snapshot(self, memory_summary_override: str = None) -> str:
+        """生成自我模型的 prompt 快照文本。
+
+        memory_summary_override：非空时用实时值覆盖 state.memory_summary
+        （2026-09-19 P2：摘要实时化，self.yaml 保留启动快照语义，不频繁写盘）。
+        """
         if not self.data:
             return "（自我模型未初始化）"
         id_ = self.data.get("identity", {})
@@ -131,7 +135,7 @@ class SelfModel:
             lines.append(f"  - {c.get('id')} [{c.get('status','?')}]：{c.get('description','')}")
         lines.append("- 当前状态：")
         lines.append(f"  - 情绪：{state.get('emotion_snapshot', {}).get('current','?')}")
-        lines.append(f"  - 记忆：{state.get('memory_summary','')}")
+        lines.append(f"  - 记忆：{memory_summary_override if memory_summary_override is not None else state.get('memory_summary','')}")
         lines.append("- 已知局限（如实，不掩盖）：")
         for lim in limits:
             lines.append(f"  - {lim}")

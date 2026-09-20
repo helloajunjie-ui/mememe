@@ -37,6 +37,7 @@ _DECISION_DEFAULTS = {
 }
 
 _CAP = 0.30  # 决策权重调节上限（不翻转决策）
+_CAP_STRONG = 0.50  # 强情绪时放宽到 ±50%（人不可能一直理智：兴奋更敢试、烦躁更较真更收着），仍不翻转决策、不越安全线
 
 # ---------- 建构层：感受词典 ----------
 # 每类感受：talk=第一人称自我觉察（内部叙事，不要求对外说出）
@@ -403,12 +404,19 @@ class EmotionState:
         return _FEELINGS.get(self.current, _FEELINGS["calm"])["talk"]
 
     def decision_weights(self) -> Dict[str, float]:
-        """感受对决策过程参数的影响（±30% 上限，不翻转决策）。"""
+        """感受对决策过程参数的影响（不翻转决策）。
+        日常（强度<0.6）：±30% 上限；强情绪（≥0.6）：系数放大 1.5 倍、上限放宽到 ±50%
+        ——人不可能一直理智：强情绪下节奏/态度偏移更大（兴奋更敢尝试、
+        烦躁/愤怒更较真更收着），但只调过程参数，不歪曲事实判断与安全边界。"""
         w = _DECISION_DEFAULTS.copy()
+        if self.intensity >= 0.60:
+            cap, boost = _CAP_STRONG, 1.5
+        else:
+            cap, boost = _CAP, 1.0
         spec = _FEELINGS.get(self.current)
         if spec:
             for k, coef in spec["mod"].items():
-                w[k] = 1.0 + max(-_CAP, min(_CAP, coef * self.intensity))
+                w[k] = 1.0 + max(-cap, min(cap, coef * self.intensity * boost))
         return {k: round(v, 2) for k, v in w.items()}
 
     # ========== 对外·表达层（独立通道，克制） ==========

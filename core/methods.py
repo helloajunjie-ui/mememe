@@ -24,14 +24,72 @@ _STOP = {
     "非常", "比较", "应该", "能够", "可能", "方法", "问题", "任务",
 }
 
+# 首尾虚字（机械切块碎片过滤：如"阻断时""了文件""或验证"这类边界字）
+_FU = set("的了是在或和与被而时会要从不要把就都还也很更最又再才只可对到为以其此该等各吗呢吧啊过着得给并则于当")
 
-def extract_keywords(text: str, maxn: int = 8) -> List[str]:
-    """从文本提取中文关键词（2~4 字连续片段，去停用词）。世界书触发词初版自动提取。"""
-    segs = re.findall(r"[\u4e00-\u9fff]{2,4}", text or "")
+# 英文停用词 + 低区分度技术噪音（这类词出现在太多条目里，做触发词只会误触发）
+_EN_STOP = {
+    "the", "and", "for", "with", "of", "in", "on", "to", "is", "are", "not", "you", "it", "this",
+    "that", "from", "by", "at", "as", "or", "if", "be", "can", "no", "do", "we", "use", "but",
+    "when", "which", "how", "what", "a", "an", "was", "will", "has", "have", "out", "up", "all",
+    "so", "my", "me", "your", "yes", "ok", "id", "json", "url", "api", "top", "done", "name",
+    "text", "html", "www", "com", "org", "py", "ps", "md",
+}
+
+
+def extract_keywords(text: str, maxn: int = 12) -> List[str]:
+    """从文本提取世界书触发关键词（2026-09-19 修订 v3，P2-4）。
+
+    旧版（v1）只抓中文 2~4 字机械切块，两个实测缺陷：① 丢掉 github/tls/yt-dlp 等区分度最高
+    的英文术语（#233 在"github 直连"场景漏命中）；② 碎片（"需要从"）占满 8 个名额、真词被挤
+    （#108 在"你叫什么名字"场景漏命中）。
+    v2 放开英文全收 → 新回归：英文/数字技术噪音（"mtime"/"20-30"）吃光名额，中文被挤出
+    （"写个爬虫抓这个站"命中数 3→0）。故 v3 改为**分类配额**：英文≤3、中文 3~4 字块≤4、
+    中文 2 字滑窗补足——保证中文触发词一定有名额，同时英文术语不被丢弃。
+    匹配侧为大小写不敏感子串比对（match: k.lower() in input.lower()），英文统一小写。
+    """
+    text = text or ''
+    en: List[str] = []
+    long_cn: List[str] = []
+    short_cn: List[str] = []
+    seen = set()
+
+    def push(bucket: List[str], w: str) -> None:
+        if w and w not in seen:
+            seen.add(w)
+            bucket.append(w)
+
+    # ① 英文/数字术语（必须含字母 → 滤掉纯数字/版本号）
+    for w in re.findall(r"[A-Za-z][A-Za-z0-9_\-\.\+]{1,}|[0-9][A-Za-z0-9_\-\.\+]{1,}", text):
+        wl = w.lower().strip('.-_+')
+        if len(wl) >= 2 and any(c.isalpha() for c in wl) and wl not in _EN_STOP:
+            push(en, wl)
+
+    # ② 中文 3~4 字块（较可能是词）
+    for w in re.findall(r"[\u4e00-\u9fff]{3,4}", text):
+        if w in _STOP or w[0] in _FU or w[-1] in _FU:
+            continue
+        push(long_cn, w)
+
+    # ③ 中文 2 字滑窗（补短词，如"名字""爬虫""代理"）
+    for seg in re.findall(r"[\u4e00-\u9fff]+", text):
+        if len(seg) < 2:
+            continue
+        for i in range(len(seg) - 1):
+            w = seg[i:i + 2]
+            if w in _STOP or w[0] in _FU or w[-1] in _FU:
+                continue
+            push(short_cn, w)
+
+    # 组装：分类配额（英文 3 / 中文长词 4 / 中文短词补足到 maxn）
     kws: List[str] = []
-    for w in segs:
-        if w not in _STOP and w not in kws:
+    for bucket, cap in ((en, 3), (long_cn, 4), (short_cn, maxn)):
+        n = 0
+        for w in bucket:
+            if n >= cap or len(kws) >= maxn:
+                break
             kws.append(w)
+            n += 1
     return kws[:maxn]
 
 
@@ -45,6 +103,9 @@ class MethodStore:
         """世界书迁移：为旧条目补全 name；用手动关键词覆盖自动提取的劣质词（幂等，每次启动生效）。"""
         changed = False
         for m in self.data.get("methods", []):
+            if not m.get("status"):
+                m["status"] = "active"
+                changed = True
             if not m.get("name"):
                 m["name"] = (m.get("scene") or "").strip("：: ") or f"方法论{m.get('id')}"
                 changed = True
@@ -117,7 +178,7 @@ class MethodStore:
         type_ = type_ if type_ in ("good", "bad") else "good"
         importance = max(0.0, min(1.0, float(importance)))
         methods = self.data.setdefault("methods", [])
-        mid = len(methods) + 1
+        mid = (max((m.get("id", 0) for m in methods), default=0)) + 1
         methods.append({
             "id": mid,
             "type": type_,
@@ -127,16 +188,52 @@ class MethodStore:
             "method": method[:500],
             "evidence": evidence[:300],
             "importance": importance,
+            "status": "active",
+            "superseded_by": None,
             "created_at": datetime.datetime.now().isoformat(timespec="seconds"),
         })
         self._save()
         return mid
 
-    def list(self, type_: Optional[str] = None) -> List[Dict]:
+    def list(self, type_: Optional[str] = None, include_all: bool = False) -> List[Dict]:
+        """活跃方法论列表（status=active）。
+
+        include_all=True 时含 superseded/archived（保留证据链，仅管理/统计用）。
+        2026-09-19 P2-3：被替代/归档的方法不再进世界书与触发匹配，防止库膨胀后重复条目反复命中。
+        """
         methods = self.data.get("methods", [])
         if type_:
             methods = [m for m in methods if m.get("type") == type_]
+        if not include_all:
+            methods = [m for m in methods if m.get("status", "active") == "active"]
         return sorted(methods, key=lambda m: -m.get("importance", 0))
+
+    def supersede(self, old_id: int, new_id: int) -> bool:
+        """标记 old 被 new 替代：old 不再进世界书/触发（证据链保留，get() 仍可查）。"""
+        old = self.get(old_id)
+        new = self.get(new_id)
+        if not old or not new or old_id == new_id:
+            return False
+        old["status"] = "superseded"
+        old["superseded_by"] = new_id
+        old["superseded_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+        self._save()
+        return True
+
+    def archive(self, mid: int, reason: str = "") -> bool:
+        """彻底归档一条方法论（明确错误/过时），不进世界书。"""
+        m = self.get(mid)
+        if not m:
+            return False
+        m["status"] = "archived"
+        m["archived_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+        if reason:
+            m["archive_reason"] = reason[:200]
+        self._save()
+        return True
+
+    def active_count(self) -> int:
+        return sum(1 for m in self.data.get("methods", []) if m.get("status", "active") == "active")
 
     def to_index_json(self, limit: Optional[int] = None) -> List[Dict]:
         """世界书多级目录（JSON 结构，适配底层逻辑）：[{"category", "items":[{id,name,type,keywords}]}]"""
@@ -246,8 +343,12 @@ class MethodStore:
 
     def summary(self) -> Dict:
         methods = self.data.get("methods", [])
+        active = [m for m in methods if m.get("status", "active") == "active"]
         return {
             "total": len(methods),
-            "good": sum(1 for m in methods if m.get("type") == "good"),
-            "bad": sum(1 for m in methods if m.get("type") == "bad"),
+            "active": len(active),
+            "good": sum(1 for m in active if m.get("type") == "good"),
+            "bad": sum(1 for m in active if m.get("type") == "bad"),
+            "superseded": sum(1 for m in methods if m.get("status") == "superseded"),
+            "archived": sum(1 for m in methods if m.get("status") == "archived"),
         }

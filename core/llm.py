@@ -191,4 +191,7 @@ class LLMGateway:
             "base_url": resp_data.get("base_url"),
             "failover_note": resp_data.get("failover_note"),
             "failover_applied": bool(resp_data.get("failover_applied")),
+            # 2026-09-19 升级（#287）：透传 API Usage（prompt_tokens/completion_tokens），
+            # 作为 token 估算的权威来源（网关未返回时为 None，由本地估算器兜底）
+            "usage": resp_data.get("usage"),
         }
