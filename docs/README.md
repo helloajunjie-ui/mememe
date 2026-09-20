@@ -196,3 +196,85 @@ mememe/
 ---
 
 —— 素月 v0.1.0 · 2026-09-15
+
+
+---
+
+## 2026-09-19 能力升级：借鉴 Tencent/WeKnora 的三项设计
+
+来源：`workspace/repos/WeKnora`（腾讯开源 LLM 知识平台，Go，27k star）。抄设计不抄身体——
+不部署其重型平台，只把可复用设计落地进素月本体。
+
+### 1. 记忆系统升级（core/memory.py + core/memory_extract.py）
+- memories 表新增 `category`（profile/preference/fact/task/interest）与 `scope`（作用域，默认 self）列，旧库自动补列平滑升级。
+- `memory_extract.auto_extract`：回合结束自动提炼长期记忆，频率闸 30 分钟/次、上限闸单次 ≤8 条（WeKnora extract.go 借鉴）。
+- `memory_extract.consolidate`：低频整库复核（24h 间隔、<6 条不查、强制最小间隔 1min——WeKnora consolidate.go 借鉴）。
+- 记忆作用域只由调用方派生（scope=self），不信任外部传入（WeKnora scope.go 的隔离模型）。
+
+### 2. 工具输出公平裁剪（core/token_est.py）
+- `split_budget_fairly`（max-min fair 水填充）：批量工具结果超长时按记录公平分配预算，
+  优先保留完整条目、只削最大的几条，不再砍头砍尾把中间记录整条弄丢。
+- agent.py 工具结果注入点已接入 `fair_trim_json`。
+
+### 3. token 估算驱动的上下文压缩（core/token_est.py）
+- `estimate_text_tokens`：中文按 0.6 token/字符（DeepSeek/Qwen 比例），英文 4 字符/token。
+- `estimate_messages_tokens`：每条消息 +3 固定开销等常量（WeKnora estimator.go 借鉴）。
+- agent.py `_compress_messages` 总量防线从字符阈值改为 token 预算（24000）驱动；
+  配对安全保留：切点落在整回合边界，tool 结果与请求它的 assistant 消息绝不拆对。
+- llm.py 透传网关 `usage` 字段（prompt/completion tokens），API Usage 为权威，估算器兜底。
+
+### 备份
+- `core/*.bak_20260919_weknora`（memory.py / agent.py / llm.py 改动前备份）
+- `data/methodology.json` 新增 #285（记忆护栏）/ #286（公平裁剪+切点配对）/ #287（token 估算）
+
+
+### 2026-09-19 资料库升级：修订历史 + 回滚（kb_tool）
+- `kb_save` 每次覆盖前自动快照旧版本到 `library/knowledge/.history/<eid>/<时间戳>.md`，
+  索引 entry 带 `versions`（版本数）与 `updated`；返回信息含版本数。
+- 新增 `kb_history`（列版本清单 / 读指定版本正文）与 `kb_rollback`（回滚到指定版本；
+  回滚前当前内容先快照进历史，可撤销；版本号白名单 `\d{8}_\d{6}` 防目录穿越）。
+- 文档解析入口不重复造轮子：外部 PDF/XLSX/DOCX → Markdown 走 MCP `kordoc`
+  （解析器，内置 OCR），再 `kb_save` 入库；Office 生成/编辑走 MCP `edit2docs`。
+  资料库自身存储/检索/版本管理不经过 MCP。
+
+---
+
+## 2026-09-20 能力升级：后台任务系统（从「排队」到「调度」）
+
+**问题**：此前所有命令同步阻塞——一条慢命令（全盘扫描、转码、长 ping）会把素月钉在原地，
+期间什么也做不了；MCP 调用卡住时，每次要白等满 25 秒超时。
+
+### 1. 异步后台任务（`tools/src/python/job_mgr.py` + `cmd_run`）
+
+- `cmd_run(background=true)` 立即返回 `job_id`，不阻塞对话；素月拿到句柄后继续做别的事，想起来再回收。
+- 配套三个工具：`job_list`（列进行中任务）/ `job_status`（读实时 stdout、stderr 尾）/ `job_kill`（`taskkill /F /T` 杀整棵进程树）。
+- 实测：5 个后台任务同一轮发起（时间戳仅差毫秒），期间前台 MCP 调用与网络搜索照常返回；`job_kill` 后进程表查无残留。
+
+### 2. 执行层根除 pipe hang（`core/platform.py`）
+
+- `run_shell` 由 `subprocess.run(capture_output=True)` 改为**临时文件重定向 + `wait(timeout)` + 超时 `taskkill /F /T`**。
+- 根因：管道被 daemon 子进程继承，父进程退出也不产生 EOF，`communicate()` 永久挂起——`timeout` 参数形同虚设。
+  同一 bug 一并修在 `mcp-service/servers/browserskill/bsk_mcp.py`（这也解释了为何"卡住"时连超时都不返回）。
+
+### 3. 界面状态条（`webui/`）
+
+- 每个后台任务一枚胶囊：**命令摘要 · 运行时长 · ×**；黄=运行中，绿=完成，红=错误/被终止；点 × 即杀进程树。
+- 任务状态变化自动在对话中插一条系统消息（完成 / 有警告 / 出错 / 被终止）。
+- 新增 `/api/jobs` 与 `/api/jobs/<id>/kill` 端点。
+
+### 4. 顺带修掉的两个真 bug
+
+- **工具失败判定读错层级**：`registry` 返回的外层信封恒为 `{"ok": true}`，工具自身返回 `ok:false` 时被误判成成功
+  ——导致状态条红字永不亮、死循环守卫的「同工具连续失败」检测同样失效。现改为**穿透信封**判定（含 MCP 内层字符串化 JSON 的二次解析）。
+- **`cmd_run` 黑名单误伤**：裸子串 `"format "` 会把 `Get-Date -Format 'HHmmss'` 当成「格式化磁盘」拦掉。
+  收紧为精确匹配真实危险形态（`format C:` / `format-volume` / `format /q`）。
+
+### 5. `exit_code` 语义修正
+
+- `exit_code != 0` 不再一刀切判 `error`：PowerShell 撞上受保护目录也会返回 1，但 stdout 有完整产出。
+  现在看产出说话——有输出判 `done_with_warnings`，无输出才判 `error`。
+
+### 备份与验证
+
+- 改动前备份：`backups/fix_20260920_153927/`；完整性基线重建后 `changed/missing/added` 全空。
+- 实弹验证：黑名单放行与拦截双向测通；失败工具首次写出 `[activity] error` 帧（历史日志中此前仅有派发层崩溃留下的记录）。
