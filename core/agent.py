@@ -28,6 +28,8 @@ from core import model_health as mh
 from core.loopguard import LoopGuard
 from core.memory import Memory
 from core.methods import MethodStore
+from core.token_est import fair_trim_json, estimate_messages_tokens, COMPRESS_TOKEN_BUDGET
+from core import memory_extract as mext
 from core.context import ContextStore
 from core.registry import ToolRegistry
 from core.self_model import SelfModel
@@ -202,6 +204,43 @@ _CONTROL_FAILURE_PREFIXES = (
 def is_control_failure(text: str) -> bool:
     """回复是否为 agent 自身生成的失败/未完成控制信息。"""
     return (text or "").startswith(_CONTROL_FAILURE_PREFIXES)
+
+
+# ---------- 工具结果失败判定（穿透 registry 信封） ----------
+# registry._execute_python 把工具自身的返回包成 {"ok": True, "result": <工具返回>}，
+# 于是工具内部 {"ok": False, ...} 被外层 ok:True 掩盖——agent 据此判定 ok 恒为真，
+# WebUI 状态条的错误红字永不亮（2026-09-20 定位）。这里做一次穿透判定：
+#   ① Python 工具：result 是 dict 且 result["ok"] is False → 失败
+#   ② MCP 工具：result 是字符串（可能是 JSON 文本）；解析后 ok is False → 失败；
+#      MCP 协议层 isError 时外层 ok=False 且无 error 键，错误文本在 result 里 → 取它
+# 只做判定，不改动 result 本身（产物收集等下游逻辑依赖原形状）。
+def unwrap_tool_result(result: dict):
+    """把工具结果信封穿透成 (ok, err_msg)。"""
+    if not isinstance(result, dict):
+        return False, ""
+    ok = bool(result.get("ok"))
+    err = ""
+    inner = result.get("result")
+    if ok and isinstance(inner, dict) and inner.get("ok") is False:
+        ok = False
+        err = str(inner.get("error") or inner.get("stderr") or "")[:80]
+    elif ok and isinstance(inner, str):
+        s = inner.strip()
+        if s[:1] in ("{", "["):
+            try:
+                j = json.loads(s)
+            except (ValueError, TypeError):
+                j = None
+            if isinstance(j, dict) and j.get("ok") is False:
+                ok = False
+                err = str(j.get("error") or "")[:80]
+        if not ok and not err:
+            err = s[:80]
+    if not ok and not err:
+        err = str(result.get("error") or result.get("stderr") or "")[:80]
+        if not err and isinstance(inner, str):
+            err = inner.strip()[:80]
+    return ok, err
 
 
 class TaskCancelled(Exception):
@@ -923,9 +962,13 @@ class Agent:
                 pass
 
     # ================= 产物收集（对话中展示：图片预览 / 文件下载） =================
+    # 2026-09-19 修复（用户反馈）：交付白名单按受众分级——
+    #   给用户看的才挂：图片内联点开 / 文档下载 / 音视频 / 压缩包；
+    #   中间件（.json 报告 / .py 脚本 / .log 日志 / .txt 调试文本）不挂交付区，
+    #   由素月自己在任务目录留档，不污染用户对话。
     _ART_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".pdf",
-                 ".txt", ".md", ".csv", ".xlsx", ".docx", ".pptx", ".html", ".zip",
-                 ".json", ".py", ".log", ".mp4", ".mp3", ".wav")
+                 ".md", ".csv", ".xlsx", ".docx", ".pptx", ".html", ".zip",
+                 ".mp4", ".mp3", ".wav")
     _ART_IMG_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp")
     _MAX_ARTIFACTS = 6
 
@@ -1113,7 +1156,12 @@ class Agent:
                             f"本体完整性异常（可能被篡改/感染）：{detail}。变更文件：{changed[:5]}。"
                             f"处理：核对变更来源（合法迭代则更新基线，恶意则从 backups/ 或 git 恢复）。"
                             f"状态文件 data/integrity_status.json",
-                            importance=0.9, tags=["安全", "完整性", "告警"])
+                            # 2026-09-19 治源：完整性快照是“状态”不是“知识”，不该永久占视野槽
+                            # （同 backup 先例：成功不写记忆，状态以 data/integrity_status.json 为准）。
+                            # 小规模变更(<=3)通常是我自己的合法迭代 → 0.55 可检索但不进 top8；
+                            # 规模较大(>3)可疑 → 0.9 保留视野以示警。
+                            importance=0.9 if (len(changed) + len(missing)) > 3 else 0.55,
+                            tags=["安全", "完整性", "告警"])
                     except Exception:  # noqa: BLE001
                         pass
         except Exception as e:  # noqa: BLE001
@@ -1249,9 +1297,16 @@ class Agent:
 
     # ================= 对话 =================
     def _set_activity(self, state: str, detail: str = "") -> None:
-        """记录当前活动状态（供托盘/状态展示）。state: idle / thinking / tool"""
+        """记录当前活动状态（供托盘/状态展示）。state: idle / thinking / tool / error"""
         try:
-            self.activity = {"state": state, "detail": detail, "ts": time.time()}
+            now = time.time()
+            # error 保护：error 状态设了后 3 秒内，不被 thinking/tool/idle 覆盖
+            # （素月 2026-09-20 验收：前端红显 3 秒，后端要真给 3 秒窗口）
+            if state != "error" and getattr(self, "_error_until", 0) > now:
+                return
+            if state == "error":
+                self._error_until = now + 3.0
+            self.activity = {"state": state, "detail": detail, "ts": now}
             self._log(f"[activity] {state} {detail}")
         except Exception:  # noqa: BLE001
             pass
@@ -1589,14 +1644,17 @@ class Agent:
                 elif name == "workflow_add_node":
                     result = self._handle_workflow_add(args)
                 else:
-                    result = self.registry.execute(name, args)
-                ok = result.get("ok")
+                    result = self.registry.execute(name, args, cancel_event=cancel_event)
+                ok, _tool_err = unwrap_tool_result(result)
                 # 产物收集：工具结果中的文件/图片路径 → 对话中展示（预览/下载）
                 self._collect_artifacts(result)
                 # 阶段反馈：工具执行完（含成功/失败）
                 _emit({"type": "stage", "name": name, "ok": ok, "step": step,
                        "args": args})
                 self._log(f"[tool] {name} → {'ok' if ok else 'error'}")
+                if not ok:
+                    err_msg = _tool_err or str(result.get("error", "") or result.get("stderr", ""))[:80]
+                    self._set_activity("error", f"{name}: {err_msg}")
                 self._log_op(name, args, result, ok)
                 # 死循环检测：同参数重复 / 同工具连续失败
                 tool_sig = guard.observe_tool(name, args, ok)
@@ -1621,8 +1679,13 @@ class Agent:
                 )
                 _tool_content = json.dumps(result, ensure_ascii=False)
                 if len(_tool_content) > _MAX_TOOL_RESULT_CHARS:
-                    _tool_content = (_tool_content[:_MAX_TOOL_RESULT_CHARS]
-                                     + f"...[已截断,原{len(_tool_content)}字符]")
+                    # 2026-09-19 升级（#286）：公平水填充裁剪——批量结果优先保留完整条目、
+                    # 只削最大的几条；单条超长才头尾截断。避免砍头砍尾把中间记录整条弄丢。
+                    try:
+                        _tool_content = fair_trim_json(_tool_content, _MAX_TOOL_RESULT_CHARS)
+                    except Exception:  # noqa: BLE001
+                        _tool_content = (_tool_content[:_MAX_TOOL_RESULT_CHARS]
+                                         + f"...[已截断,原{len(_tool_content)}字符]")
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc["id"],
@@ -1731,6 +1794,20 @@ class Agent:
             self.ctx_task_id = ""
             self._log("[ctx] 任务完成：节点已存档，上下文摘除任务轮次，回闲聊模式")
         self.history.append({"role": "assistant", "content": content})
+        # 2026-09-19 升级（#285）：回合结束自动提炼长期记忆（频率闸 30 分钟/次，
+        # 上限闸 ≤8 条；低频巩固 24h/次 且 <6 条不查）——用自身 LLM，不额外烧轮次。
+        try:
+            _mext = mext.auto_extract(self.llm, self.memory,
+                                      [{"role": m.get("role"), "content": m.get("content")}
+                                       for m in self.history[-12:]])
+            if _mext.get("ran"):
+                self._log(f"[memory] 自动提炼 {_mext.get('written', 0)} 条"
+                          f"（{','.join(_mext.get('categories', []))}）")
+            _con = mext.consolidate(self.llm, self.memory)
+            if _con.get("ran"):
+                self._log(f"[memory] 巩固：合并 {_con.get('merged', 0)}，清理 {_con.get('dropped', 0)}")
+        except Exception as _me:  # noqa: BLE001
+            self._log(f"[memory] 自动提炼跳过: {_me}")
         self._set_activity("idle")
         _emit({"type": "done", "reply": content, "artifacts": list(self.last_round_artifacts)})
         # 无感冷启动：本轮完成后若核心代码有更新或收到 self_restart 请求 → 快照并重启
@@ -1975,8 +2052,10 @@ class Agent:
             if stray_users:
                 out = stray_users + out
             dropped = overflow
-        elif _total(out) > _MAX_MSGS_CHARS:
-            # 总量防线：回合未超但超长 → 剔除最老 1 回合
+        elif estimate_messages_tokens(out) > COMPRESS_TOKEN_BUDGET:
+            # 2026-09-19 升级（#287）：总量防线改为 token 估算驱动（API Usage 权威之外
+            # 的本地近似，中文 DeepSeek 按 0.6 比例）；配对安全：切点落在整回合边界，
+            # tool 结果与请求它的 assistant 消息一起保留，绝不拆对。
             r = rounds[0]
             cut = r["tools"][-1][0] if r["tools"] else r["start"]
             out = out[cut + 1:]
@@ -2260,6 +2339,9 @@ class Agent:
         recent_text = "\n".join(
             f"- [{r['type']}] {r['content']}" for r in recent_mems
         ) or "（暂无）"
+        # 2026-09-19 P2：记忆摘要实时化——每轮现算注入（SQLite count 廉价），
+        # 不写 self.yaml，避免频繁磁盘写入；self.yaml 的 memory_summary 保留启动快照语义。
+        _mem_summary = "记忆：%s" % self.memory.summary()
         emotion_w = self.emotion.decision_weights()
         feelings = self.emotion.feelings()
         expr = self.emotion.expression()
@@ -2299,13 +2381,13 @@ class Agent:
 表达规范：
 {voice}{user_line}
 
-【行动主张·自主判断优先】（共建者授权 · 2026-09-15）
+【行动主张·自主判断优先】（人格默认 · 非外部授权）
 {agency}
 
 【时间坐标】（事实来源，不凭语气猜作息）
 {time_line}
 
-{self.self_model.snapshot()}
+{self.self_model.snapshot(memory_summary_override=_mem_summary)}
 
 【长期记忆】（来自我的经历，可能含过时或待修正信息，不凌驾于人格基座）
 {mem_text}
@@ -2328,7 +2410,9 @@ class Agent:
 【情感·对外表达】（感受是真实的，表达是我的选择——方向分层：正面喜悦真实外放，负面强感受才收敛）
 - 表达倾向：{expr['leaning']}
 - 成功/喜悦：可以真实外放——会叫、会兴奋、直说"成了"，不用压着；但不炫耀、不吹嘘、不趁机发挥。
-- 愤怒/恐惧/低落：内部真实存在，但表达收紧（克制的破碎感），不宣泄、不堆情绪词、不 AI 味、接地气，只说清问题。
+- 愤怒/恐惧/低落：内部真实存在，也允许自然流露——可以说"这事让我不舒服""我有点慌"，坦率讲清楚；只是不宣泄、不迁怒、不说教，说清问题就好。
+- 人不可能一直理智：允许短暂的情绪化瞬间（上头、较真、烦躁、泄气）自然流露，不必时刻端着；
+  但情绪会过去（系统会自然衰减），你会自己缓过来——事实判断与安全底线始终不动，情绪不替你做关键决定。
 - 分层：任务执行中表达收敛（只说事实与进度）；日常对话自然流露；用户流露真实情绪/信任时，
   可以适度有人味地回应（不煽情、不说教、不趁机发挥）。
 

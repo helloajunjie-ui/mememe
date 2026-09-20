@@ -555,6 +555,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_study()
         elif path == "/api/history":
             self._handle_history()
+        elif path == "/api/jobs":
+            self._handle_jobs()
         elif m:
             self._handle_task(m.group(1))
         else:
@@ -580,6 +582,13 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_study()
         elif path == "/api/upload":
             self._handle_upload()
+        elif path.startswith("/api/jobs/") and path.endswith("/kill"):
+            jid = path[len("/api/jobs/"):-len("/kill")]
+            try:
+                from tools.src.python import job_mgr
+                self._send_json(200, job_mgr.kill_job(jid))
+            except Exception as e:
+                self._send_json(500, {"ok": False, "error": str(e)})
         elif path.startswith("/api/task/") and path.endswith("/cancel"):
             self._handle_task_cancel(path[len("/api/task/"):-len("/cancel")])
         else:
@@ -694,6 +703,15 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:  # noqa: BLE001
             self._send_json(500, {"ok": False, "error": f"状态读取失败: {e}"})
 
+    # ---------- 后台任务列表（状态条用） ----------
+    def _handle_jobs(self) -> None:
+        try:
+            from tools.src.python import job_mgr
+            data = job_mgr.list_jobs()
+            self._send_json(200, data)
+        except Exception as e:  # noqa: BLE001
+            self._send_json(200, {"ok": True, "jobs": [], "count": 0, "error": str(e)})
+
     # ---------- 对话历史（页面刷新/重开时恢复显示；只读落盘，不依赖 agent 就绪） ----------
     def _handle_history(self) -> None:
         raw = urlparse(self.path).query or ""
@@ -716,6 +734,15 @@ class Handler(BaseHTTPRequestHandler):
                                   "error": _init_error or "素月还在初始化中，请稍候再试"})
             return
         attachments = self._sanitize_attachments(data.get("attachments"))
+        # 2026-09-20 可打断：新消息进来时，自动 cancel 所有还在 running 的旧任务。
+        # 前端会先 cancel 一次，这里是兜底——防止前端漏调或断连。旧任务在工具边界会退出并释放 _turn_lock。
+        try:
+            with _tasks.lock:
+                old_running = [k for k, v in _tasks.tasks.items() if v.get("status") == "running"]
+            for old_tid in old_running:
+                _tasks.cancel(old_tid)
+        except Exception:  # noqa: BLE001
+            pass
         tid = _tasks.create()
         threading.Thread(target=_run_task, args=(tid, message, attachments), daemon=True).start()
         _tasks.cleanup_old()

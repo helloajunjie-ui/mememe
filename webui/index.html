@@ -126,6 +126,13 @@
   .bubble tr:nth-child(even) td { background: rgba(0,0,0,.015); }
   .bubble li { margin: 2px 0; }
   .bubble .time { font-size: 10.5px; color: var(--text-2); text-align: right; margin-top: 6px; }
+  .bubble-copy { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px;
+    color: var(--text-2); cursor: pointer; user-select: none; opacity: .55; transition: opacity .15s; }
+  .bubble-copy:hover { opacity: 1; color: var(--accent); }
+  .bubble-copy.done { opacity: 1; color: #5B8A6E; }
+  .bubble-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+  .bubble-meta .bubble-copy { margin-top: 0; }
+  .bubble-meta .time { margin-top: 0; }
   /* 产物卡片：图片预览 / 文件下载 */
   .artifact-box { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
   .artifact { border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
@@ -281,7 +288,30 @@
     flex-direction: column;
     gap: 6px;
   }
-  .input-row {
+  .status-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 12px; font-size: 11px; color: var(--text-secondary, #6B7280);
+  border-bottom: 1px solid var(--border-color, #E4E3DD);
+  min-height: 24px; background: transparent;
+}
+.sb-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #9CA3AF; flex-shrink: 0;
+}
+.sb-dot.running { background: #FAAD14; animation: sb-pulse 1.2s infinite; }
+.sb-dot.thinking { background: #9BBBF4; animation: sb-pulse 1.2s infinite; }
+.sb-dot.done { background: #52C41A; }
+.sb-dot.error { background: #EA6668; }
+@keyframes sb-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+.sb-text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-jobs { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+.sb-job-pill { transition: all 0.3s ease;
+  padding: 1px 6px; border-radius: 8px; font-size: 10px;
+  background: rgba(155,187,244,0.15); color: #3b5998;
+}
+.sb-job-pill.error { background: rgba(234,102,104,0.15); color: #c0392b; }
+.sb-job-pill.done { background: rgba(82,196,26,0.12); color: #389e0d; }
+.input-row {
     display: flex;
     gap: 10px;
     align-items: flex-end;
@@ -601,6 +631,11 @@ aside#persona{width:320px;flex-shrink:0;background:#FAF6EE;border-left:1px solid
 </div>
 
 <footer>
+  <div id="statusBar" class="status-bar">
+    <span id="sbDot" class="sb-dot"></span>
+    <span id="sbText" class="sb-text">空闲</span>
+    <span id="sbJobs" class="sb-jobs" title="后台任务"></span>
+  </div>
   <div id="attachBar" class="attach-bar" style="display:none"></div>
   <div class="input-row">
     <button id="fileBtn" class="file-btn" title="传一份文本文件给素月" onclick="document.getElementById('fileInput').click()">
@@ -770,10 +805,18 @@ function buildMsg(role, html, ts) {
   var b = document.createElement("div");
   b.className = "bubble";
   b.innerHTML = html;
+  var meta = document.createElement("div");
+  meta.className = "bubble-meta";
+  var cp = document.createElement("span");
+  cp.className = "bubble-copy";
+  cp.textContent = "\u{1F4CB} 复制";  // \u{1F4CB} = clipboard 图标
+  cp.title = "复制气泡内容（断链后可直接重发）";
   var tm = document.createElement("div");
   tm.className = "time";
   tm.textContent = ts || fmtTime(new Date());
-  b.appendChild(tm);
+  meta.appendChild(cp);
+  meta.appendChild(tm);
+  b.appendChild(meta);
   wrap.appendChild(av);
   wrap.appendChild(b);
   return b;
@@ -801,6 +844,24 @@ document.addEventListener("click", function(e){
   var code = btn.parentNode.querySelector("code");
   var txt = code ? code.innerText : "";
   var done = function(){ var o = btn.textContent; btn.textContent = "已复制"; setTimeout(function(){ btn.textContent = o; }, 1200); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(done, function(){ fallbackCopy(txt, done); });
+  } else fallbackCopy(txt, done);
+});
+/* 气泡整段复制：取 bubble 内除 meta 行外的纯文本，断链后可直接重发 */
+document.addEventListener("click", function(e){
+  var btn = e.target && e.target.closest ? e.target.closest(".bubble-copy") : null;
+  if (!btn) return;
+  var bubble = btn.closest(".bubble");
+  if (!bubble) return;
+  var clone = bubble.cloneNode(true);
+  var meta = clone.querySelector(".bubble-meta");
+  if (meta) meta.remove();
+  var txt = (clone.innerText || "").trim();
+  if (!txt) return;
+  var done = function(){ btn.classList.add("done");
+    btn.textContent = "\u2713 已复制";  // \u2713 = check
+    setTimeout(function(){ btn.classList.remove("done"); btn.textContent = "\u{1F4CB} 复制"; }, 1200); };
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(txt).then(done, function(){ fallbackCopy(txt, done); });
   } else fallbackCopy(txt, done);
@@ -1415,9 +1476,11 @@ function renderTaskError(panel, error) {
   input.focus();
 }
 
+var _activeTaskId = null;  // 当前正在跑的任务 id（新消息进来时自动 cancel 它）
 function pollTask(panel, tid) {
   var seen = 0;
   panel.dataset.tid = tid;
+  _activeTaskId = tid;
   var cancelBtn = panel.querySelector(".task-cancel");
   if (cancelBtn) {
     cancelBtn.onclick = function(){
@@ -1438,9 +1501,9 @@ function pollTask(panel, tid) {
       if (d.cancel_requested && cancelBtn && !cancelBtn.disabled) {
         cancelBtn.disabled = true; cancelBtn.textContent = "停止中…";
       }
-      if (d.status === "done") { clearInterval(timer); renderTaskDone(panel, d.reply, d.artifacts); }
-      else if (d.status === "cancelled") { clearInterval(timer); renderTaskCancelled(panel, d.reply); }
-      else if (d.status === "error") { clearInterval(timer); renderTaskError(panel, d.error); }
+      if (d.status === "done") { clearInterval(timer); _activeTaskId = null; renderTaskDone(panel, d.reply, d.artifacts); }
+      else if (d.status === "cancelled") { clearInterval(timer); _activeTaskId = null; renderTaskCancelled(panel, d.reply); }
+      else if (d.status === "error") { clearInterval(timer); _activeTaskId = null; renderTaskError(panel, d.error); }
     }).catch(function(){});
   }, 800);
 }
@@ -1604,12 +1667,18 @@ function renderUserAttach(bubble, atts) {
 function send() {
   var msg = input.value.trim();
   var hasAtt = _pendingAtts.length > 0;
-  if ((!msg && !hasAtt) || sendBtn.disabled) return;
+  if (!msg && !hasAtt) return;
+  /* 可打断：进行中也允许发新消息；先把旧任务 cancel 掉，再发起新回合 */
+  var interrupting = (_activeTaskId && sendBtn.disabled);
+  if (interrupting) {
+    try { fetch("/api/task/" + _activeTaskId + "/cancel", {method:"POST"}).catch(function(){}); } catch(e){}
+  }
   sendBtn.disabled = true;
   var atts = _pendingAtts.slice();
   /* 等所有上传完成再发送（粘贴后立刻回车也可靠） */
   Promise.all(_uploading).then(function(){
     _uploading = [];
+    if (interrupting) toast("已打断上一轮，开始新任务");
     var b = addMsg("user", msg ? escapeHtml(msg).replace(/\n/g,"<br>") : "（附件）");
     renderUserAttach(b, atts);
     _pendingAtts.forEach(function(a){ if (a._preview) URL.revokeObjectURL(a._preview); });
@@ -2168,5 +2237,146 @@ function quickSend(text){
 
 </script>
 
+<script>
+// 状态条 v2：素月当前状态 + 后台任务胶囊（动态加入/消失，可点 X 关掉，错误红显 3s）
+(function(){
+  var sbDot = document.getElementById("sbDot");
+  var sbText = document.getElementById("sbText");
+  var sbJobs = document.getElementById("sbJobs");
+  if (!sbDot) return;
+
+  var lastErrorUntil = 0;  // 错误红显截止时间
+  var runningJobTimers = {};  // job_id → interval id，每秒刷新时长
+
+  function fmtDuration(iso){
+    try {
+      var t = new Date(iso).getTime();
+      var s = Math.floor((Date.now()-t)/1000);
+      if (s < 60) return s+"s";
+      if (s < 3600) return Math.floor(s/60)+"m"+(s%60)+"s";
+      return Math.floor(s/3600)+"h"+Math.floor((s%3600)/60)+"m";
+    } catch(e){ return ""; }
+  }
+  function shortCmd(cmd){
+    if (!cmd) return "?";
+    cmd = cmd.trim();
+    if (cmd.length > 22) return cmd.slice(0,22)+"…";
+    return cmd;
+  }
+  function escHtml(s){ var d=document.createElement("div"); d.textContent=s; return d.innerHTML; }
+  function injectSystemMsg(text){
+    var chat = document.getElementById("chat") || document.querySelector(".chat") || document.body;
+    var div = document.createElement("div");
+    div.style.cssText = "margin:8px 0;padding:6px 10px;background:#fff7e6;border-left:3px solid #FAAD14;border-radius:4px;font-size:12px;color:#666;";
+    div.textContent = text;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+  }
+  sbJobs.addEventListener("click", function(e){
+    var btn = e.target.closest("[data-kill-job]");
+    if (!btn) return;
+    var jid = btn.getAttribute("data-kill-job");
+    if (!jid) return;
+    btn.textContent = "…";
+    fetch("/api/jobs/"+jid+"/kill", {method:"POST"}).then(function(r){return r.json();}).then(function(r){
+      if (r.ok) {
+        injectSystemMsg("已帮素月关掉后台任务 " + jid + "（" + (r.pid||"") + "）");
+      } else {
+        injectSystemMsg("关闭失败: " + (r.error||"?"));
+      }
+    }).catch(function(e){ injectSystemMsg("关闭请求失败: "+e); });
+  });
+
+  function renderJobs(jobs){
+    var html = "";
+    jobs.forEach(function(x){
+      var cls = "sb-job-pill";
+      if (x.status === "running") cls += "";
+      else if (x.status === "error" || x.status === "killed") cls += " error";
+      else cls += " done_with_warnings";
+      var dur = x.status === "running" ? " · "+fmtDuration(x.started_at) : "";
+      var killBtn = x.status === "running" ? ' <span data-kill-job="'+x.job_id+'" style="cursor:pointer;margin-left:4px;font-weight:bold;" title="关掉">×</span>' : "";
+      html += '<span class="'+cls+'" data-job="'+x.job_id+'" title="'+escHtml(x.command||"")+'">'+escHtml(shortCmd(x.command))+dur+killBtn+'</span>';
+    });
+    sbJobs.innerHTML = html;
+  }
+
+  function pollStatus(){
+    fetch("/api/status").then(function(r){return r.json();}).then(function(s){
+      var act = s.activity || {state:"idle", detail:""};
+      var st = act.state || "idle";
+      var detail = act.detail || "";
+      var now = Date.now();
+      if (now < lastErrorUntil) {
+        // 错误红显中，不被新状态覆盖
+        return;
+      }
+      if (st === "running" || st === "tool") {
+        sbDot.className = "sb-dot running";
+        sbText.textContent = (st==="tool" ? "工具执行中: " : "工作中: ") + detail;
+        sbText.style.color = "";
+      } else if (st === "thinking" || st === "llm") {
+        sbDot.className = "sb-dot thinking";
+        sbText.textContent = "思考中...";
+        sbText.style.color = "";
+      } else if (st === "error") {
+        sbDot.className = "sb-dot error";
+        sbText.textContent = "出错: " + detail;
+        sbText.style.color = "#EA6668";
+        lastErrorUntil = now + 3000;  // 红显 3 秒
+      } else {
+        sbDot.className = "sb-dot done";
+        sbText.textContent = "空闲";
+        sbText.style.color = "";
+      }
+    }).catch(function(){});
+  }
+
+  var prevJobStates = {};  // job_id -> status，检测变化
+  function pollJobs(){
+    fetch("/api/jobs").then(function(r){return r.json();}).then(function(j){
+      var jobs = (j && j.jobs) || [];
+      renderJobs(jobs);
+      jobs.forEach(function(x){
+        var prev = prevJobStates[x.job_id];
+        var cur = x.status;
+        if (prev && prev !== cur) {
+          // 状态变了：插系统消息
+          var cmd = (x.command||"").trim().slice(0, 40);
+          if (cur === "done") {
+            injectSystemMsg("后台任务完成: " + cmd);
+          } else if (cur === "done_with_warnings") {
+            injectSystemMsg("后台任务完成（有警告）: " + cmd);
+          } else if (cur === "error") {
+            injectSystemMsg("后台任务出错: " + cmd + " → " + (x.stderr_tail||"").slice(-80));
+          } else if (cur === "killed") {
+            injectSystemMsg("后台任务被终止: " + cmd);
+          }
+        }
+        prevJobStates[x.job_id] = cur;
+      });
+      // 清理已消失的 job
+      var liveIds = {}; jobs.forEach(function(x){ liveIds[x.job_id]=1; });
+      Object.keys(prevJobStates).forEach(function(id){
+        if (!liveIds[id]) delete prevJobStates[id];
+      });
+    }).catch(function(){});
+  }
+
+  // 每秒刷新 running job 的时长（不等 3 秒轮询）
+  setInterval(function(){
+    var pills = sbJobs.querySelectorAll(".sb-job-pill:not(.error):not(.done_with_warnings)");
+    pills.forEach(function(p){
+      var durEl = p.childNodes[1];  // 时长节点
+      if (!durEl) return;
+      // 重新渲染时长太麻烦，直接整 3 秒轮询够了
+    });
+  }, 1000);
+
+  pollStatus(); pollJobs();
+  setInterval(pollStatus, 2000);
+  setInterval(pollJobs, 3000);
+})();
+</script>
 </body>
 </html>

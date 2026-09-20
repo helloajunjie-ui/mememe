@@ -705,8 +705,8 @@ class ToolRegistry:
         return names
 
     # ---------- 执行分发 ----------
-    def execute(self, name: str, args: Dict) -> Dict:
-        """分发执行工具。返回 {"ok": bool, "result": ...} 或 {"ok": False, "error": ...}"""
+    def execute(self, name: str, args: Dict, cancel_event=None) -> Dict:
+        """分发执行工具。cancel_event 可选——MCP 调用可中途取消。"""
         entry = self.tools.get(name)
         if not entry:
             # MCP 工具不在注册表（v2.7 起按需激活注入）：mcp_<server>_<tool> 兜底转发给 MCP 服务
@@ -714,7 +714,7 @@ class ToolRegistry:
                 srv = self.mcp.match_server(name)
                 if srv:
                     tool = name[len(f"mcp_{srv}_"):]
-                    return self.mcp.call(srv, tool, args)
+                    return self.mcp.call(srv, tool, args, cancel_event=cancel_event)
             return {"ok": False, "error": f"工具不存在: {name}"}
         impl = entry["impl"]
         if impl["type"] == "python_function":
@@ -733,7 +733,7 @@ class ToolRegistry:
         if impl["type"] == "mcp":
             if self.mcp is None:
                 return {"ok": False, "error": f"MCP 管理器未初始化（server={impl.get('server')}）"}
-            return self.mcp.call(impl.get("server", ""), impl.get("tool", ""), args)
+            return self.mcp.call(impl.get("server", ""), impl.get("tool", ""), args, cancel_event=cancel_event)
         return {"ok": False, "error": f"未知工具类型: {impl['type']}"}
 
     def _execute_python(self, name: str, args: Dict) -> Dict:
