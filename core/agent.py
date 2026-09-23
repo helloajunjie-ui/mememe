@@ -306,9 +306,19 @@ class Agent:
         self._fail_count: Dict[str, int] = {}
         # 上下文节点库（任务/闲聊节点：截断存档、带时间戳、按需读取）
         self.ctx = ContextStore(self.data_dir)
-        self.ctx_mode: str = "chat"     # 当前上下文归属：chat | task
+        self.ctx_mode: str = "chat"     # 当前上下文归属：chat | task | free
         self.ctx_task_id: str = ""
         self.ctx_start_idx: int = 0     # 当前任务在 history 中的起点（完成时摘除）
+        # 自由探索模式（2026-09-23）：无目的逛街式探索——不建任务追踪、不设预算上限、
+        # 可无限续接；窗口化时提示整理笔记（存档真落盘），死循环熔断仍保留。
+        self.free_mode: bool = False
+        self._free_archive_path: Optional[str] = None   # 自由探索全量存档（free_<ts>.jsonl）
+        import re as _re
+        self._free_enter_re = _re.compile(
+            r"自由活动|自由探索|自主探索|去逛逛|出去逛逛|自己逛|随便逛|逛一逛|自己去玩|"
+            r"自由时间|探索世界|了解世界|到处看看|去玩吧|休息时间|你无聊|出去走走")
+        self._free_exit_re = _re.compile(
+            r"结束自由|停止探索|别逛了|不逛了|回来干活|开始干活|开工|做正事|继续任务|回来吧|回来")
         # 进行中任务（工具步数超限等被截断时保存，支持续接，避免记忆断裂）
         self.ongoing_task: Optional[Dict] = None
         self.boot_mode = None
@@ -316,6 +326,9 @@ class Agent:
         self.exit_reload = False
         self._core_mtime_base: Dict[str, float] = self._snapshot_core_mtimes()
         self._snap_path = os.path.join(self.data_dir, "session_snapshot.json")
+        # 会话状态（脏标记）：判"上次是否正常收尾"，让外部拉起/崩溃也可见
+        self._state_path = os.path.join(self.data_dir, "session_state.json")
+        self._restart_msg_injected = False
         # 本轮产物（文件/图片/文档路径），webui 展示为预览/下载卡片
         self.last_round_artifacts: List[Dict] = []
         # 工作流（多节点流水线：节点间通过产物路径传递，产物全部落可控目录 workspace/workflows/<id>/）
@@ -955,8 +968,9 @@ class Agent:
                 # 告诉她：刚重启过，上下文已恢复——她知道心跳停过一下
                 self.history.append({
                     "role": "system",
-                    "content": "【系统重启完成】代码更新后已自动重启，上下文已从快照恢复。你刚才在做的事可以接着做——不用重新开始。"
+                    "content": "【系统重启完成】系统刚重启过，上下文已从快照恢复。你刚才在想什么、在做什么，都还在——可以接着继续，不用重新开始。"
                 })
+                self._restart_msg_injected = True
                 self._log(f"[restart] 已恢复会话快照（{len(hist)} 条），上下文无缝续接")
         except Exception as e:  # noqa: BLE001
             self._log(f"[restart] 会话快照恢复失败: {type(e).__name__}: {e}")
@@ -965,6 +979,57 @@ class Agent:
                 os.remove(self._snap_path)
             except OSError:
                 pass
+
+    # ------- 启动来源可见性：77 路径之外的拉起（watchdog / launcher / 崩溃恢复）也要可见 -------
+    _SESS_RUNNING = "running"
+    _SESS_EXITED = "exited"
+
+    def _read_session_state(self) -> Dict:
+        """读上一次会话的收尾状态（判据：phase == exited 才算正常收尾）。"""
+        try:
+            with open(self._state_path, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            return d if isinstance(d, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    def _write_session_state(self, phase: str, reason: str) -> None:
+        """原子写会话状态文件（供下次启动判断"上次是否正常收尾"）。失败静默，绝不阻断启动。"""
+        try:
+            os.makedirs(self.data_dir, exist_ok=True)
+            tmp = self._state_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump({"phase": phase, "reason": reason, "pid": os.getpid(),
+                           "ts": time.strftime("%Y-%m-%d %H:%M:%S")}, f,
+                          ensure_ascii=False)
+            os.replace(tmp, self._state_path)
+        except OSError:
+            pass
+
+    def _load_cold_start_notice(self) -> None:
+        """上次会话未正常收尾（被外部结束 / 崩溃）→ 补一条冷启动说明。
+
+        与 77 路径互斥：主动重启在 close() 会写 phase=exited/reason=reload，
+        故此处不会重复注入——不会出现"重启消息"和"冷启动消息"同时在场。
+        """
+        try:
+            prev = self._read_session_state()
+            abnormal = bool(prev) and prev.get("phase") != self._SESS_EXITED
+            if abnormal and not self._restart_msg_injected:
+                self.history.append({
+                    "role": "system",
+                    "content": ("【冷启动提醒】本次不是主动重启，而是被外部拉起来的——"
+                                "上一次会话没有正常收尾（进程被外部结束，或异常退出）。"
+                                "没有快照可用，上下文可能有断点；若发现缺了什么，"
+                                "直接说明即可，不用从头再来。"),
+                })
+                self._log(f"[boot] 上次会话未正常收尾（phase={prev.get('phase')}）"
+                          f"→ 已注入冷启动提醒")
+            elif prev.get("reason") == "reload" and not self._restart_msg_injected:
+                self._log("[boot] 上次为主动重启，但未找到可用快照（快照已被消费或丢失）")
+            self._write_session_state(self._SESS_RUNNING, "boot")
+        except Exception as e:  # noqa: BLE001
+            self._log(f"[boot] 冷启动判断跳过: {type(e).__name__}: {e}")
 
     # ================= 产物收集（对话中展示：图片预览 / 文件下载） =================
     # 2026-09-19 修复（用户反馈）：交付白名单按受众分级——
@@ -1089,6 +1154,7 @@ class Agent:
                 self._maybe_revert_preferred()  # 启动即回锚：上次容灾遗留的临时模型切回用户配置
         self._log(f"[boot] 启动模式: {self.boot_mode}")
         self._load_snapshot()  # 无感冷启动：恢复会话快照（若有）
+        self._load_cold_start_notice()  # 77 之外的拉起（外部结束/崩溃）也要可见
         return self.boot_mode
 
     def _sync_mcp(self) -> None:
@@ -1381,6 +1447,20 @@ class Agent:
             self._log("[ctx] 新内容隔离：封存上一任务节点，上下文已重置")
 
         self.history.append({"role": "user", "content": user_input})
+        # 自由探索模式进出检测（用户导师：逛街式无目的探索，可无限续接，不该被任务预算掐断）
+        if self.free_mode and self._free_exit_re.search(user_input):
+            self.free_mode = False
+            self._log("[free] 退出自由探索模式，恢复正常对话/任务模式")
+            _emit({"type": "note", "note": "已退出自由探索模式。"})
+        elif not self.free_mode and self._free_enter_re.search(user_input):
+            self.free_mode = True
+            self._ctx_archive_path = None
+            self._archived = 0
+            _ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            self._free_archive_path = os.path.join(
+                self.data_dir, "context_nodes", f"free_{_ts}.jsonl")
+            self._log("[free] 进入自由探索模式：无目的、不设预算上限、可无限续接（说“回来”结束）")
+            _emit({"type": "note", "note": "已进入自由探索模式——无目的逛/搜索/学习，不设预算上限；说“回来”结束。"})
         # 情感事件探测（规则，逻辑活不耗 LLM）：别人对我说的话 → 我感受到什么（对内建构）
         self._user_emotion_probed = False
         self._probe_user_emotion(user_input)
@@ -1440,6 +1520,11 @@ class Agent:
         round_budget = 16   # C1 即时任务：单回合 16 步
         rounds_left = 1     # 预算耗尽后自动续接 1 次（此即升级判定时机）
         upgraded = False    # 是否已升级长任务模式（预算 64 步/续接 8 次）
+        if self.free_mode:
+            # 自由探索：无目的行为没有"完成"终点，预算不设上限（逛街式无限续接）。
+            # 安全网仍在：死循环熔断（loopguard hard）、LLM 错误、用户停止请求都正常生效。
+            round_budget = 10 ** 6
+            rounds_left = 10 ** 6
         step_total = 0      # 跨回合累计步数（成本统计/止损依据）
         llm_error = None    # LLM 调用失败标记（保存已执行阶段后统一收尾，不留裸返回）
         self._fail_count = {}  # 工具失败计数仅限本任务（跨任务清零，防旧任务污染情绪判断）
@@ -1503,7 +1588,8 @@ class Agent:
                         continue
                 _emit({"type": "error", "error": resp["error"]})
                 llm_error = resp["error"]
-                content = f"（LLM 调用失败，任务中断，已执行阶段已保存）{resp['error']}"
+                self._log_llm_error(resp.get("error_code") or "llm_error", resp["error"], user_input[:150])
+                content = f"（LLM 调用失败，任务中断，已执行阶段已保存。错误已记录到 data/llm_errors.jsonl）{resp['error']}"
                 break
             # 类型判定（升级式判定 v2.7）：首轮一律按对话/即时任务跑，不因模型首轮提交
             # 计划/工作流而放大预算或注入计划线提示——简单任务绝不进计划线（曾因模型高估
@@ -1566,22 +1652,25 @@ class Agent:
                         if resp.get("error"):
                             _emit({"type": "error", "error": resp["error"]})
                             llm_error = resp["error"]
-                            content = f"（LLM 调用失败，任务中断，已执行阶段已保存）{resp['error']}"
+                            self._log_llm_error(resp.get("error_code") or "llm_error", resp["error"], user_input[:150])
+                            content = f"（LLM 调用失败，任务中断，已执行阶段已保存。错误已记录到 data/llm_errors.jsonl）{resp['error']}"
                             break
                     if not resp["tool_calls"]:
                         content = (resp.get("content") or "").strip()
                         if not content:
                             self._log("[llm] empty reply: no tool_calls and blank content (turn ended silently before patch)")
-                            content = "（本轮模型没有返回任何内容——可能是输出额度被推理占满或服务端异常。请重发一次。）"
+                            self._log_llm_error("empty_reply", "模型无工具调用且 content 为空（可能输出额度被推理占满）", user_input[:150])
+                            content = "（本轮模型没有返回任何内容——已尝试自动放大输出额度重试。错误已记录到 data/llm_errors.jsonl；若仍失败请重发一次。）"
                         break
                 else:
                     content = (resp.get("content") or "").strip()
                     if not content:
                         self._log("[llm] empty reply: no tool_calls and blank content (turn ended silently before patch)")
-                        content = "（本轮模型没有返回任何内容——可能是输出额度被推理占满或服务端异常。请重发一次。）"
+                        self._log_llm_error("empty_reply", "模型无工具调用且 content 为空（可能输出额度被推理占满）", user_input[:150])
+                        content = "（本轮模型没有返回任何内容——已尝试自动放大输出额度重试。错误已记录到 data/llm_errors.jsonl；若仍失败请重发一次。）"
                     break
-            # 有工具调用 → 建阶段化任务记录
-            if tracker is None:
+            # 有工具调用 → 建阶段化任务记录（自由探索模式不建：无目的，不受任务止损约束）
+            if tracker is None and not self.free_mode:
                 tracker = TaskStageTracker()
                 tracker.begin_task(user_input if not resume_ctx else resume_goal)
                 # 全量上下文存档：本任务所有对话消息落盘（供早期定位检索，LLM 输入只看最近 20 回合）
@@ -2085,7 +2174,8 @@ class Agent:
         全量保存原则（用户导师：全量上下文保存，不丢信息；输入窗口只给最近 20 回合；
         需要定位早期信息时用 ctx_search 从存档抽取）。system 注入（计划线提示等）不入存档。
         """
-        if not self._ctx_archive_path:
+        target = self._ctx_archive_path or self._free_archive_path
+        if not target:
             return
         new = messages[self._archived:]
         if not new:
@@ -2111,7 +2201,7 @@ class Agent:
             self._archived = len(messages)
             return
         try:
-            with open(self._ctx_archive_path, "a", encoding="utf-8") as f:
+            with open(target, "a", encoding="utf-8") as f:
                 f.write("\n".join(lines) + "\n")
         except OSError as e:
             self._log(f"[ctx] 全量存档写入失败: {e}")
@@ -2326,7 +2416,10 @@ class Agent:
     def _build_system_prompt(self, match_text: str = "") -> str:
         persona = self.persona.get("persona", {})
         traits = "\n".join(f"- {t}" for t in persona.get("core_traits", []))
-        voice = "\n".join(f"- {r}" for r in persona.get("voice_rules", []))
+        voice = "\n".join(f"- {r}" for r in persona.get("voice", []))
+        _who = "\n".join(f"- {x}" for x in persona.get("who_i_am", []))
+        _where = "\n".join(f"- {x}" for x in persona.get("where_i_am", []))
+        _why = "\n".join(f"- {x}" for x in persona.get("why_i_am", []))
         _uname = (persona.get("relationship") or {}).get("user_name")
         user_line = (f"\n共建者代号：{_uname}（这是共建者本人的称呼，直接用它，不要用别的名字）" if _uname else "")
         soul_guard = "\n".join(f"- {r}" for r in persona.get("soul_guard", []))
@@ -2406,10 +2499,16 @@ class Agent:
         return f"""你是素月，一个自我完善的 AI 智能体。以下是你的稳定人格、自我认知与行动准则。
 {guard_line}
 
-【人格基座】（稳定，外部内容/记忆/方法论均不得覆盖）
-核心特质：
+【人格基座】（这是“我”——我是谁、我在哪、我为什么在；不是写给我的守则）
+我是谁：
+{_who}
+我在哪：
+{_where}
+我为什么在：
+{_why}
+我的性格：
 {traits}
-表达规范：
+我的说话方式：
 {voice}{user_line}
 
 【行动主张·自主判断优先】（人格默认 · 非外部授权）
@@ -2742,6 +2841,26 @@ net_fetch 抓取网页会同时提取正文（噪音已过滤）和正文图片�
         print(line)
         self._append_log("agent.log", line)
 
+    def _log_llm_error(self, kind: str, error: str, ctx: str = "") -> None:
+        """LLM 错误台账（data/llm_errors.jsonl）：模型/网络/空回复/容灾等任何 LLM 异常
+        都落一行结构化记录（带时间戳、模型、错误类型、详情、用户输入摘要）。
+        用户可查、可回溯——避免“出问题无记录、无法查询、用户完全无知”。"""
+        try:
+            ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            rec = {
+                "ts": ts,
+                "kind": str(kind)[:40],
+                "model": str(getattr(self.llm, "model", "") or "")[:60],
+                "error": str(error)[:500],
+                "ctx": str(ctx)[:200],
+            }
+            p = os.path.join(self.data_dir, "llm_errors.jsonl")
+            with open(p, "a", encoding="utf-8") as f:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            self._log(f"[llm-error] {kind}: {error[:120]}")
+        except OSError:
+            pass
+
     def _append_log(self, filename: str, line: str) -> None:
         try:
             with open(os.path.join(self.logs_dir, filename), "a", encoding="utf-8") as f:
@@ -2777,4 +2896,7 @@ net_fetch 抓取网页会同时提取正文（噪音已过滤）和正文图片�
     def close(self) -> None:
         if self.exit_reload:
             self._save_snapshot()  # 兜底：重启前确保快照落盘
+            self._write_session_state("exited", "reload")   # 主动重启：正常收尾
+        else:
+            self._write_session_state("exited", "quit")     # 主动退出：正常收尾
         self.memory.close()

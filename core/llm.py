@@ -176,6 +176,26 @@ class LLMGateway:
                 "base_url": resp_data.get("base_url"),
                 "failover_note": resp_data.get("failover_note"),
             }
+        # —— 推理预算保护（2026-09-23）——
+        # 推理模型（deepseek-flash 等）的 reasoning 与 content 共用 max_tokens 预算：
+        # 思考链吃光额度 → content 为空串 → 主循环误判"空回复"直接结束（"话说到一半空白"）。
+        # 机械可修复场景（无 error + content 空 + reasoning 非空 + finish_reason==length 截断）
+        # → 放大 max_tokens 重试一次，不把问题留给用户"重发一次"。
+        if (not (resp_data.get("content") or "").strip()
+                and resp_data.get("reasoning_content")
+                and resp_data.get("finish_reason") == "length"):
+            boost = min(16384, max(4096, int(self.max_tokens or 4096) * 2))
+            if boost != int(self.max_tokens or 4096):
+                payload["max_tokens"] = boost
+                data = json.dumps(payload).encode("utf-8")
+                try:
+                    req = urllib.request.Request(
+                        self._gateway_url + "/v1/chat", data=data,
+                        headers={"Content-Type": "application/json"}, method="POST")
+                    with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                        resp_data = json.loads(r.read().decode("utf-8"))
+                except Exception:  # noqa: BLE001 —— 重试失败就用原结果，交给上层兜底
+                    pass
         # 正常回复：透传网关信息（容灾已由网关完成，素月只消费结果）
         tcs = resp_data.get("tool_calls") or []
         return {
