@@ -1085,13 +1085,17 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def _port_in_use(host: str, port: int) -> bool:
-    """端口占用检查：防重复启动导致的多进程互锁。"""
+    """端口占用检查：用 TCP 连接探测（能连上 = 有服务在听）。
+
+    2026-09-23 修复：原实现用 bind 探测，Windows 上端口处于 TIME_WAIT 残留时
+    bind 必抛 10048 → 误判"占用" → 误等/误杀 → 启动崩溃循环（18:50 连崩 5 次）。
+    connect 探测对 TIME_WAIT 端口返回拒绝（=空闲可绑），与真实监听区分开。"""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
         try:
-            s.bind((host, port))
-            return False
+            return s.connect_ex((host, port)) == 0
         except OSError:
-            return True
+            return False
 
 
 def _cmd_out(args: list, timeout: int = 15) -> str:
@@ -1245,7 +1249,22 @@ def main() -> None:
     global _started_at
     _started_at = time.time()
 
-    srv = ThreadingHTTPServer((HOST, PORT), Handler)
+    # bind 短重试（2026-09-23）：端口刚释放/处于残留态时给 3 次机会（每次 1s），
+    # 仍失败才退出——避免"起来 3 秒就崩"式启动循环。
+    # SO_REUSEADDR 已由 HTTPServer 默认开启（allow_reuse_address=1），Windows 上
+    # 允许绑定 TIME_WAIT 残留端口；此处显式声明防回归。
+    srv = None
+    for _try in range(3):
+        try:
+            srv = ThreadingHTTPServer((HOST, PORT), Handler)
+            srv.allow_reuse_address = True
+            break
+        except OSError as _e:
+            print(f"端口 {PORT} 绑定失败（{_e}），第 {_try + 1} 次重试 ...")
+            time.sleep(1)
+    if srv is None:
+        print(f"端口 {PORT} 绑定失败，无法启动。请检查占用进程。")
+        sys.exit(1)
 
     # ---- 托盘化：常驻系统托盘（悬停气泡 + 左键开网页 + 右键退出） ----
     # 主线程跑托盘事件循环，HTTP 服务放子线程；托盘"退出素月" → 关闭服务收尾。

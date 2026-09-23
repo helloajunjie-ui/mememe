@@ -46,6 +46,14 @@ if not exist "%~dp0.venv\.deps_ok" (
 
 REM ---- 2. 启动（start 分离，pythonw 后台无窗口，本窗口自动关闭） ----
 echo [3/3] 启动素月...
+REM ---- 0. 单实例检查：8765 已在监听 = 素月已运行，直接打开界面，不重复启动 ----
+powershell -NoProfile -Command "$c=New-Object Net.Sockets.TcpClient; try{$c.Connect('127.0.0.1',8765);exit 0}catch{exit 1}"
+if %errorlevel%==0 (
+  echo [3/3] 素月已在运行，直接打开界面...
+  start "" "http://127.0.0.1:8765"
+  exit /b 0
+)
+
 REM ---- gateway: start Go LLM gateway (hidden) before Suyue ----
 if exist "%~dp0llm-gateway\bailing-gateway.exe" (
   wscript.exe "%~dp0llm-gateway\start-gateway-hidden.vbs"
