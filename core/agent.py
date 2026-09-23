@@ -1764,13 +1764,14 @@ class Agent:
                         self.emotion.on_event("tool_error_repeat")
                 else:
                     self._fail_count[name] = 0
-                # 阶段记录
-                tracker.add_stage(
-                    name,
-                    action=json.dumps(args, ensure_ascii=False),
-                    result=json.dumps(result, ensure_ascii=False),
-                    status="ok" if ok else "error",
-                )
+                # 阶段记录（自由探索模式不建 tracker，此处需空值保护——2026-09-23）
+                if tracker is not None:
+                    tracker.add_stage(
+                        name,
+                        action=json.dumps(args, ensure_ascii=False),
+                        result=json.dumps(result, ensure_ascii=False),
+                        status="ok" if ok else "error",
+                    )
                 _tool_content = json.dumps(result, ensure_ascii=False)
                 if len(_tool_content) > _MAX_TOOL_RESULT_CHARS:
                     # 2026-09-19 升级（#286）：公平水填充裁剪——批量结果优先保留完整条目、
