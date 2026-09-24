@@ -166,9 +166,11 @@ _CAT_HINT = {
 
 
 def _norm_cat(s: str) -> str:
-    """分类名归一：Version-Control ↔ version control。"""
-    return s.lower().replace("-", " ").replace("_", " ")
-
+    """分类名归一化：兼容 "Knowledge--Memory" / "Knowledge & Memory" / "Workplace-And-Productivity" 等写法。"""
+    s = (s or "").lower().replace("&", " and ")
+    for ch in ("--", "-", "_", "/", ":"):
+        s = s.replace(ch, " ")
+    return " ".join(w for w in s.split() if w != "and")
 
 def _fuse(servers: list, installed: dict) -> set:
     """融合：把已装 MCP 标注到索引条目（name 精确 / repo 名去 .git 后精确或 endswith + 分类限定）。
