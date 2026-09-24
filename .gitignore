@@ -115,3 +115,9 @@ mcp-service/servers/*/__pycache__/
 mcp-service/servers/*/data/
 tools/bin/crw-mcp.exe
 mcp-service/servers/urara/
+
+# runtime logs/state (not for repo)
+data/crash_log.jsonl
+data/llm_errors.jsonl
+data/session_state.json
+data/mcp_index_history/
