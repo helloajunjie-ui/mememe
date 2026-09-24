@@ -125,3 +125,6 @@ data/mcp_index_history/
 mcp-service/servers/microsoft-markitdown/
 mcp-service/servers/*/.venv/
 mcp-service/workspace/
+
+# 视频抽帧/媒体产物（可重生成，不入公开仓库）
+workspace/media/
