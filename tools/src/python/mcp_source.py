@@ -27,6 +27,8 @@ from tools.base import tool
 
 ROOT = Path(__file__).resolve().parents[3]          # F:\me\self-agent
 INDEX = ROOT / "data" / "mcp_index.json"
+INDEX_HISTORY = ROOT / "data" / "mcp_index_history"   # 滚动存档目录（最多留 3 份）
+HISTORY_KEEP = 3
 MCP_CONFIG = ROOT / "mcp-service" / "config" / "mcp.json"
 SERVERS_DIR = ROOT / "mcp-service" / "servers"
 
@@ -267,12 +269,26 @@ def run_update() -> dict:
         }
         INDEX.parent.mkdir(parents=True, exist_ok=True)
         INDEX.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+        # 滚动存档：带时间戳写历史，只保留最近 HISTORY_KEEP 份，多的替换旧的
+        now = datetime.now()
+        INDEX_HISTORY.mkdir(parents=True, exist_ok=True)
+        hist_name = f"mcp_index_{now.strftime('%Y%m%d_%H%M%S')}.json"
+        (INDEX_HISTORY / hist_name).write_text(
+            json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+        olds = sorted(INDEX_HISTORY.glob("mcp_index_*.json"))
+        removed = []
+        for f in olds[:-HISTORY_KEEP]:
+            f.unlink(missing_ok=True)
+            removed.append(f.name)
         return {
             "ok": True,
             "count": len(servers),
             "installed_count": payload["installed_count"],
             "categories_count": len(categories),
             "index": str(INDEX),
+            "history": str(INDEX_HISTORY / hist_name),
+            "history_kept": len(olds) - len(removed),
+            "removed": removed,
             "updated_at": payload["updated_at"],
             "提示": "已融合已装 MCP（installed=true）。用 mcp_source_search 按关键词/分类找能力。",
         }
