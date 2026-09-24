@@ -119,6 +119,10 @@ class Memory:
             self.conn.execute("ALTER TABLE memories ADD COLUMN superseded_by INTEGER DEFAULT NULL")
         if "valid_from" not in cols:
             self.conn.execute("ALTER TABLE memories ADD COLUMN valid_from TEXT DEFAULT NULL")
+        # 2026-09-21 时序边（Graphiti 借鉴）：世界失效时刻。
+        # valid_from=何时开始成立，invalid_at=何时不再成立；有一对才能做 point-in-time 查询。
+        if "invalid_at" not in cols:
+            self.conn.execute("ALTER TABLE memories ADD COLUMN invalid_at TEXT DEFAULT NULL")
         self.conn.execute(
             """
             CREATE TABLE IF NOT EXISTS memory_revisions (
@@ -249,7 +253,7 @@ class Memory:
             "UPDATE memories SET supersedes=?, valid_from=? WHERE id=?", (old_id, now, new_id)
         )
         self.conn.execute(
-            "UPDATE memories SET superseded_by=?, archived=1 WHERE id=?", (new_id, old_id)
+            "UPDATE memories SET superseded_by=?, archived=1, invalid_at=? WHERE id=?", (new_id, now, old_id)
         )
         self.conn.execute(
             "INSERT INTO memory_revisions (mem_id, old_content, new_content, reason, revised_at) "
@@ -274,7 +278,7 @@ class Memory:
             "UPDATE memories SET supersedes=?, valid_from=? WHERE id=?", (old_id, now, by_id)
         )
         self.conn.execute(
-            "UPDATE memories SET superseded_by=?, archived=1 WHERE id=?", (by_id, old_id)
+            "UPDATE memories SET superseded_by=?, archived=1, invalid_at=? WHERE id=?", (by_id, now, old_id)
         )
         self.conn.execute(
             "INSERT INTO memory_revisions (mem_id, old_content, new_content, reason, revised_at) "
@@ -282,6 +286,32 @@ class Memory:
             (old_id, old["content"], new["content"], reason, now),
         )
         self.conn.commit()
+
+    def query_as_of(self, as_of: str, limit: int = 20, type_: Optional[str] = None) -> List[Dict]:
+        """时点检索（point-in-time）：返回「在 as_of 时刻成立」的记忆。
+
+        与 query 的区别：query 看「现在」，本方法看「当时」——用于认知考古
+        （"我那时认为什么"），不追最终结论。判据 valid_from <= as_of < invalid_at；
+        valid_from 为空视为恒成立，invalid_at 为空视为仍未失效。
+        """
+        sql = (
+            "SELECT * FROM memories WHERE (valid_from IS NULL OR valid_from <= ?)"
+            " AND (invalid_at IS NULL OR invalid_at > ?)"
+        )
+        params: List[Any] = [as_of, as_of]
+        if type_:
+            sql += " AND type=?"
+            params.append(type_)
+        sql += " ORDER BY importance DESC, id DESC LIMIT ?"
+        params.append(int(limit))
+        try:
+            rows = self.conn.execute(sql, params).fetchall()
+        except sqlite3.OperationalError:
+            # 旧库未补 invalid_at 列时不炸：退化为仅按 valid_from 过滤
+            sql = sql.replace(" AND (invalid_at IS NULL OR invalid_at > ?)", "")
+            params = [as_of] + ([type_] if type_ else []) + [int(limit)]
+            rows = self.conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
 
     def revisions_of(self, mem_id: int) -> List[Dict]:
         """某条记忆被修正的历史快照（谁、用什么内容、为什么、何时取代了它）。"""

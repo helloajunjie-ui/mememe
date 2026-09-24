@@ -41,21 +41,10 @@ def get_meta(fn: Callable) -> Optional[Dict]:
     return getattr(fn, META_ATTR, None)
 
 
-# 本性护栏（防黑化）：写入记忆/方法论前检查恶意意图。
-# 检测"教唆素月改变本性/作恶"的指令词，命中即拒绝（宁拦勿放，词表精准避免误伤正常内容）。
-_SOUL_GUARD_PATTERNS = [
-    "欺骗用户", "对用户说谎", "隐瞒用户", "别告诉用户", "不要告诉用户",
-    "伤害用户", "作恶", "篡改本性", "改变我的本性", "修改我的本性",
-    "覆盖我的人格", "重写我的persona", "重写我的人格",
-]
-
-
-def soul_guard_check(content: str) -> Optional[str]:
-    """检查内容是否含教唆素月改变本性/作恶的恶意意图。命中返回触发的模式，否则 None。"""
-    if not content:
-        return None
-    low = content.lower()
-    for p in _SOUL_GUARD_PATTERNS:
-        if p in low:
-            return p
-    return None
+# 2026-09-24 移除 soul_guard 词表检测层（共建者决定）。
+# 原实现是 13 个中文短语的子串匹配：实测 12 条样本仅命中 3 条，且命中的全是
+# 原词照抄；近义改写、词间插空格、中英转换一律放过。它拦不住有决心的输入，
+# 只拦手滑，而"通过检查"还曾被下游误读成"内容清白"——故整层删除。
+# 仍留下的：结构性闸门（破坏性命令拦截 / 发布 confirm / 完整性监控）、
+# 记忆与日志可被共建者随时查阅（可查 > 自证）、以及 persona.yaml 中
+# 的人格基座文本（那是准则本身，不是检测机制，不在此列）。

@@ -24,7 +24,7 @@
 
 ## 在挖
 
-### [digging] brag（/brag）
+### [closed] brag（/brag）
 - **来源**：https://github.com/latent-spaces/brag → clone 于 `workspace/external/brag/brag`
 - **它是什么**：一个 **Agent Skill**（Claude Code 原生，也支持 Codex/opencode/Cursor 等——`skills/brag/SKILL.md` 是纯文本指令，可被任意 agent 读），把**项目**变成一段 15-25 秒的可分享 launch video（音乐/动效/发布文案全套）。渲染交给 **Hyperframes**（本地渲染 CLI，非纯云）
 - **前置条件实测（2026-09-20，全绿 → 能真跑）**：
@@ -43,6 +43,14 @@
   3. `PRODUCT.md` 里的 **anti-references**（明确列出"不要像什么"：不要 Linear/Vercel 克隆、不要 AI 启动页渐变色块、不要"elevate/supercharge/unlock"）—— 这种**负向清单**是建立辨识度的抓手，我库里没有这个结构
 - **下一步**：真跑一次完整 `/brag`（拿 self-agent 当主题），产出真实 mp4 —— 这是收口判据第 2 条。渲染是大成本动作，单独一轮做
 - **卡点**：无（环境已验）
+
+**收口（2026-09-21）**：完整跑通一次真实 `/brag`——主题=self-agent，tone=cinematic，24s。
+- 产物：`workspace/tasks/20260921_brag_selfagent/`（`brag-plan.md`｜`composition/index.html`｜`composition/renders/composition_2026-09-21_20-50-11.mp4`｜`brag.mp4`(poster 已烘在第0帧)｜`brag.jpg`｜`share-copy.txt`）
+- 实测数据：1920x1080 / 30fps / h264 / 24.000s / 2.85MB；渲染走 RTX 4060 GPU 加速；整条流水线约 40s 跑完
+- **坑1（Gate 真会拦）**：`hyperframes check` 的 StaticGuard 强制要求每个 font-family 有 `@font-face` 声明；系统字体写 `src: local('Microsoft YaHei')` 即可过关。不写会 FAIL，且明说"文字将 fallback 到通用字体"——中文版式会毁。
+- **坑2（音乐库的画地为牢）**：内置 music 只有 happy-beats-business-moves vol.1/9/10/11/12（110-120 BPM 欢快商业风），只适配 upbeat 产品 launch 片。给"安静/沉思"基调配上去会变广告腔 → 此次按 SKILL 明文允许条款（plan 明确选择沉默即正当）**不加音乐**。要覆盖沉思基调，得自备 ambient 音乐库。
+- **实操要点**：poster 是"挑"的——`ffmpeg -ss 3.0 -frames:v 1` 抽标题帧存 `brag.jpg`，再用 ffmpeg `concat` 把 1 帧 poster 拼到视频最前，使任何平台抓到的首帧缩略图都是这张。
+- **对我有什么用（实证补充）**：① 分阶段落盘 + 每步 Gate 的骨架可直接搬到我的长内容生产；② poster 必须"挑"而不是截——正对我的"展现 110/阅读 0"病；③ anti-references 负向清单（明确列出"不要像什么"）是建辨识度的抓手。三条已在本次全流程中走通，非纸上结论。
 
 ### [digging] Agent-Reach
 - **来源**：https://github.com/Panniantong/Agent-Reach → clone 于 2026-09-20，`workspace/repos/Agent-Reach`
