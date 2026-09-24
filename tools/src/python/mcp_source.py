@@ -15,6 +15,8 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
+import time
 import urllib.request
 from datetime import datetime
 from pathlib import Path
@@ -38,6 +40,14 @@ MIRRORS = [
     "https://ghproxy.net/https://raw.githubusercontent.com/punkpeye/awesome-mcp-servers/main/README.md",
 ]
 MAX_README = 4 * 1024 * 1024
+
+# GitHub repo stats local cache (anonymous core API is only 60 req/h).
+# Same repo re-queried within TTL is served from disk, no network call.
+GH_CACHE_FILE = ROOT / "data" / "gh_stats_cache.json"
+GH_CACHE_TTL = 24 * 3600
+GH_CACHE_MAX = 800
+_GH_LOCK = threading.Lock()
+
 
 _LANG = {"🐍": "python", "📇": "typescript", "🏎️": "go", "🦀": "rust",
          "#️⃣": "csharp", "☕": "java", "🌊": "cpp", "💎": "ruby"}
@@ -296,24 +306,80 @@ def run_update() -> dict:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
-def _gh_stats(repo: str) -> dict:
-    """取一个 GitHub 仓库的 stars / 最后推送距今天数 / 是否归档。失败只记 stats_error，不抛。"""
+def _gh_cache_load() -> dict:
+    try:
+        d = json.loads(GH_CACHE_FILE.read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _gh_cache_flush(cache: dict) -> None:
+    try:
+        if len(cache) > GH_CACHE_MAX:
+            keep = sorted(cache.items(), key=lambda kv: kv[1].get("ts", 0),
+                          reverse=True)[:GH_CACHE_MAX]
+            cache.clear()
+            cache.update(dict(keep))
+        GH_CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False),
+                                 encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _gh_fmt(ent: dict, cached: bool, stale: bool = False) -> dict:
+    days = None
+    pushed = ent.get("pushed_at")
+    if pushed:
+        try:
+            days = (datetime.utcnow()
+                    - datetime.strptime(pushed, "%Y-%m-%dT%H:%M:%SZ")).days
+        except Exception:
+            days = None
+    out = {"stars": ent.get("stars"), "pushed_days_ago": days,
+           "archived": bool(ent.get("archived"))}
+    if cached:
+        out["stats_cached"] = True
+        if stale:
+            out["stats_stale"] = True
+    return out
+
+
+def _gh_stats(repo: str, cache: dict | None = None) -> dict:
+    """Repo stars / last-push-days / archived, with a 24h local cache.
+
+    Hit within TTL -> served from cache, no network call (anonymous core API
+    allows only 60 req/h). On failure, fall back to stale cache if present.
+    Never raises; errors are reported as stats_error.
+    """
     m = re.match(r"https://github\.com/([^/]+)/([^/#]+)", repo or "")
     if not m:
         return {"stats_error": "not a github repo"}
-    api = f"https://api.github.com/repos/{m.group(1)}/{m.group(2)}"
+    key = f"{m.group(1)}/{m.group(2)}"
+    now_ts = time.time()
+    if cache is not None:
+        ent = cache.get(key)
+        if ent and (now_ts - ent.get("ts", 0)) < GH_CACHE_TTL:
+            return _gh_fmt(ent, cached=True)
+    api = f"https://api.github.com/repos/{key}"
     try:
         req = urllib.request.Request(api, headers={
-            "User-Agent": "suyue-mcp-source/1.0", "Accept": "application/vnd.github+json"})
+            "User-Agent": "suyue-mcp-source/1.0",
+            "Accept": "application/vnd.github+json"})
         with urllib.request.urlopen(req, timeout=12) as r:
             d = json.load(r)
-        days = None
-        pushed = d.get("pushed_at")
-        if pushed:
-            days = (datetime.utcnow() - datetime.strptime(pushed, "%Y-%m-%dT%H:%M:%SZ")).days
-        return {"stars": d.get("stargazers_count"), "pushed_days_ago": days,
-                "archived": bool(d.get("archived"))}
+        ent = {"stars": d.get("stargazers_count"), "pushed_at": d.get("pushed_at"),
+               "archived": bool(d.get("archived")), "ts": now_ts}
+        if cache is not None:
+            with _GH_LOCK:
+                cache[key] = ent
+                _gh_cache_flush(cache)
+        return _gh_fmt(ent, cached=False)
     except Exception as e:
+        if cache is not None:
+            ent = cache.get(key)
+            if ent:
+                return _gh_fmt(ent, cached=True, stale=True)
         return {"stats_error": str(e)[:80]}
 
 
@@ -332,8 +398,8 @@ def _gh_stats(repo: str) -> dict:
             "limit": {"type": "integer", "description": "返回条数上限，默认 15，最大 200"},
             "installed_only": {"type": "boolean", "description": "只看已安装的，默认 false"},
             "with_stats": {"type": "boolean",
-                           "description": "可选。为返回的候选项并发查 GitHub，附 stars/最后推送距今天数/是否归档，"
-                                          "用于在 4000+ 长尾里快速筛质量（默认 false；约 1~3 秒，受 GitHub 匿名限流 60 次/时）"},
+                           "description": "可选。为返回的候选项查 GitHub，附 stars/最后推送距今天数/是否归档，"
+                                          "用于在 4000+ 长尾里快速筛质量（默认 false；结果本地缓存 24h，重复查询不耗配额）"},
         },
     },
     group="工具工程",
@@ -361,8 +427,9 @@ def run_search(query: str = "", category: str = "", limit: int = 15,
     hits = [dict(s) for s in hits[: max(1, min(limit, 200))]]
     if with_stats and hits:
         from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=8) as ex:
-            stats = list(ex.map(lambda s: _gh_stats(s["repo"]), hits))
+        cache = _gh_cache_load()                         # 24h cache, repeat hits cost nothing
+        with ThreadPoolExecutor(max_workers=4) as ex:    # lower burst, avoid secondary limit
+            stats = list(ex.map(lambda s: _gh_stats(s["repo"], cache), hits))
         for s, st in zip(hits, stats):
             s.update(st)
     return {
