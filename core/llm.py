@@ -133,13 +133,21 @@ class LLMGateway:
             "temperature": self.temperature if temperature is None else float(temperature),
             "max_tokens": self.max_tokens,
         }
+        model_name = str(getattr(self, "model", "") or "").lower()
         if tools:
+            # DeepSeek 思考模型（flash/reasoner）只接受 tool_choice="auto"：
+            # "required" 与"指定具体函数"均返回 HTTP 400
+            # 「Thinking mode does not support this tool_choice」。
+            # 2026-09-24 四组对照实测（A带thinking+required / B不带thinking+required /
+            # C-auto / D-指定函数），仅 auto 可用。此处统一降级，避免 400 沿调用链
+            # 变成"LLM 调用失败，任务中断"。
+            if tool_choice not in (None, "auto", "none") and model_name.startswith("deepseek"):
+                tool_choice = "auto"
             payload["tools"] = tools
             payload["tool_choice"] = tool_choice
         # DeepSeek 思考预算：限制每轮 reasoning 输出，显著降延迟（其他模型不支持该参数，跳过）
         # 2026-09-15 诊断：素月每轮 2-8s（偶尔 20s+）慢的根因是 thinking 全量思考；
         # budget_tokens 设上限后简单轮次 1-2s 可回，复杂推理（计划线）仍够用。
-        model_name = str(getattr(self, "model", "") or "").lower()
         if model_name.startswith("deepseek"):
             payload["thinking"] = {"type": "enabled", "budget_tokens": _DEEPSEEK_THINKING_BUDGET}
         data = json.dumps(payload).encode("utf-8")
