@@ -89,6 +89,9 @@
   .bubble p { margin: 4px 0; }
   .bubble .chat-img { display: block; max-width: 100%; max-height: 320px; border-radius: 8px;
     margin: 6px 0; border: 1px solid var(--border); object-fit: contain; background: #fff; }
+  .bubble .chat-audio { display: block; width: 100%; max-width: 420px; margin: 8px 0; }
+  .bubble .chat-video { display: block; max-width: 100%; max-height: 320px; border-radius: 8px;
+    margin: 6px 0; border: 1px solid var(--border); background: #000; }
   .bubble ul, .bubble ol { margin: 6px 0 6px 20px; }
   .bubble pre {
     background: #F7F3EA; border: 1px solid var(--border);
@@ -716,8 +719,16 @@ function renderMd(text) {
            + ' onclick="openArtifactModal(this.src)"'
            + ' onerror="this.style.display=\'none\'">';
     });
-    t = t.replace(/\[([^\]]+)\]\(((?:https?:|mailto:|\/|#)[^)\s]*)\)/g, function(m,txt,h){
-      return '<a href="'+h+'" target="_blank" rel="noopener noreferrer">'+txt+'</a>';
+    t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function(m,txt,h){
+      var url = resolveArtifactSrc(h);
+      if (/^(javascript|data|vbscript):/i.test(url)) return txt;
+      if (/\.(mp3|wav|m4a|ogg|oga|flac|aac|opus|wma)$/i.test(url)) {
+        return '<audio controls preload="metadata" class="chat-audio" src="'+url+'" title="'+txt+'"></audio>';
+      }
+      if (/\.(mp4|webm|mov|mkv|m4v|ogv)$/i.test(url)) {
+        return '<video controls preload="metadata" class="chat-video" src="'+url+'" title="'+txt+'"></video>';
+      }
+      return '<a href="'+url+'" target="_blank" rel="noopener noreferrer">'+txt+'</a>';
     });
     t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
     t = t.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");

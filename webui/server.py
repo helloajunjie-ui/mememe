@@ -529,6 +529,11 @@ class Handler(BaseHTTPRequestHandler):
         ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         ".zip": "application/zip",
+        ".mp3": "audio/mpeg", ".wav": "audio/wav", ".m4a": "audio/mp4",
+        ".ogg": "audio/ogg", ".oga": "audio/ogg", ".flac": "audio/flac",
+        ".aac": "audio/aac", ".opus": "audio/ogg", ".wma": "audio/x-ms-wma",
+        ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime",
+        ".mkv": "video/x-matroska",
     }
 
     def do_GET(self):
