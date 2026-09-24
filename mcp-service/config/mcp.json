@@ -150,6 +150,14 @@
       "version": "0.9.64",
       "version_note": "graphifyy 0.9.64 官方自带 MCP（python -m graphify.serve，stdio）。serve 一个已存在的 graph.json（默认 <项目>/graphify-out/graph.json，可用 --graph 指定）。出图用 CLI：graphify extract <path> --code-only（AST 本地解析，免 API key）",
       "check_update": true
+    },
+    "markitdown": {
+      "command": "F:\\me\\self-agent\\mcp-service\\servers\\microsoft-markitdown\\.venv\\Scripts\\markitdown-mcp.exe",
+      "desc": "微软官方 MarkItDown：文档转 Markdown 供模型读取（PDF / Word / Excel / PPT / HTML / CSV / JSON / XML / 图片元数据 / 音频转录）"
+    },
+    "talkthrough": {
+      "command": "F:\\me\\self-agent\\mcp-service\\servers\\talkthrough-mcp\\.venv\\Scripts\\talkthrough-mcp.exe",
+      "desc": "本地录音/视频分析：本地 Whisper 转写 + 关键帧 + OCR + 墙钟时间戳（无云、无 LLM）"
     }
   }
 }

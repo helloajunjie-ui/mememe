@@ -223,23 +223,55 @@ def _env_probe() -> dict:
     return env
 
 
-def _extract_install_hints(repo_dir: Path) -> list:
-    """从 clone 的 README 提取常见安装命令。"""
+_GH_SUBDIR_RE = re.compile(
+    r"^(https?://(?:www\.)?github\.com/[^/]+/[^/]+)"
+    r"(?:/(?:tree|blob)/[^/]+)?(?:/(.*))?$", re.I)
+
+
+def _repo_split(url: str) -> tuple[str, str]:
+    """把 GitHub URL 拆成 (仓库根 URL, 仓库内子目录)。
+
+    索引里不少条目指向 monorepo 的子目录，形如
+    https://github.com/owner/repo/tree/main/packages/xxx
+    这种 URL 直接 git clone 必然 404，必须先还原成仓库根再克隆。
+    """
+    u = (url or "").strip()
+    u = re.sub(r"[?#].*$", "", u).rstrip("/")
+    if u.endswith(".git"):
+        u = u[:-4]
+    m = _GH_SUBDIR_RE.match(u)
+    if not m:
+        return u, ""
+    return m.group(1), (m.group(2) or "").strip("/")
+
+
+def _extract_install_hints(repo_dir: Path, subdir: str = "") -> list:
+    """从 clone 的 README 提取常见安装命令；monorepo 优先读子目录内的 README。"""
     hints = []
-    for name in ("README.md", "README.MD", "readme.md", "README"):
-        f = repo_dir / name
-        if not f.exists():
-            continue
-        try:
-            text = f.read_text(encoding="utf-8", errors="replace")[:200_000]
-        except Exception:
-            continue
-        for pat, kind in _INSTALL_PATTERNS:
-            for m in re.findall(pat, text, re.I):
-                cmd = m.strip()
-                if cmd not in hints:
-                    hints.append(cmd)
-        break
+    bases = []
+    sub = repo_dir / subdir if subdir else None
+    if sub is not None and sub.is_dir():
+        bases.append(sub)
+    bases.append(repo_dir)
+    for base in bases:
+        got = False
+        for name in ("README.md", "README.MD", "readme.md", "README"):
+            f = base / name
+            if not f.exists():
+                continue
+            try:
+                t = f.read_text(encoding="utf-8", errors="replace")[:200_000]
+            except Exception:
+                continue
+            for pat, kind in _INSTALL_PATTERNS:
+                for m in re.findall(pat, t, re.I):
+                    cmd = m.strip()
+                    if cmd not in hints:
+                        hints.append(cmd)
+            got = True
+            break
+        if got and hints:
+            break
     return hints[:6]
 
 
@@ -480,27 +512,35 @@ def run_install(name: str = "", repo: str = "") -> dict:
                     "提示": "已装，直接 mcp_connect 激活即可"}
     elif repo:
         target = {"name": repo.rstrip("/").split("/")[-1], "repo": repo, "desc": "", "category": ""}
+    root_url, subdir = _repo_split(target.get("repo", ""))
+    if not root_url:
+        return {"ok": False, "error": f"无法解析仓库地址: {target.get('repo')!r}"}
     env = _env_probe()
+    env["repo_root"] = root_url
+    env["subdir"] = subdir
     if not env["git"]:
         return {"ok": False, "error": "本机没有 git，无法 clone（git 是安装前置）"}
     safe = re.sub(r"[^a-z0-9_-]", "-", target["name"].lower()).strip("-") or "mcp-server"
     dest = SERVERS_DIR / safe
     if dest.exists():
         return {"ok": True, "path": str(dest), "already_cloned": True, "env": env,
-                "hints": _extract_install_hints(dest)}
+                "repo_root": root_url, "subdir": subdir,
+                "hints": _extract_install_hints(dest, subdir)}
     SERVERS_DIR.mkdir(parents=True, exist_ok=True)
     try:
-        r = subprocess.run(["git", "clone", "--depth", "1", target["repo"], str(dest)],
+        r = subprocess.run(["git", "clone", "--depth", "1", root_url, str(dest)],
                            capture_output=True, text=True, timeout=180)
     except Exception as e:
         return {"ok": False, "error": f"git clone 失败: {e}"}
     if r.returncode != 0:
         return {"ok": False, "error": f"git clone 失败: {r.stderr[-500:]}"}
-    hints = _extract_install_hints(dest)
+    hints = _extract_install_hints(dest, subdir)
     return {
         "ok": True,
         "name": target["name"],
         "repo": target["repo"],
+        "repo_root": root_url,
+        "subdir": subdir,
         "path": str(dest),
         "env": env,
         "install_hints": hints,
