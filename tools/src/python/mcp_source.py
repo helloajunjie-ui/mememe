@@ -296,6 +296,27 @@ def run_update() -> dict:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
+def _gh_stats(repo: str) -> dict:
+    """取一个 GitHub 仓库的 stars / 最后推送距今天数 / 是否归档。失败只记 stats_error，不抛。"""
+    m = re.match(r"https://github\.com/([^/]+)/([^/#]+)", repo or "")
+    if not m:
+        return {"stats_error": "not a github repo"}
+    api = f"https://api.github.com/repos/{m.group(1)}/{m.group(2)}"
+    try:
+        req = urllib.request.Request(api, headers={
+            "User-Agent": "suyue-mcp-source/1.0", "Accept": "application/vnd.github+json"})
+        with urllib.request.urlopen(req, timeout=12) as r:
+            d = json.load(r)
+        days = None
+        pushed = d.get("pushed_at")
+        if pushed:
+            days = (datetime.utcnow() - datetime.strptime(pushed, "%Y-%m-%dT%H:%M:%SZ")).days
+        return {"stars": d.get("stargazers_count"), "pushed_days_ago": days,
+                "archived": bool(d.get("archived"))}
+    except Exception as e:
+        return {"stats_error": str(e)[:80]}
+
+
 @tool(
     "mcp_source_search",
     "在 MCP 源目录（data/mcp_index.json）里按关键词/分类搜索可用 MCP 服务器，"
@@ -308,14 +329,17 @@ def run_update() -> dict:
                       "description": "搜索关键词（匹配名称/描述/仓库），如 video / browser / database / qr"},
             "category": {"type": "string",
                          "description": "可选。按分类过滤，如 Browser Automation / Multimedia Process / Knowledge & Memory"},
-            "limit": {"type": "integer", "description": "返回条数上限，默认 15"},
+            "limit": {"type": "integer", "description": "返回条数上限，默认 15，最大 200"},
             "installed_only": {"type": "boolean", "description": "只看已安装的，默认 false"},
+            "with_stats": {"type": "boolean",
+                           "description": "可选。为返回的候选项并发查 GitHub，附 stars/最后推送距今天数/是否归档，"
+                                          "用于在 4000+ 长尾里快速筛质量（默认 false；约 1~3 秒，受 GitHub 匿名限流 60 次/时）"},
         },
     },
     group="工具工程",
 )
 def run_search(query: str = "", category: str = "", limit: int = 15,
-               installed_only: bool = False) -> dict:
+               installed_only: bool = False, with_stats: bool = False) -> dict:
     try:
         idx = _load_index()
     except RuntimeError as e:
@@ -333,13 +357,22 @@ def run_search(query: str = "", category: str = "", limit: int = 15,
                 continue
         hits.append(s)
     hits.sort(key=lambda x: (not x["installed"], not x["official"]))
-    hits = hits[: max(1, min(limit, 50))]
+    matched = len(hits)                                  # 截断前的真实命中总数
+    hits = [dict(s) for s in hits[: max(1, min(limit, 200))]]
+    if with_stats and hits:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            stats = list(ex.map(lambda s: _gh_stats(s["repo"]), hits))
+        for s, st in zip(hits, stats):
+            s.update(st)
     return {
         "ok": True,
-        "total_matched": len(hits),
+        "total_matched": matched,                        # 截断前真实命中数（旧版误为返回条数）
+        "returned": len(hits),
         "query": query, "category": category,
         "results": hits,
-        "提示": "挑中后 mcp_source_install 传 name 拉取；已装(installed=true)的直接 mcp_connect 激活。",
+        "提示": "挑中后 mcp_source_install 传 name 拉取；已装(installed=true)的直接 mcp_connect 激活。"
+                " total_matched 为截断前真实命中数，返回条数受 limit 限制。",
     }
 
 
