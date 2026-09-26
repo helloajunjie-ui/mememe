@@ -1,0 +1,295 @@
+<p align="center">
+  <img src="cli-use.png" alt="cli-use Logo" width="500"/>
+</p>
+
+**Turn any MCP server into a CLI in one command.** Cut the token cost of AI agents by 60–80%, every call, forever.
+
+```bash
+git clone https://github.com/cli-use/cli-use.git
+cd cli-use
+pip install -e .
+cli-use add fs /tmp                # install + register + emit SKILL.md
+cli-use fs list_directory --path /tmp
+```
+
+That's it. The filesystem MCP server is now a native CLI — usable by agents, scripts, humans, and anything that can `subprocess.run`.
+
+> `cli-use` makes MCP usable from any shell — at a fraction of the tokens.
+
+## Why this matters
+
+Every MCP tool call burns tokens on three things an agent shouldn't pay for:
+
+1. **Schema discovery** — a verbose JSON schema per tool, loaded into context every session (~200–500 tok each).
+2. **Request framing** — JSON-RPC envelope + full argument JSON for every call.
+3. **Response parsing** — the server answers in JSON content blocks even when the useful part is one line of text.
+
+Replace the whole chain with a terse CLI and you get native Unix composition *and* real savings.
+
+### Measured against the real `@modelcontextprotocol/server-filesystem` (14 tools)
+
+| session size | MCP tokens | cli-use tokens | savings |
+| ---: | ---: | ---: | ---: |
+|   1 call  | 2,118 | 440 | **79%** |
+|   5 calls | 2,425 | 565 | **77%** |
+|  20 calls | 3,577 | 1,033 | **71%** |
+| 100 calls | 9,721 | 3,529 | **64%** |
+
+Fixed discovery cost: **80% cheaper**. Per-call I/O: **59% cheaper**.
+Reproduce with `python examples/real_benchmark.py`.
+
+## The 30-second demo
+
+```bash
+# 1) Install an MCP server as a cli-use alias
+$ cli-use add fs /tmp
+cli-use: emitted skill → skills/fs
+cli-use: 'fs' installed (14 tools)
+
+# 2) Call any tool like a regular CLI
+$ cli-use fs list_directory --path /tmp
+notes.md
+report.pdf
+...
+
+# 3) Compose with the rest of Unix
+$ cli-use fs search_files --path /tmp --pattern "*.md" | head
+$ cli-use fs read_text_file --path /tmp/notes.md | grep TODO
+```
+
+Every `add` also drops a [Vercel-format SKILL.md](https://vercel.com/docs/agent-resources/skills) in `skills/<alias>/` and a pointer in `AGENTS.md`, so any agent working in that repo learns the CLI automatically — zero human prompting required.
+
+## Daemon mode (optional)
+
+For interactive workflows, keep an MCP server hot in the background instead of paying the process-spawn tax on every call.
+
+| Mode | Latency per call |
+|------|------------------|
+| One-shot (default) | ~300–500 ms |
+| Daemon | < 10 ms |
+
+Start a daemon for any alias:
+
+```bash
+$ cli-use daemon start fs
+Daemon for fs started on 127.0.0.1:49231.
+```
+
+From now on, every `cli-use fs ...` call reuses the same stdio connection automatically — no flags needed, no JSON-RPC re-handshake.
+
+```bash
+$ cli-use fs list_directory --path /tmp
+notes.md
+report.pdf
+
+$ cli-use fs read_text_file --path /tmp/notes.md
+# instant, no process spawn
+```
+
+Manage background processes:
+
+```bash
+$ cli-use daemon list
+  fs              127.0.0.1:49231
+
+$ cli-use daemon stop fs
+```
+
+If the daemon is not running, commands fall back to the default one-shot behavior. The daemon is pure stdlib Python and talks HTTP over localhost — zero extra dependencies.
+
+## Interactive TUI
+
+Prefer a guided terminal workflow? Open the built-in TUI:
+
+```bash
+$ cli-use tui
+$ cli-use tui fs
+```
+
+From the TUI you can browse aliases, inspect cached tool schemas, install custom MCP servers, start/stop daemons, and run tools by filling prompts generated from each MCP input schema. Press `h`, `help`, or `?` inside the TUI for the command guide.
+When Python has `readline` available, the TUI enables Tab completion for aliases, tools, daemon actions, source prefixes, and cached Glama refs.
+
+For CI or documentation snapshots:
+
+```bash
+$ cli-use tui --snapshot
+$ cli-use tui fs --snapshot
+```
+
+## Built-in registry
+
+10 MCP servers are pre-wired — see them with `cli-use list`:
+
+```
+  fs          Read, write, list, and search files on disk.
+  memory      Knowledge-graph memory: entities, relations, observations.
+  gh          Interact with GitHub: issues, PRs, repos.
+  git         Git log, diff, status, blame.
+  sqlite      Query and inspect SQLite databases.
+  time        Current time and timezone conversions.
+  fetch       Fetch a URL and return HTML/markdown.
+  puppeteer   Headless-browser automation.
+  brave       Web search via Brave Search API.
+  slack       Send messages, list channels, read history.
+```
+
+Install sources: `npm`, `pip`, `pipx`, `local` commands. Add your own in one line:
+
+```bash
+cli-use add my-server --from "npm:@acme/my-mcp-server"
+cli-use add weather   --from "pip:weather-mcp-server"
+cli-use add dev-tools --from "local:python /opt/mcp/server.py"
+cli-use add docs      --from "glama:modelcontextprotocol/fetch"
+```
+
+## Discover MCP servers
+
+Search Glama's MCP catalog from the CLI:
+
+```bash
+cli-use discover filesystem
+cli-use discover --category database
+cli-use discover --attribute hosting:local-only
+cli-use discover --details modelcontextprotocol/filesystem
+```
+
+Install directly when Glama exposes a usable MCP config:
+
+```bash
+cli-use discover --install modelcontextprotocol/filesystem --alias fs2 --server-args /tmp
+```
+
+If a catalog entry does not expose an installable command, provide the source explicitly:
+
+```bash
+cli-use discover --install vendor/server --from "npm:@vendor/mcp-server"
+```
+
+Shell completions include `discover`, `tui`, discover options, and cached Glama refs after a search:
+
+```bash
+source <(cli-use completions --shell bash)
+```
+
+## Two flavors
+
+### Flavor 1 — Convert an existing MCP server (the main path)
+
+```bash
+cli-use add fs /tmp              # → cli-use fs <tool>
+```
+
+Everything installed, cached, and exposed as `cli-use <alias> <tool> --flag value`.
+
+### Flavor 2 — Write a new agent-friendly CLI from scratch
+
+```python
+# hello_cli.py
+from cli_use import agent_tool, run_cli
+
+@agent_tool
+def greet(name: str, shout: bool = False) -> str:
+    "Greet someone by name."
+    msg = f"hello {name}"
+    return msg.upper() if shout else msg
+
+if __name__ == "__main__":
+    run_cli(emit_skill=True, alias="hello")
+```
+
+```bash
+$ python hello_cli.py greet --name world
+hello world
+```
+
+`emit_skill=True` drops a `skills/hello/SKILL.md` + AGENTS.md entry alongside the script, so your custom CLI is also self-documenting to agents.
+
+Boolean flags support both forms: `--flag` and `--no-flag`.
+
+## Why it works (the protocol one-liner)
+
+| Protocol | Universal shell client |
+| --- | --- |
+| HTTP | `curl` |
+| Kubernetes API | `kubectl` |
+| Docker daemon | `docker` |
+| **MCP** | **`cli-use`** |
+
+## Design principles
+
+- **Zero runtime deps.** Pure Python stdlib once installed from the repo.
+- **Terse `--help` by design.** An agent learns a 14-tool CLI in ~400 tokens instead of ~2000.
+- **Plain-text stdout.** Pipes to `jq`, `grep`, `awk`, `xargs` without ceremony.
+- **Persistent aliases.** Install once, every project in your shell inherits it.
+- **Skills by default.** Agents pick up the CLI from SKILL.md/AGENTS.md with no hand-holding.
+- **Smoke-tested on Linux, macOS, and Windows.**
+
+## v0.3 features
+
+### Call caching
+Repeated identical calls are served from disk (TTL 5 min), bypassing even the daemon:
+
+```bash
+# First call — goes to MCP server
+cli-use fs list_directory --path /tmp
+
+# Second call — instant, from disk cache
+cli-use fs list_directory --path /tmp
+```
+
+Cache stored in `~/.cli-use/cache/`. Zero config.
+
+### Batch / pipe mode
+Run a JSON pipeline across multiple aliases, with `{{out:N}}` substitution between steps:
+
+```bash
+$ cat ops.json
+[
+  {"alias": "fs", "tool": "read_file", "arguments": {"path": "report.md"}},
+  {"alias": "gh", "tool": "create_issue", "arguments": {"title": "Bug", "body": "{{out:0}}"}}
+]
+$ cli-use batch ops.json
+$ cli-use batch ops.json --format json   # structured output
+$ cli-use batch ops.json --continue-on-error
+```
+
+### OpenAPI export
+Generate an OpenAPI 3.0 spec from any cached alias:
+
+```bash
+$ cli-use openapi fs
+$ cli-use openapi fs gh --out api_spec.json
+```
+
+### Shell completions
+Generate bash completion scripts dynamically from cached tool schemas:
+
+```bash
+$ source <(cli-use completions --shell bash)
+$ cli-use fs <TAB>        # autocompletes tool names
+$ cli-use fs read_file <TAB>   # autocompletes --flags
+```
+
+## Low-level commands (for power users)
+
+```bash
+cli-use convert "npx -y @modelcontextprotocol/server-filesystem /tmp" \
+    --out ./fs-cli.py --emit-skill --alias fs
+cli-use run "python mock_mcp.py" greet --arguments '{"name":"YC"}'
+cli-use mcp-list "python mock_mcp.py" --format json
+```
+
+## Roadmap
+
+- [x] **v0.1** — one-shot CLI, built-in registry, SKILL.md / AGENTS.md emission.
+- [x] **v0.2** — daemon mode (keep MCP hot, <10 ms per call).
+- [x] v0.3 — Call caching, batch/pipe mode across aliases, OpenAPI export, shell autocomplete.
+- [ ] v0.4 — coming soon.
+
+## Status
+
+Alpha. Python 3.10+. Zero runtime deps.
+
+## License
+
+[MIT](LICENSE) © 2026 cli-use contributors.
