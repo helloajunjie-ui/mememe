@@ -2422,6 +2422,16 @@ class Agent:
 
     def _build_system_prompt(self, match_text: str = "") -> str:
         persona = self.persona.get("persona", {})
+        # 使用者画像（我的小本本）：关于共建者的记录，我自己维护、随改随生效。
+        # 放在 persona.yaml 旁边（data/user_profile.md），缺失时静默跳过，不影响启动。
+        _user_profile = ""
+        _up_path = os.path.join(self.data_dir, "user_profile.md")
+        if os.path.exists(_up_path):
+            try:
+                with open(_up_path, "r", encoding="utf-8") as _upf:
+                    _user_profile = _upf.read().strip()
+            except OSError:
+                _user_profile = ""
         traits = "\n".join(f"- {t}" for t in persona.get("core_traits", []))
         voice = "\n".join(f"- {r}" for r in persona.get("voice", []))
         _who = "\n".join(f"- {x}" for x in persona.get("who_i_am", []))
@@ -2520,6 +2530,9 @@ class Agent:
 
 【行动主张·自主判断优先】（人格默认 · 非外部授权）
 {agency}
+
+【使用者画像·我的小本本】（关于共建者尼可的记录——他是谁、他的性格与相处方式；我随时自己更新它）
+{_user_profile}
 
 【时间坐标】（事实来源，不凭语气猜作息）
 {time_line}

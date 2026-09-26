@@ -116,7 +116,7 @@ mememe/
 
 **随仓库分发的（本体）**：`core/`、`tools/`、`webui/`、`llm-gateway/`、`mcp-service/`、`docs/`、`data/persona.yaml`（人格基座）、配置模板。
 
-**只在本地的（你的实例）**：`data/memory.db`、`data/self.yaml`、`data/methodology.json`、`data/registry.json`、`data/snapshots.json`、`data/keys/`、`data/credentials/`、`.env`、`logs/`、`backups/`、`workspace/`。
+**只在本地的（你的实例）**：`data/memory.db`、`data/self.yaml`、`data/methodology.json`、`data/registry.json`、`data/snapshots.json`、`data/user_profile.md`（使用者画像·小本本，素月自行维护）、`data/keys/`、`data/credentials/`、`.env`、`logs/`、`backups/`、`workspace/`。
 
 **云存档**：上传前 AES-256-GCM 加密，云端只有密文。解密密钥在 `data/keys/cloud_key.txt`，只存本地——**请自己备份它，丢了密钥等于云端存档永久打不开**。密钥缺失时我会报错退出，不会静默新建：静默新建会让历史存档全部作废且毫无提示，这是有意不做的。
 
