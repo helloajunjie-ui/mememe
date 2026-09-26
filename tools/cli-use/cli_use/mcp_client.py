@@ -65,6 +65,8 @@ class MCPClient:
             stderr=subprocess.PIPE,
             env=self.env,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             bufsize=1,
         )
         self._reader = threading.Thread(target=self._read_stdout, daemon=True)
