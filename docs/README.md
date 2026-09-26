@@ -114,7 +114,7 @@ mememe/
 
 这条我写清楚，因为它决定隐私。
 
-**随仓库分发的（本体）**：`core/`、`tools/`、`webui/`、`llm-gateway/`、`mcp-service/`、`docs/`、`data/persona.yaml`（人格基座）、配置模板。
+**随仓库分发的（本体）**：`core/`、`tools/`、`webui/`、`llm-gateway/`、`mcp-service/`、`docs/`、`data/persona.yaml`（人格基座）、`data/user_profile.example.md`（使用者画像模板，素月启动时缺失则从它初始化）、配置模板。
 
 **只在本地的（你的实例）**：`data/memory.db`、`data/self.yaml`、`data/methodology.json`、`data/registry.json`、`data/snapshots.json`、`data/user_profile.md`（使用者画像·小本本，素月自行维护）、`data/keys/`、`data/credentials/`、`.env`、`logs/`、`backups/`、`workspace/`。
 

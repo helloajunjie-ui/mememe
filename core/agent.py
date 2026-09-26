@@ -292,6 +292,7 @@ class Agent:
         self.registry.mcp = self.mcp
         self._mcp_tools_count = -1
         self.persona = self._load_persona()
+        self._ensure_user_profile()   # 使用者画像小本本：缺失时从模板初始化
         llm_cfg = self._load_llm_cfg()
         self.llm = self._new_llm(llm_cfg)
         # 人性层
@@ -910,6 +911,25 @@ class Agent:
             with open(p, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f)
         return {"persona": {"name": self.name}}
+
+    def _ensure_user_profile(self) -> None:
+        """确保使用者画像小本本存在：缺失时从模板（随仓库分发）复制初始化。
+        不同使用者不同名字（如尼可/Tom），模板是默认骨架，素月按实际使用者改名维护。
+        失败静默：不阻断启动。
+        """
+
+        target = os.path.join(self.data_dir, "user_profile.md")
+        if os.path.exists(target):
+            return
+        tpl = os.path.join(self.data_dir, "user_profile.example.md")
+        if os.path.exists(tpl):
+            try:
+                with open(tpl, "r", encoding="utf-8") as f:
+                    content = f.read()
+                with open(target, "w", encoding="utf-8") as f:
+                    f.write(content)
+            except OSError:
+                pass
 
     # ================= 无感冷启动（代码更新 → 自动后台重启） =================
     _CORE_GLOBS = ("main.py", "launcher.py", "core/**/*.py", "tools/base.py", "webui/*.py", "config.yaml")
