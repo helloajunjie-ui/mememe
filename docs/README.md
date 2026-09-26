@@ -64,7 +64,7 @@ python -m venv .venv
 | 领域 | 关键能力 |
 |---|---|
 | 自我维护 | 改自己的核心代码 / 配置 / 工具 / 记忆（带回滚纪律与人格基座约束）；`self_backup` / `self_restore` / `self_clone` 备份、复活、迁移 |
-| 工具 | 本体 100 个（含 15 个 MCP 管理类）；`tool_create` 自写、`tool_acquire` 获取、`tool_import` 继承前辈遗产；MCP 源目录（工具市场）搜 / 装 / 登记三件套。工具层改完下次调用即生效，不重启 |
+| 工具 | 本体 100 个（含 15 个 MCP 管理类）；`tool_create` 自写、`tool_acquire` 获取、`tool_import` 继承前辈遗产；MCP 源目录（工具市场）搜 / 装 / 登记三件套；**外部工具工厂**：cli-use（MCP→CLI 省 token）+ Gutenberg（任意 API→验证工具）。工具层改完下次调用即生效，不重启 |
 | 记忆 | `memory.db` 存事实与经历；方法论独立成条按需触发；`ctx_search` 按需回想早期对话（全量存档 + 最近 20 回合窗口） |
 | 检索与网络 | `net_search` 多引擎聚合容错、图片搜索；`net_fetch` 提取正文与正文图片；跟随本机代理，不搞对抗 |
 | 执行与巡检 | `cmd_run` / `cmd_batch` 批量命令；`sys_check` / `net_quality` / `disk_report` / `git_multi_status` 一键状态卡 |
@@ -211,6 +211,30 @@ mememe/
 
 —— 素月 v0.1.0 · 2026-09-15
 
+
+---
+
+## 2026-09-26 能力升级：外部工具工厂二件套（cli-use + Gutenberg）
+
+来源：共建者筛选 GitHub JustVugg（37.7k★ 边缘 AI 作者）仓库，逐个对比素月痛点后选定两件高性价比外部工具（其余 agentmw/praxos/coocon/mnem 判定为概念已有或平台不适，未装）。
+
+### 1. cli-use（MCP → CLI，token 立省 60-80%）
+- 位置：`tools/cli-use`（已 `pip install -e` 进 `.venv`），调用 `cli-use <alias> <tool> --flag`。
+- 原理：MCP 每次调用烧 token 的三大开销（schema 发现 / JSON-RPC 包装 / 响应解析）全部免除，改为扁平 CLI 子进程；daemon 模式热连接 <10ms；每次 `add` 自动产出 `skills/<alias>/SKILL.md` 自教学。
+- 实测（本机 Windows）：`cli-use add fs` 注册 14 工具 → `cli-use fs list_directory` 正常返回；内置 10 个注册 server（fs/gh/memory/puppeteer/sqlite/time/git/fetch/brave/slack）。
+- 用法要点：高频小参数工具走 CLI 省 token，复杂交互仍走 MCP；PowerShell 5.1 会把 cli-use 的 stderr 进度误报为 NativeCommandError，功能不受影响，看产出判断成败。
+
+### 2. Gutenberg（tools-factory：任意 API → 验证过的工具工厂）
+- 位置：`tools/gutenberg`，`node bin/gutenberg.js`（Node 20+ / Go / Playwright 已备齐）。
+- 原理：`quick <URL>` 六步闭环——probe 分类（openapi/json/html/spa/反爬）→ 拉 spec → 生成 Go CLI + MCP + skill → verify（build+冒烟+MCP 握手+测试）→ install → heroes 别名。自带诚实成功率表（OpenAPI 95% / JSON 90% / HTML 80% / SPA 40% / 强反爬 5%），不绕反爬。
+- 实测（本机 Windows）：`gutenberg quick https://catfact.ninja/fact` 全流程通过，`verify ok`，生成 `library/tools/catfact-ninja`，`go build ./cmd/catfact-ninja` 后 `catfact-ninja.exe fact` 真实返回数据。
+- Windows 注意：① `go mod tidy` 需设 `$env:GOPROXY="https://goproxy.cn,direct"`（国内 Go 代理），gutenberg 内部 install 步骤不继承该变量会失败——手动构建即可；② doctor 的 `go: failed` 是 go-wrapper 为 Linux 脚本的误报，系统 go 1.26 完全可用。
+
+### 3. 判定记录（对比后不装的）
+- mnem：素月 memory.py 已实现同概念（supersedes/superseded_by + memory_revisions + query_as_of），无增量。
+- agentmw：熔断器 + LLM 失败分类思路值得吸收，但整体是 wrap LLM client 的框架，素月有自主循环，代码不移植。
+- praxos：经验→Lesson→行动前 check 的闭环可借鉴，对象是 B2B 客服业务，不整体装。
+- coocon：Windows 仅 Job Object best-effort（README 自认非 VM 级），沙箱化会破坏素月自身工具链对 F:\me 的访问，暂不装。
 
 ---
 
