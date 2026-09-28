@@ -130,6 +130,7 @@ def auto_extract(llm, memory, turns: List[Dict], scope: str = "self",
             tags=[f"auto:{cat}"],
             source="auto_extract",
             scope=scope,
+            origin="llm_extract",  # 2026-09-29：自动抽取的出处是「模型从上下文抽的」，不是外部原始来源
         )
         if mid:
             written += 1

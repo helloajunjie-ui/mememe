@@ -25,11 +25,16 @@ _DB = str(Path(__file__).resolve().parents[3] / "data" / "memory.db")
             "importance": {"type": "number",
                            "description": "重要性 0~1。影响后续被加载进上下文的优先级，重要知识给 0.6~0.9，琐碎给 0.3 以下"},
             "tags": {"type": "array", "items": {"type": "string"}, "description": "可选标签，便于检索"},
+            "origin": {"type": "string",
+                       "description": "这条记忆的出处（建议填）：user:尼可=共建者原话；web:域名=网页/搜索结果；"
+                                      "tool:工具名=工具输出；doc:路径=本地文件；self=我自己的判断/推断；"
+                                      "conversation=对话轮次。不填记为 unknown——事后无法判断这条该不该信"},
         },
         "required": ["content"],
     },
 )
-def run(content: str, type: str = "fact", importance: float = 0.6, tags: list = None) -> dict:
+def run(content: str, type: str = "fact", importance: float = 0.6, tags: list = None,
+        origin: str = "") -> dict:
     if not content or not content.strip():
         return {"ok": False, "error": "内容不能为空"}
     importance = max(0.0, min(1.0, float(importance)))
@@ -39,10 +44,10 @@ def run(content: str, type: str = "fact", importance: float = 0.6, tags: list = 
     mem = Memory(_DB)
     try:
         if type_ == "episode":
-            mid = mem.add_episode(content, importance, tags=tags, source="bailing")
+            mid = mem.add_episode(content, importance, tags=tags, source="bailing", origin=origin)
         else:
-            mid = mem.add_fact(content, importance=importance, tags=tags, source="bailing")
+            mid = mem.add_fact(content, importance=importance, tags=tags, source="bailing", origin=origin)
         return {"ok": True, "memory_id": mid, "type": type_, "importance": importance,
-                "note": "已写入长期记忆，后续会话可检索引用"}
+                "origin": origin or "unknown", "note": "已写入长期记忆，后续会话可检索引用"}
     finally:
         mem.close()

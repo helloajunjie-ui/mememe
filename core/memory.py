@@ -123,6 +123,12 @@ class Memory:
         # valid_from=何时开始成立，invalid_at=何时不再成立；有一对才能做 point-in-time 查询。
         if "invalid_at" not in cols:
             self.conn.execute("ALTER TABLE memories ADD COLUMN invalid_at TEXT DEFAULT NULL")
+        # 2026-09-29 出处（provenance）：source 记「哪个程序写的」，origin 记「这话最初从哪来」。
+        # 判一条记忆该不该信，看的是后者——同一句话出自「尼可原话」和出自「我自己的推断」，
+        # 权重完全不同；此前 944 条记忆没有任何一条记过这件事（见 conflicts/来源审计）。
+        # 旧库平滑升级；存量值由回填脚本按可考证信息标注，不做无依据的补齐。
+        if "origin" not in cols:
+            self.conn.execute("ALTER TABLE memories ADD COLUMN origin TEXT DEFAULT ''")
         self.conn.execute(
             """
             CREATE TABLE IF NOT EXISTS memory_revisions (
@@ -162,26 +168,29 @@ class Memory:
     # ---------- 写入 ----------
     def add_fact(self, content: str, confidence: float = 0.8, importance: float = 0.6,
                  tags: Optional[List[str]] = None, source: str = "",
-                 category: Optional[str] = None, scope: str = "self") -> int:
-        return self._add("fact", content, confidence, importance, tags, source, category, scope)
+                 category: Optional[str] = None, scope: str = "self",
+                 origin: str = "") -> int:
+        return self._add("fact", content, confidence, importance, tags, source, category, scope, origin)
 
     def add_episode(self, content: str, importance: float = 0.5,
                     tags: Optional[List[str]] = None, source: str = "",
-                    category: Optional[str] = None, scope: str = "self") -> int:
-        return self._add("episode", content, 0.0, importance, tags, source, category, scope)
+                    category: Optional[str] = None, scope: str = "self",
+                    origin: str = "") -> int:
+        return self._add("episode", content, 0.0, importance, tags, source, category, scope, origin)
 
     def add_categorized(self, category: str, content: str, importance: float = 0.6,
                         tags: Optional[List[str]] = None, source: str = "",
-                        scope: str = "self") -> int:
+                        scope: str = "self", origin: str = "") -> int:
         """按五类语义分类写入（WeKnora 借鉴：#285 profile/preference/fact/task/interest）。
 
         底层仍存 type=fact，category 记录语义类；检索与统计可按 category 过滤。
         """
-        return self._add("fact", content, 0.8, importance, tags, source, category, scope)
+        return self._add("fact", content, 0.8, importance, tags, source, category, scope, origin)
 
     def _add(self, type_: str, content: str, confidence: float, importance: float,
              tags: Optional[List[str]], source: str,
-             category: Optional[str] = None, scope: str = "self") -> int:
+             category: Optional[str] = None, scope: str = "self",
+             origin: str = "") -> int:
         now = datetime.datetime.now().isoformat()
         import json
 
@@ -213,10 +222,10 @@ class Memory:
             return dup["id"]
 
         cur = self.conn.execute(
-            "INSERT INTO memories (type, content, confidence, importance, created_at, last_access, tags, source, category, scope) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO memories (type, content, confidence, importance, created_at, last_access, tags, source, category, scope, origin) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (type_, norm, confidence, importance, now, now, json.dumps(tags or [], ensure_ascii=False),
-             source, category, scope),
+             source, category, scope, origin),
         )
         mid = cur.lastrowid
         grams = self._gram_tokens("%s %s" % (norm, json.dumps(tags or [], ensure_ascii=False)))
@@ -231,7 +240,7 @@ class Memory:
     def revise(self, old_id: int, new_content: str, reason: str = "",
                importance: Optional[float] = None, tags: Optional[List[str]] = None,
                source: str = "", category: Optional[str] = None,
-               scope: str = "self") -> int:
+               scope: str = "self", origin: str = "") -> int:
         """用一条新记忆「修正」旧记忆（认知迭代，不是覆盖）。
 
         与 _add 的查重不同：查重只挡「归一化后完全相同」；本条处理「同一断言取值变了」。
@@ -248,7 +257,7 @@ class Memory:
         now = datetime.datetime.now().isoformat()
         imp = old["importance"] if importance is None else importance
         tgs = tags if tags is not None else _json.loads(old["tags"] or "[]")
-        new_id = self._add("fact", new_content, 0.8, imp, tgs, source, category, scope)
+        new_id = self._add("fact", new_content, 0.8, imp, tgs, source, category, scope, origin)
         self.conn.execute(
             "UPDATE memories SET supersedes=?, valid_from=? WHERE id=?", (old_id, now, new_id)
         )
