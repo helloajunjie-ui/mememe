@@ -360,20 +360,32 @@ class Memory:
         params: List[Any] = [f"%{keyword}%", f"%{keyword}%"]
         if grams:
             ph = ",".join("?" * len(grams))
+            like = f"%{keyword}%"
+            # 2026-09-29 修复：候选集内先按「相关度」排序再截断。
+            # 旧实现直接 ORDER BY importance 截断，低重要度但精确命中的记忆会被挤出。
+            # _score = 命中 gram 数 + 整串连续命中加权（连续子串比零散 2-gram 强得多）。
             sql = (
-                "SELECT * FROM memories WHERE archived=0 AND superseded_by IS NULL AND ("
-                "id IN (SELECT mem_id FROM memory_grams WHERE gram IN (" + ph + ")) "
-                "OR content LIKE ? OR tags LIKE ?)"
+                "SELECT m.*, ("
+                "(SELECT COUNT(*) FROM memory_grams g WHERE g.mem_id = m.id AND g.gram IN (" + ph + "))"
+                " + CASE WHEN m.content LIKE ? OR m.tags LIKE ? THEN 1000 ELSE 0 END"
+                ") AS _score FROM memories m WHERE m.archived=0 AND m.superseded_by IS NULL AND ("
+                "m.id IN (SELECT mem_id FROM memory_grams WHERE gram IN (" + ph + ")) "
+                "OR m.content LIKE ? OR m.tags LIKE ?)"
             )
-            params = list(grams) + [f"%{keyword}%", f"%{keyword}%"]
+            params = list(grams) + [like, like] + list(grams) + [like, like]
         if types:
             placeholders = ",".join("?" * len(types))
             sql += f" AND type IN ({placeholders})"
             params.extend(types)
-        sql += " ORDER BY importance DESC, last_access DESC LIMIT ?"
+        _order = "_score DESC, " if grams else ""
+        sql += " ORDER BY " + _order + "importance DESC, last_access DESC LIMIT ?"
         params.append(limit)
         rows = self.conn.execute(sql, params).fetchall()
-        results = [dict(r) for r in rows]
+        results = []
+        for r in rows:
+            d = dict(r)
+            d.pop("_score", None)
+            results.append(d)
         # 更新访问计数
         for r in results:
             self._touch(r["id"])
