@@ -1,0 +1,164 @@
+{
+  "settings": {
+    "interval_hours": 6,
+    "expire_days": 15,
+    "per_site_limit": 12,
+    "open_browser": false
+  },
+  "sites": [
+    {
+      "id": "anthropic",
+      "name": "Anthropic Newsroom",
+      "url": "https://www.anthropic.com/news",
+      "category": "AI厂商·海外",
+      "channel": "fetch"
+    },
+    {
+      "id": "google_ai",
+      "name": "Google Blog · AI",
+      "url": "https://blog.google/technology/ai/",
+      "category": "AI厂商·海外",
+      "channel": "fetch"
+    },
+    {
+      "id": "deepmind",
+      "name": "Google DeepMind Blog",
+      "url": "https://deepmind.google/discover/blog/",
+      "category": "AI厂商·海外",
+      "channel": "browser"
+    },
+    {
+      "id": "meta_ai",
+      "name": "Meta AI Blog",
+      "url": "https://ai.meta.com/blog/",
+      "category": "AI厂商·海外",
+      "channel": "fetch"
+    },
+    {
+      "id": "mistral",
+      "name": "Mistral News",
+      "url": "https://mistral.ai/news/",
+      "category": "AI厂商·海外",
+      "channel": "fetch"
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI News",
+      "url": "https://openai.com/news",
+      "category": "AI厂商·海外",
+      "channel": "browser"
+    },
+    {
+      "id": "microsoft_ai",
+      "name": "Microsoft AI Blog",
+      "url": "https://blogs.microsoft.com/ai/",
+      "category": "AI厂商·海外",
+      "channel": "browser"
+    },
+    {
+      "id": "xai",
+      "name": "xAI News",
+      "url": "https://x.ai/news",
+      "category": "AI厂商·海外",
+      "channel": "browser"
+    },
+    {
+      "id": "nvidia",
+      "name": "NVIDIA Blog",
+      "url": "https://blogs.nvidia.com/",
+      "category": "AI厂商·海外",
+      "channel": "fetch"
+    },
+    {
+      "id": "qwen",
+      "name": "阿里 Qwen Blog",
+      "url": "https://qwen.ai/research",
+      "category": "AI厂商·国内",
+      "channel": "browser"
+    },
+    {
+      "id": "deepseek",
+      "name": "DeepSeek 官方文档/新闻",
+      "url": "https://api-docs.deepseek.com/news/",
+      "category": "AI厂商·国内",
+      "channel": "fetch"
+    },
+    {
+      "id": "bytedance_seed",
+      "name": "字节 Seed",
+      "url": "https://seed.bytedance.com/",
+      "category": "AI厂商·国内",
+      "channel": "fetch"
+    },
+    {
+      "id": "bigmodel",
+      "name": "智谱 BigModel",
+      "url": "https://www.bigmodel.cn/",
+      "category": "AI厂商·国内",
+      "channel": "browser"
+    },
+    {
+      "id": "moonshot",
+      "name": "月之暗面 Kimi",
+      "url": "https://moonshotai.github.io/",
+      "category": "AI厂商·国内",
+      "channel": "browser"
+    },
+    {
+      "id": "huggingface",
+      "name": "HuggingFace Blog",
+      "url": "https://huggingface.co/blog",
+      "category": "开发者·数据源",
+      "channel": "fetch"
+    },
+    {
+      "id": "github_trending",
+      "name": "GitHub Trending",
+      "url": "https://github.com/trending",
+      "category": "开发者·数据源",
+      "channel": "gh_trending"
+    },
+    {
+      "id": "arxiv_cs_ai",
+      "name": "arXiv cs.AI 最新",
+      "url": "https://arxiv.org/list/cs.AI/recent",
+      "category": "开发者·数据源",
+      "channel": "fetch"
+    },
+    {
+      "id": "tomshardware",
+      "name": "Tom's Hardware",
+      "url": "https://www.tomshardware.com/",
+      "category": "硬件·科技媒体",
+      "channel": "fetch"
+    },
+    {
+      "id": "simonwillison",
+      "name": "Simon Willison's Weblog",
+      "url": "https://simonwillison.net/",
+      "category": "独立观察",
+      "channel": "fetch"
+    },
+    {
+      "id": "hackernews",
+      "name": "Hacker News",
+      "url": "https://news.ycombinator.com/",
+      "category": "独立观察",
+      "channel": "fetch"
+    },
+    {
+      "id": "qbitai",
+      "name": "量子位",
+      "url": "https://www.qbitai.com/",
+      "category": "中文媒体",
+      "channel": "fetch"
+    },
+    {
+      "id": "jiqizhixin",
+      "name": "机器之心",
+      "url": "https://www.jiqizhixin.com/",
+      "category": "中文媒体",
+      "channel": "browser"
+    }
+  ]
+}
