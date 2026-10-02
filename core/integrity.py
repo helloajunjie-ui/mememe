@@ -37,8 +37,10 @@ _SCAN_FILES = ["main.py", "config.yaml", ".gitignore", "data/persona.yaml"]  # �
 # 注：data/self.yaml 未纳入——boot_count 每次启动自增属正常变动，纳入会制造常态告警噪音。
 _SCAN_DIRS = ["core", "tools", "webui"]  # 含最暴露的 HTTP 接口面
 _EXTENSIONS = {".py", ".go", ".yaml", ".yml", ".html"}
-# 注：tools/vendor = 第三方依赖（可重新拉取，非本体代码），排除以免基线误报"新增篡改"。
-_EXCLUDE_DIRS = {".venv", "__pycache__", ".git", "bin", "templates_external", "vendor"}
+# 注：tools/vendor、node_modules、library、samples = 第三方依赖/随仓库样例（可重新拉取，非本体代码），
+#     排除以免基线误报"新增篡改"——实测 tools/gutenberg/ 曾占基线 66%（212/323）。
+_EXCLUDE_DIRS = {".venv", "__pycache__", ".git", "bin", "templates_external",
+                 "vendor", "node_modules", "library", "samples"}  # node_modules/library/samples = 第三方随仓库内容（同 vendor：可重拉、非本体）
 
 
 def _iter_body_files():
