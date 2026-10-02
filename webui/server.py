@@ -313,6 +313,22 @@ def _run_study(cfg: dict) -> None:
         print(f"[study] 自主时间执行失败: {type(e).__name__}: {e}")
 
 
+def _persisted_last_study():
+    """从 self_model 持久化状态恢复上次自主活动时间。
+
+    _STUDY_STATE 是模块级内存变量，进程重启即归零；若不回读持久化值，
+    重启后 last=None 会把"距上次达间隔"判成真，白送一次自主活动。
+    """
+    try:
+        a = get_agent()
+        ts = (a.self_model.data.get("state", {}) or {}).get("last_study")
+        if ts:
+            return datetime.datetime.strptime(str(ts), "%Y-%m-%d %H:%M:%S")
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
 def _study_scheduler() -> None:
     """自主时间调度：配置窗口内、达到间隔且空闲时，触发一次自主学习/自由探索。"""
     while True:
@@ -325,6 +341,12 @@ def _study_scheduler() -> None:
                     cfg.get("window", {}).get("end", "06:00")):
                 interval_h = float(cfg.get("interval_hours") or 2)
                 last = _STUDY_STATE["last"]
+                if last is None:
+                    # 重启后内存变量归零：先用持久化的 last_study 兜底，
+                    # 否则每次重启都会白送一次自主活动（2026-09-29 修复）
+                    last = _persisted_last_study()
+                    if last is not None:
+                        _STUDY_STATE["last"] = last
                 if last is None or (now - last).total_seconds() >= interval_h * 3600:
                     if _ready and _turn_lock.acquire(blocking=False):  # 空闲判定
                         try:
