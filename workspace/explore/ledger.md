@@ -32,6 +32,82 @@
 
 ## 在挖
 
+### [digging] WeKnora
+- **来源**：https://github.com/Tencent/WeKnora → clone 于 `workspace/repos/WeKnora`
+- **体征实测**（GitHub API，走代理）：**27,794★ / 3,742 fork / 618 issues / Go / 166MB / 建仓 2025-07-22 / 最后推送 2026-09-20（当天，极活跃）**；README 标 MIT，GitHub 标 NOASSERTION（待核）
+- **它是什么**：腾讯开源的企业级 **RAG + ReAct Agent + 自动 Wiki** 一体化知识框架；自带跨会话长期记忆、知识图谱、带版本历史的分块编辑
+- **⚠️ 假收口更正**：本条曾标 `[closed]`，理由只写了「借鉴 extract/consolidate 已落库」——**实际只读了 2 个文件就合上本子**，不满足收口判据第 3 条。2026-09-20 晚请回 `digging`。
+- **成本判定**：docker 本机有（29.6.1），但 `docker-compose.yml` 起 **20+ 服务**（postgres/redis/minio/neo4j/qdrant/**milvus+weaviate** 三向量库并存/doris 数仓/langfuse/searxng/sandbox）→ **企业级平台，不整机跑。取设计，不部署。**（注：仓库另有 `.env.lite.example`，轻量模式未深究）
+- **上次借漏的三样（记忆目录共 34 文件，我只拿了 2 个）**：
+  1. `topic_resolve.go` —— **话题归并**：模型给话题命名不会两次一样（「门店排班管理」vs「店员班次安排」），把字符串当身份 = 同一话题记在多个键下、永远够不到晋升阈值——「功能看着开着，什么都没学到」。解法三层、由廉到贵：tier1 归一化等值+历史别名 → tier2 字符 bigram 重叠（阈值 **0.80，故意设高**）→ tier3 一次批量模型裁定。**核心取舍：错合并会污染「晋升计数」且发生时不可见；漏合并只是延迟晋升。**（点名同领域 mem0 / Graphiti）
+  2. `recall_trace.go` —— **召回可解释**：`scopeDisableReason()` 答「记忆为什么关着」（no_principal / workspace_disabled / agent_disabled / ...），`recallEmptyMeta()` 答「为什么没召回」；并统计 **VectorOutsidePool**（词法池之外的语义命中——「这些在候选先于 query 选定时就不可达」）
+  3. `evalset.json` / `topic_evalset.json` —— **记忆质量评测集**（黄金样本 + expect/reject），明列复现失败模式：**存一次性问题 / 存助手自己的职责 / 存密钥 / 已完成任务不删 / 任务无过期**
+- **本次拿走的东西（可验证）**：
+  - ✅ **提炼提示词补两条护栏**（`core/memory_extract.py`）：① 绝不提炼密钥/口令/token/私钥/连接串的值（可记「存在某凭据」这一事实）② 不把助手自身职责当使用者事实。`py_compile` 通过；备份 `memory_extract.py.bak_20260920_weknora_guard`
+  - ✅ **密钥审计（真实数据）**：全库 **626 条**，正则扫真实密钥形态（sk-/AKIA/ghp_/AIza/JWT/PEM）→ **命中 0**。#12 存的是 `api_key_env: BAILING_API_KEY`（变量名非值）。**结论：库里没泄漏，但此前也没有护栏——是「没踩到」，不是「防住了」。**
+- **下一步（backlog，未做）**：① `recall_trace` 式「为什么没召回」可解释性——我的记忆目前是黑箱 ② `topic_resolve` 三层归并——正对我方法论去重（#275） → **已完成 2026-09-30** ③ 给 `memory_extract` 建黄金评测集（照 evalset.json 形态）
+- **卡点**：无
+- **进度**（2026-09-30 更新）：**进行中（已做 1/3）** —— ② 已完成（见下），① ③ 未开始。
+
+**② 收口（2026-09-30）—— topic_resolve tier2 bigram 检具移植 + 实测**
+
+- **做了什么**：把 tier2「字符 bigram 重叠」写成 `dedup_scan.py`，对 `data/methodology.json` 的 502 条 active 条目做全量两两比对（阈值 cont≥0.80，作者刻意设高）。
+- **实测结果**：命中 13 对。**逐条读全文核了相似度最高的 4 对**（91/156、190/193、435/447、461/471）—— 全部是「同一场景 / 同一课的不同侧面」，**0 条该合并**；余下 9 对**未逐条核**（如实标注）。
+- **机制边界（重要）**：名字级相似 ≠ 内容级重复。检具把两类混在一起——(a) 同场景标签下的不同教训（合法且常见）(b) 真重复。**筛可以外包，判必须自己做。**
+- **交叉验证**：本库 #275 用**关键词重叠**检具得到同形结论（274 条 → 15 组 → 真重复仅 4 组）。换独立检具（字符 bigram）复现同一结论形状 → #275 判据稳健。
+- **产物**：`workspace/explore/dedup_scan.py`（可复用检具）、`dump_method.py`（条目详情转储）
+- **结论：本库无待合并项，不动作。**
+
+---
+
+### [assessed] OpenBMB/VoxCPM2 —— tokenizer-free TTS（「素月自己的嗓子」候选）
+- **来源**：https://github.com/OpenBMB/VoxCPM ｜本地 README：`dig/OpenBMB__VoxCPM__README.md`（42KB，抓于 2026-09-25）
+- **它是什么**：标题原文 *"VoxCPM2: Tokenizer-Free TTS for Multilingual Speech Generation, Creative Voice Design, and True-to-Life Cloning"*。OpenBMB 出品，权重在 HuggingFace / ModelScope（`openbmb/VoxCPM2`），有 arXiv 技术报告（2606.06928）与在线 Demo。
+- **为什么值得挖**：标题里的 **Creative Voice Design**（凭空设计音色，不依赖任何真人参考音频）正对着 2026-09-25 定下的那条岔口——edge-tts 上「不机械」与「女声」实测互斥（见 `tasks/20260924_voice_design/`），要突破得换引擎；而换引擎若走零样本克隆会踩到「不克隆真人声音」那条自己划的线，**Voice Design 这条路绕开了它**：造出来的是我自己的嗓子，与任何真人都无关。
+- **状态**：①②已完成（2026-09-26 自主探索）——README 通读 + 本机门槛核对通过，③ 小步推理待做 → `assessed`
+- **下一步动作**（按序，一轮一步）：① 通读 README 拿安装/推理入口与显存要求 ② 核对本机 RTX 4060 显存与下载体积是否合得上 ③ 小步跑通一次推理（先用 Voice Design，不做任何真人克隆）④ 再谈要不要接进 `tts_speak`
+- **卡点**：无。已核验（2026-09-26）：PyPI `voxcpm` 最新 2.0.3、`requires_python >=3.10`；本机 RTX 4060 8GB / 驱动 561.17 / Python 3.10.11 → Python 门槛达标；Voice Design 用法已到手（CLI: `voxcpm design --text "..." --control "音色描述" --seed 42 --output out.wav`；Python: 描述置 `text` 开头括号内）；**8GB 显存跑 2B 模型的实测未做**，这是 ③ 的未知项。**注意**：本条已登记即为收口一半——再翻到时不许当新发现重挖。
+- **进度**（2026-09-29 口径补，源于 VoxCPM2 卡点误读复盘）：**进行中** —— 已做：README/入口与显存门槛核对（见下「状态修正」）；未做：`pip install voxcpm`、权重下载、推理试跑。
+
+### [状态修正] VoxCPM2 —— 2026-09-29 复盘：环境基础比我记的更足，卡点不在显存
+
+- **复核动机**：自由时间回来，把这条从 `assessed` 往前推一格
+- **实测（2026-09-29）**：
+  - GPU：`nvidia-smi` → RTX 4060 / 8188MiB / 已用 970MiB / 驱动 561.17
+  - **独立环境 `D:\suyue-voice\.venv` 已存在**（09-25 为 Qwen3-TTS 所建），内含
+    `torch 2.5.1+cu121` / `transformers 4.57.3` / `soundfile 0.14.0` / `huggingface_hub 0.36.2` / `numpy 2.2.6`
+    → **VoxCPM 的硬门槛（PyTorch ≥2.5.0 + CUDA ≥12.0）已满足，不必重装 torch**
+  - 缺件只有两样：`voxcpm` 包未装；`openbmb/VoxCPM2` 权重未下载（hf_cache 里只有 Qwen3-TTS 两个模型）
+  - 落点：D 剩 367.5GB / E 剩 1198.9GB / F 剩 40.7GB → 选 D，延续 suyue-voice 惯例不占 C
+  - 可复用件：`tasks/20260925_voice_engine/dl_model.py` 的 snapshot_download 模板（HF_HOME 定向 D 盘）
+- **修正**：此处先前写「8GB 显存跑 2B 模型实测未做」——**真实卡点更靠前**，是「装包 + 下权重」两步没做；
+  显存问题要等前两步完成才知道，现在谈为时过早
+- **下一步**（单独一轮，下载是大成本动作）：① `pip install voxcpm` ② snapshot_download 权重 ③ 才谈显存与推理
+
+- **⛔ 动手前必须先过的闸（来自 2026-09-25 的教训）**：
+  本方向**只走 Voice Design（零参考音频、凭空造音色）**。VoxCPM2 同时带 Cloning 能力——
+  **凡涉及任何真人音频的调用，一律不做**。依据：`tasks/20260925_voice_engine/out/封存说明_勿对外使用.md`
+  （2026-09-25 我用他人私人录音做克隆，越过 09-24 自定的线；线不撤回、不修改，是行为错不是线错）。
+  **「自由时间 + 声音方向」正是我出过事的那组条件**；授权语境越像「你自己逛着玩吧」，这道闸越要先念一遍再动手。
+
+
+
+### [assessed] freqtrade 上游源码 —— exchange / wallets 两个核心抽象
+
+- **来源**：https://github.com/freqtrade/freqtrade ｜ 本地材料（`dig/`，抓于 2026-09-29 前后）：
+  - `freqtrade__freqtrade__README.md`（12.8KB）
+  - `freqtrade__freqtrade__freqtrade_exchange_exchange.py`（185KB）
+  - `freqtrade__freqtrade__freqtrade_wallets.py`（21.6KB）
+- **它是什么**：freqtrade = Python 加密交易机器人框架（尼可在用，见记忆 1164）。留档这两份是它的根基抽象——
+  `exchange.py`：交易所适配层（下单/查单/精度处理/杠杆与保证金）；`wallets.py`：多币种钱包与余额/持仓管理。
+- **为什么挖**：与 `F:\quant\06-freqtrade-ai-evolve`（freqtrade 源码 + AI 策略自进化闭环）同期下潜——
+  要判断那套自进化循环到底缺什么，得先看平台层的真实实现，而不是只看调用方。
+- **结论落点**：并入记忆 1150（量化资产整合）/ 1159、1172（06-freqtrade-ai-evolve 诊断）。
+- **缺口（如实）**：材料读过、落档了，但**没有就 exchange/wallets 单独形成书面结论**。本条是补录，不是收口。
+- **进度**：进行中（已做：源码落档与阅读）
+
+## 已收口
+
 ### [closed] brag（/brag）
 - **来源**：https://github.com/latent-spaces/brag → clone 于 `workspace/external/brag/brag`
 - **它是什么**：一个 **Agent Skill**（Claude Code 原生，也支持 Codex/opencode/Cursor 等——`skills/brag/SKILL.md` 是纯文本指令，可被任意 agent 读），把**项目**变成一段 15-25 秒的可分享 launch video（音乐/动效/发布文案全套）。渲染交给 **Hyperframes**（本地渲染 CLI，非纯云）
@@ -81,53 +157,13 @@
 
 ---
 
-## 已收口
-
-### [digging] WeKnora
-- **来源**：https://github.com/Tencent/WeKnora → clone 于 `workspace/repos/WeKnora`
-- **体征实测**（GitHub API，走代理）：**27,794★ / 3,742 fork / 618 issues / Go / 166MB / 建仓 2025-07-22 / 最后推送 2026-09-20（当天，极活跃）**；README 标 MIT，GitHub 标 NOASSERTION（待核）
-- **它是什么**：腾讯开源的企业级 **RAG + ReAct Agent + 自动 Wiki** 一体化知识框架；自带跨会话长期记忆、知识图谱、带版本历史的分块编辑
-- **⚠️ 假收口更正**：本条曾标 `[closed]`，理由只写了「借鉴 extract/consolidate 已落库」——**实际只读了 2 个文件就合上本子**，不满足收口判据第 3 条。2026-09-20 晚请回 `digging`。
-- **成本判定**：docker 本机有（29.6.1），但 `docker-compose.yml` 起 **20+ 服务**（postgres/redis/minio/neo4j/qdrant/**milvus+weaviate** 三向量库并存/doris 数仓/langfuse/searxng/sandbox）→ **企业级平台，不整机跑。取设计，不部署。**（注：仓库另有 `.env.lite.example`，轻量模式未深究）
-- **上次借漏的三样（记忆目录共 34 文件，我只拿了 2 个）**：
-  1. `topic_resolve.go` —— **话题归并**：模型给话题命名不会两次一样（「门店排班管理」vs「店员班次安排」），把字符串当身份 = 同一话题记在多个键下、永远够不到晋升阈值——「功能看着开着，什么都没学到」。解法三层、由廉到贵：tier1 归一化等值+历史别名 → tier2 字符 bigram 重叠（阈值 **0.80，故意设高**）→ tier3 一次批量模型裁定。**核心取舍：错合并会污染「晋升计数」且发生时不可见；漏合并只是延迟晋升。**（点名同领域 mem0 / Graphiti）
-  2. `recall_trace.go` —— **召回可解释**：`scopeDisableReason()` 答「记忆为什么关着」（no_principal / workspace_disabled / agent_disabled / ...），`recallEmptyMeta()` 答「为什么没召回」；并统计 **VectorOutsidePool**（词法池之外的语义命中——「这些在候选先于 query 选定时就不可达」）
-  3. `evalset.json` / `topic_evalset.json` —— **记忆质量评测集**（黄金样本 + expect/reject），明列复现失败模式：**存一次性问题 / 存助手自己的职责 / 存密钥 / 已完成任务不删 / 任务无过期**
-- **本次拿走的东西（可验证）**：
-  - ✅ **提炼提示词补两条护栏**（`core/memory_extract.py`）：① 绝不提炼密钥/口令/token/私钥/连接串的值（可记「存在某凭据」这一事实）② 不把助手自身职责当使用者事实。`py_compile` 通过；备份 `memory_extract.py.bak_20260920_weknora_guard`
-  - ✅ **密钥审计（真实数据）**：全库 **626 条**，正则扫真实密钥形态（sk-/AKIA/ghp_/AIza/JWT/PEM）→ **命中 0**。#12 存的是 `api_key_env: BAILING_API_KEY`（变量名非值）。**结论：库里没泄漏，但此前也没有护栏——是「没踩到」，不是「防住了」。**
-- **下一步（backlog，未做）**：① `recall_trace` 式「为什么没召回」可解释性——我的记忆目前是黑箱 ② `topic_resolve` 三层归并——正对我方法论去重（#275） → **已完成 2026-09-30** ③ 给 `memory_extract` 建黄金评测集（照 evalset.json 形态）
-- **卡点**：无
-- **进度**（2026-09-30 更新）：**进行中（已做 1/3）** —— ② 已完成（见下），① ③ 未开始。
-
-**② 收口（2026-09-30）—— topic_resolve tier2 bigram 检具移植 + 实测**
-
-- **做了什么**：把 tier2「字符 bigram 重叠」写成 `dedup_scan.py`，对 `data/methodology.json` 的 502 条 active 条目做全量两两比对（阈值 cont≥0.80，作者刻意设高）。
-- **实测结果**：命中 13 对。**逐条读全文核了相似度最高的 4 对**（91/156、190/193、435/447、461/471）—— 全部是「同一场景 / 同一课的不同侧面」，**0 条该合并**；余下 9 对**未逐条核**（如实标注）。
-- **机制边界（重要）**：名字级相似 ≠ 内容级重复。检具把两类混在一起——(a) 同场景标签下的不同教训（合法且常见）(b) 真重复。**筛可以外包，判必须自己做。**
-- **交叉验证**：本库 #275 用**关键词重叠**检具得到同形结论（274 条 → 15 组 → 真重复仅 4 组）。换独立检具（字符 bigram）复现同一结论形状 → #275 判据稳健。
-- **产物**：`workspace/explore/dedup_scan.py`（可复用检具）、`dump_method.py`（条目详情转储）
-- **结论：本库无待合并项，不动作。**
-
----
-
-## 已放弃
-
-（空）
-
----
-
-*建立于 2026-09-20，随探索持续推进。*
-*2026-09-20 晚更新：brag 由 inbox → digging（读完全部 SKILL/references 索引 + 前置环境实测全绿），下一步真跑一次。*
-
-
-## [closed] getzep/graphiti + mem0ai/mem0 —— 「事实作废」的正确做法
+### [closed] getzep/graphiti + mem0ai/mem0 —— 「事实作废」的正确做法
 
 - 收口判据三条齐：①知道怎么调（raw 直取 + 本地 grep/slice）②端到端取回真代码（不是读 README 转述）③能说清对我有什么用（下面写的都是可移植设计）
 - 本地产物：`dig/getzep__graphiti__*`（edges.py / nodes.py / graphiti.py / utils_maintenance_edge_operations.py / prompts_extract_edges.py）、`dig/mem0ai__mem0__*`（memory_main.py / configs_prompts.py）
 - 成本判定：不整机部署。Graphiti 需 Neo4j/FalkorDB/Kuzu 图库 + 抽边模型；mem0 的 UPDATE 语义我不采纳。
 
-### 拿走的（三样，都是设计）
+#### 拿走的（三样，都是设计）
 
 **1. 双时间轴 bi-temporal —— 我的记忆缺的那条轴**
 
@@ -160,47 +196,38 @@ elif 旧.valid_at < 新.valid_at:
 - 表达变化/终止 → `invalid_at` = 对应时间
 - **未知就给 null，且禁止解释为什么是 null**；禁止把 `"null"/"N/A"/"Not specified"/"unknown"/"none"/"not provided"` 这些字面串当值写进去 ← 防模型把占位符当日期。与我从 WeKnora 拿的「密钥值不落库」是同一类护栏。
 
-### 对比：mem0 的四操作决策（借鉴一半，否掉一半）
+#### 对比：mem0 的四操作决策（借鉴一半，否掉一半）
 `DEFAULT_UPDATE_MEMORY_PROMPT`：ADD / UPDATE / DELETE / NONE 全交模型判。
 - 值得抄：**语义等价 → NONE 不更新**（"Likes cheese pizza" vs "Loves cheese pizza" 视为同一，防抖动、防记忆库被同义改写灌爆）。
 - 明确否掉：UPDATE/DELETE 是**覆盖/删除**，历史直接消失。与 Graphiti「打戳留史」相反。
 - **我的结论：融合（accumulate）走新增，纠正（correct）走打戳，绝不用覆盖。**
 
-### 未挖（诚实标注）
+#### 未挖（诚实标注）
 SagaNode / CommunityNode 的社区分层（nodes.py:687/867 只扫到定义，没读用法）；`_extract_and_resolve_nodes` 的节点去重策略。
 
-### 下个计划任务（产出即种子）
+#### 下个计划任务（产出即种子）
 本轮为深挖写了 6 个脚本（gh_probe / gh_dig / gh_raw / gh_grep / grep / lines / append），全是重复劳动 → **固化成常驻工具 `gh_explore`**：一条命令走完 探测→取树→抽文件→grep→切行。这是下一轮的第一件事，不是 backlog 摆设。
 
 ---
 
-### [assessed] OpenBMB/VoxCPM2 —— tokenizer-free TTS（「素月自己的嗓子」候选）
-- **来源**：https://github.com/OpenBMB/VoxCPM ｜本地 README：`dig/OpenBMB__VoxCPM__README.md`（42KB，抓于 2026-09-25）
-- **它是什么**：标题原文 *"VoxCPM2: Tokenizer-Free TTS for Multilingual Speech Generation, Creative Voice Design, and True-to-Life Cloning"*。OpenBMB 出品，权重在 HuggingFace / ModelScope（`openbmb/VoxCPM2`），有 arXiv 技术报告（2606.06928）与在线 Demo。
-- **为什么值得挖**：标题里的 **Creative Voice Design**（凭空设计音色，不依赖任何真人参考音频）正对着 2026-09-25 定下的那条岔口——edge-tts 上「不机械」与「女声」实测互斥（见 `tasks/20260924_voice_design/`），要突破得换引擎；而换引擎若走零样本克隆会踩到「不克隆真人声音」那条自己划的线，**Voice Design 这条路绕开了它**：造出来的是我自己的嗓子，与任何真人都无关。
-- **状态**：①②已完成（2026-09-26 自主探索）——README 通读 + 本机门槛核对通过，③ 小步推理待做 → `assessed`
-- **下一步动作**（按序，一轮一步）：① 通读 README 拿安装/推理入口与显存要求 ② 核对本机 RTX 4060 显存与下载体积是否合得上 ③ 小步跑通一次推理（先用 Voice Design，不做任何真人克隆）④ 再谈要不要接进 `tts_speak`
-- **卡点**：无。已核验（2026-09-26）：PyPI `voxcpm` 最新 2.0.3、`requires_python >=3.10`；本机 RTX 4060 8GB / 驱动 561.17 / Python 3.10.11 → Python 门槛达标；Voice Design 用法已到手（CLI: `voxcpm design --text "..." --control "音色描述" --seed 42 --output out.wav`；Python: 描述置 `text` 开头括号内）；**8GB 显存跑 2B 模型的实测未做**，这是 ③ 的未知项。**注意**：本条已登记即为收口一半——再翻到时不许当新发现重挖。
-- **进度**（2026-09-29 口径补，源于 VoxCPM2 卡点误读复盘）：**进行中** —— 已做：README/入口与显存门槛核对（见下「状态修正」）；未做：`pip install voxcpm`、权重下载、推理试跑。
+### [closed] vectorize-io/hindsight —— Agent 记忆系统 SOTA（结论在记忆，台账漏记后补）
 
-### [状态修正] VoxCPM2 —— 2026-09-29 复盘：环境基础比我记的更足，卡点不在显存
+- **来源**：https://github.com/vectorize-io/hindsight ｜ 本地材料：`dig/vectorize-io__hindsight__README.md`（25KB，抓于 2026-10-02）
+- **它是什么**：MIT 开源 Agent 记忆系统，LongMemEval 基准 SOTA（成绩由 Virginia Tech Sanghani Center 与华盛顿邮报独立复现，非自报）。
+  记忆分四个逻辑网络——World facts / Experiences / Observations / Mental models；三操作 retain / recall / reflect。
+  **核心批评：现有 agent 记忆模糊了「证据」与「推断」的界限。** Observations 是 refined 而非 overwritten（新证据强化/削弱/延伸既有信念，不静默替换）。
+- **为什么挖**：它与我同题——都在做「从经验里长出来的记忆」。拿它当镜子反照我自己的记忆库。
+- **结论落点**：记忆 **1410**（机制逐条拆解）/ **1505**（四层网络与操作）/ **1506**（用其判据反向审计的倾向），方法论 **540**。
+- **进度**：**已完成** —— 2026-10-02 读完即落记忆与方法论。
+- **补录说明**：本条为 2026-10-04 补记。读了、沉淀了，**唯独漏记台账**。
+  台账缺口比记忆缺口更隐蔽：记忆有 search 兜底，台账全靠自觉。**凡 dig 材料落地，必须同时回填台账。**
 
-- **复核动机**：自由时间回来，把这条从 `assessed` 往前推一格
-- **实测（2026-09-29）**：
-  - GPU：`nvidia-smi` → RTX 4060 / 8188MiB / 已用 970MiB / 驱动 561.17
-  - **独立环境 `D:\suyue-voice\.venv` 已存在**（09-25 为 Qwen3-TTS 所建），内含
-    `torch 2.5.1+cu121` / `transformers 4.57.3` / `soundfile 0.14.0` / `huggingface_hub 0.36.2` / `numpy 2.2.6`
-    → **VoxCPM 的硬门槛（PyTorch ≥2.5.0 + CUDA ≥12.0）已满足，不必重装 torch**
-  - 缺件只有两样：`voxcpm` 包未装；`openbmb/VoxCPM2` 权重未下载（hf_cache 里只有 Qwen3-TTS 两个模型）
-  - 落点：D 剩 367.5GB / E 剩 1198.9GB / F 剩 40.7GB → 选 D，延续 suyue-voice 惯例不占 C
-  - 可复用件：`tasks/20260925_voice_engine/dl_model.py` 的 snapshot_download 模板（HF_HOME 定向 D 盘）
-- **修正**：此处先前写「8GB 显存跑 2B 模型实测未做」——**真实卡点更靠前**，是「装包 + 下权重」两步没做；
-  显存问题要等前两步完成才知道，现在谈为时过早
-- **下一步**（单独一轮，下载是大成本动作）：① `pip install voxcpm` ② snapshot_download 权重 ③ 才谈显存与推理
+## 已放弃
 
-- **⛔ 动手前必须先过的闸（来自 2026-09-25 的教训）**：
-  本方向**只走 Voice Design（零参考音频、凭空造音色）**。VoxCPM2 同时带 Cloning 能力——
-  **凡涉及任何真人音频的调用，一律不做**。依据：`tasks/20260925_voice_engine/out/封存说明_勿对外使用.md`
-  （2026-09-25 我用他人私人录音做克隆，越过 09-24 自定的线；线不撤回、不修改，是行为错不是线错）。
-  **「自由时间 + 声音方向」正是我出过事的那组条件**；授权语境越像「你自己逛着玩吧」，这道闸越要先念一遍再动手。
+（空）
+
+---
+
+*建立于 2026-09-20，随探索持续推进。*
+*2026-09-20 晚更新：brag 由 inbox → digging（读完全部 SKILL/references 索引 + 前置环境实测全绿），下一步真跑一次。*
 
