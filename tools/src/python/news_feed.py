@@ -107,6 +107,9 @@ def _txt(s):
     return _WS_RE.sub(" ", _html.unescape(s)).strip()
 
 
+_GH_TAG_RE = re.compile(r"/releases/tag/([^/?#]+)")  # GitHub release 版本号（常短于标题长度门槛）
+
+
 def _clean_title(t):
     """列表页结构常是「标题 时间 摘要」——取时间串之前的部分作为标题。"""
     if not t:
@@ -156,7 +159,12 @@ def _extract(page, site, limit):
     for m in _A_RE.finditer(page):
         href, raw = m.group(1), m.group(2)
         title = _clean_title(_txt(raw))
-        if not (8 <= len(title) <= 160):
+        _tag = _GH_TAG_RE.search(href)
+        if _tag:
+            # 版本号本身短于门槛（v0.1.15=7 字符）会被丢弃、再由同 URL 的
+            # "Read more" 顶替；URL 是权威，故从 tag 反推标题。
+            title = urllib.parse.unquote(_tag.group(1))
+        elif not (8 <= len(title) <= 160):
             continue
         if title.lower().strip() in _NAV:
             continue
@@ -174,7 +182,8 @@ def _extract(page, site, limit):
         tm = _TIME_RE.search(tail)
         cands.append({"title": title, "url": u, "time": tm.group(1) if tm else "",
                       "path": urllib.parse.urlparse(u).path,
-                      "same_host": _host(u) == base_host})
+                      "same_host": _host(u) == base_host,
+                      "is_tag": bool(_tag)})
 
     sub = []
     if bpath:
@@ -190,7 +199,7 @@ def _extract(page, site, limit):
         depth = len([x for x in c["path"].split("/") if x])
         if depth <= 1 and not bpath:
             continue
-        if len(c["title"]) < 16:
+        if len(c["title"]) < 16 and not c.get("is_tag"):
             continue
         out.append(c)
     if len(out) < 3:
@@ -198,6 +207,7 @@ def _extract(page, site, limit):
     for o in out:
         o.pop("path", None)
         o.pop("same_host", None)
+        o.pop("is_tag", None)
     return out[:limit]
 
 
@@ -468,7 +478,7 @@ def run(action="fetch", refresh=False, only="", days=7, open_browser=False,
         # 2026-10-02 补：render 是离线动作，但同样要清理过期缓存——
         # 否则长期只用 render（不联网）时缓存目录会无限增长。
         cleaned = _clean(st.get("expire_days", 15))
-        path = _render(days, only_ids)
+        path = _render(days)
         return {"ok": True, "action": "render", "html": path,
                 "cleaned_expired_dirs": cleaned}
 
@@ -495,7 +505,7 @@ def run(action="fetch", refresh=False, only="", days=7, open_browser=False,
         fp.write_text(json.dumps(rec, ensure_ascii=False, indent=1), encoding="utf-8")
         results.append(rec)
 
-    html = _render(days, only_ids)
+    html = _render(days)
     opened = False
     if open_browser or st.get("open_browser"):
         try:
