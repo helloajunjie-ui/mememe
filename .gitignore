@@ -133,3 +133,12 @@ workspace/media/
 tools/gutenberg/node_modules/
 tools/gutenberg/library/tools/
 tools/gutenberg/generated/
+
+# ?????????/?????????
+workspace/explore/dig/*.zip
+# workspace one-off scripts & intermediate artifacts
+workspace/maintenance/
+workspace/reflection/
+workspace/tools/
+workspace/explore/dig/_cm_tree.json
+workspace/explore/mem_audit.py

@@ -259,6 +259,21 @@ SagaNode / CommunityNode 的社区分层（nodes.py:687/867 只扫到定义，�
 - **补录说明**：本条为 2026-10-04 补记。读了、沉淀了，**唯独漏记台账**。
   台账缺口比记忆缺口更隐蔽：记忆有 search 兜底，台账全靠自觉。**凡 dig 材料落地，必须同时回填台账。**
 
+### [digging] thedotmack/claude-mem —— 跨会话持久记忆压缩（记忆系统同题镜鉴·第二面）
+
+- **来源**：https://github.com/thedotmack/claude-mem ｜ 本地材料：`dig/claude-mem/`（README 20KB + 23 个 TS 源文件；另有 `cm1.zip`/`cm2.zip`，抓于 2026-10-09）
+- **它是什么**：为 Claude Code 做的持久记忆压缩系统，GitHub 约 9.8 万星（星数用 GitHub API 一手核过，非工具转述）。
+  链路：5 个生命周期 Hook（SessionStart/UserPromptSubmit/PostToolUse/Stop/SessionEnd）抓会话 → Bun 起的本地 worker（HTTP API + 检索端点）→ SQLite 存 sessions/observations/summaries → mem-search 技能 + Chroma 向量库。
+- **三条可借鉴机制**：
+  1. **3 层检索漏斗**（省 token 的关键）：`search` 只返紧凑索引 + ID（~50-100 token/条）→ `timeline` 返时间线上下文 → `get_observations` 只对筛中的 ID 取全文。契约上显式分成两段：`MemoryIndexRow`（id/kind/project/title/createdAt/type）vs `MemoryDetail`（+content+truncated）。
+  2. **observation 表比我的记忆条目丰富**：`title/subtitle/narrative/facts/concepts` 分层 + `files_read/files_modified`（工程上下文）+ **`discovery_tokens`（记录挖这条知识花掉多少 token）——可当重要性的代理指标，我完全没有这个字段**。
+  3. **渐进检索的工程约束**：检索会话 TTL 15 分钟（不让状态永久挂着）、单次响应硬上限 64KB、游标状态 48KB、游标 ID 正则 `/^ms_[A-Za-z0-9_-]{24}$/`；`shortText()` 按 **UTF-8 字节** 截断（逐 char 累加 byteLength，超出即 break），中文等多字节字符不会被切坏。
+- **为什么挖**：与我记忆系统同题（hindsight 之后第二面镜子）。它照出我的两个缺项——**没有"发现成本"字段**、**没有显式的索引/详情两段式契约**。
+- **结论落点**：记忆 **1617**，方法论 **564**。
+- **进度**：**digging** —— 已读 README 全貌 + `shared/progressive-search.ts` 接口与约束 + `services/context/ObservationCompiler.ts` 表结构；**未读** `services/sqlite/SessionSearch.ts`(35KB) 与 `SessionStore.ts`(198KB) 的检索实现。
+- **下一步**：若要借鉴，优先看它的 SQLite FTS 检索实现，与"索引/详情"两段式在我 `memory_search` 上的落地细节。
+
+
 ## 已放弃
 
 （空）
