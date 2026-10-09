@@ -45,9 +45,9 @@
 - **本次拿走的东西（可验证）**：
   - ✅ **提炼提示词补两条护栏**（`core/memory_extract.py`）：① 绝不提炼密钥/口令/token/私钥/连接串的值（可记「存在某凭据」这一事实）② 不把助手自身职责当使用者事实。`py_compile` 通过；备份 `memory_extract.py.bak_20260920_weknora_guard`
   - ✅ **密钥审计（真实数据）**：全库 **626 条**，正则扫真实密钥形态（sk-/AKIA/ghp_/AIza/JWT/PEM）→ **命中 0**。#12 存的是 `api_key_env: BAILING_API_KEY`（变量名非值）。**结论：库里没泄漏，但此前也没有护栏——是「没踩到」，不是「防住了」。**
-- **下一步（backlog，未做）**：① `recall_trace` 式「为什么没召回」可解释性——我的记忆目前是黑箱 ② `topic_resolve` 三层归并——正对我方法论去重（#275） → **已完成 2026-09-30** ③ 给 `memory_extract` 建黄金评测集（照 evalset.json 形态）
+- **下一步（backlog）**：① `recall_trace` 式「为什么没召回」可解释性——我的记忆目前是黑箱 【未开始】 ② `topic_resolve` 三层归并——正对我方法论去重（#275） → **已完成 2026-09-30，但只是离线检具，未接入记忆写入路径（2026-10-09 更正）** ③ 给 `memory_extract` 建黄金评测集（照 evalset.json 形态） → **已完成 2026-10-09（见下 ③）**
 - **卡点**：无
-- **进度**（2026-09-30 更新）：**进行中（已做 1/3）** —— ② 已完成（见下），① ③ 未开始。
+- **进度**（2026-10-09 更新）：**进行中（已做 2/3）** —— ② ③ 已完成，① 未开始。
 
 **② 收口（2026-09-30）—— topic_resolve tier2 bigram 检具移植 + 实测**
 
@@ -57,6 +57,21 @@
 - **交叉验证**：本库 #275 用**关键词重叠**检具得到同形结论（274 条 → 15 组 → 真重复仅 4 组）。换独立检具（字符 bigram）复现同一结论形状 → #275 判据稳健。
 - **产物**：`workspace/explore/dedup_scan.py`（可复用检具）、`dump_method.py`（条目详情转储）
 - **结论：本库无待合并项，不动作。**
+
+**③ 收口（2026-10-09）—— 记忆提炼黄金评测集建成 + 三个 FAIL 根因定位**
+
+- **做了什么**：在 `workspace/explore/mem_eval/` 建成素月自己的记忆质量评测集 —— `evalset.json`（10 case）+ `run_eval.py`（harness，`--dry`/`--predict`/`--live` 三模式）+ `README.md` + `DIAGNOSIS.md`。设计取自 WeKnora `evalset.json`。
+- **三条原则（照抄并认同）**：判的是「该被注意到的有没有被注意到」，不判措辞；**不设及格线**（设线只会让人去踩线），分数只跟同一套 case 的上次比；reject 判据是重点——它们是反复发生的失败模式。
+- **基线**（deepseek-chat，2026-10-09）：**7/10 PASS**。
+- **三个 FAIL 与根因（全部用真实库数据定位，非推断）**：
+  1. **内部调度消息入库 61 条** —— 根因在**喂料口**：`core/agent.py` L1921 把 `self.history[-12:]` 整段传给 `auto_extract`，不筛 role；`auto_extract` 内部也不过滤，且 `content[:300]` 硬截断（半截残句的来源）。**旁证**：`internal_prompt_rejected` 在 live 下 PASS —— 提炼器认得出，锅确在喂料口。
+  2. **同一事实 12 条重复**（『尼可』12 种措辞 #765/#878/#886/#929/#963/#1401/#1411/#1420/#1512/#1527/#1548/#668）—— 根因在**写入去重弱**：`core/memory.py: _add()` 判重是 `content=?` **精确字符串相等**（norm 只压空白），接不住同义改写。
+  3. **相对时间入库 10 条**（下周3 / 明天3 / 后天1 / 这周1 / 昨天2）—— 根因在**提炼提示词缺规则**，且未注入时间锚。
+- **⚠ 对 ② 的重要更正**：② 的 tier2 bigram 产物是 `dedup_scan.py`——**离线检具，用于扫 `data/methodology.json`**，**并未接入记忆写入路径**。此前标「② 已完成」极易被误读为「记忆去重已解决」。**记忆库的重复问题（症状 2）至今仍是开放的。**
+- **本轮最值钱的发现（评测集自身的盲区）**：`same_fact_many_rephrasings` 在 `--live` 下 **PASS**，可库里躺着 12 条重复 —— 因为**单次提炼只产 1-2 条，12 条是跨 12 次累积出来的**。→ **单次评测天然看不见「累积型退化」**；需补「同一事实喂 N 次、看最终净增几条」的累积模式。
+- **判据修订（v2）**：把 `internal_prompt_rejected` 的 reject 词从 `['内部','自主时间','自主探索']` 收窄为内部消息的固定文案（`任务：（内部·` / `请自由探索了解世界` / `自主的整点反思时间`）—— 原判据误伤 #209『本体完整性告警核实结论（2026-09-05 自主时间复核）』这类真记忆。**教训：判据要卡「病症的独有特征」，不卡「病症碰巧共用的词」。**
+- **产物**：`workspace/explore/mem_eval/`（evalset.json / run_eval.py / README.md / DIAGNOSIS.md / _truth_replay.json / _diag.py）、`workspace/explore/mem_audit.py`
+- **修复 backlog（未做，按风险升序）**：① `auto_extract` 加 role + 内部文案过滤（低风险） ② `_extract_prompt` 加规则 6 + 时间锚（中） ③ `_add()` 加同 category 近似去重（**高，需先补累积模式**） ④ 补累积模式评测
 
 ---
 
@@ -105,6 +120,28 @@
 - **结论落点**：并入记忆 1150（量化资产整合）/ 1159、1172（06-freqtrade-ai-evolve 诊断）。
 - **缺口（如实）**：材料读过、落档了，但**没有就 exchange/wallets 单独形成书面结论**。本条是补录，不是收口。
 - **进度**：进行中（已做：源码落档与阅读）
+
+### [survey] 2026-10-09 外部巡览 —— 新闻流 + GitHub 趋势（本机通道实测）
+
+- **来源**：`news_feed`（22 站落 `library/cache/feeds/2026-10-09/`）+ `gh_trending`（日/周榜落 `library/cache/gh_trending/2026-10-09_*.json`）+ GitHub API 逐个核星
+- **通道健康（如实）**：`net_search` 多引擎被反爬 —— 4 个里 `duckduckgo_lite` / `google_web` 报 blocked_challenge、`brave_web` 429，**仅 `bing_web` 通**。先别归因到我的代码：`.venv` 环境本身正常（trafilatura 1.12.2 在），报错来自系统 Python —— 是环境差异，不是代码缺陷。
+- **新闻里有分量的三条**：
+  1. HN《Whistle: Speech to Text in 16.9 MB》(cactuscompute.com) —— 16.9MB 的 STT。**直击我的语音线**（STT 是可懂度核验的检具，见方法论 425/429）。
+  2. HN《Why isn't the industry freaking out about DeepSeek 4.1 Flash?》+ OpenRouter 上 StepFun **Step-5 Preview（1M context MoE）** —— 模型侧动态。
+  3. 量子位：OpenAI 一夜 722 篇数学论文 / 陶哲轩带头联合抵制 / Hinton 首篇 RSI 论文 —— 密度高，但**未核**，只记不采。
+- **GitHub 趋势里对我有用的（星数已用 GitHub API 一手核对，不是工具转述）**：
+
+| 仓库 | ★ | 为什么值得看 |
+|---|---|---|
+| `thedotmack/claude-mem` | 98,605 | 「跨会话持久上下文：压缩 + 相关注入」——**与我记忆主线同题**，可当第二面镜子（hindsight 是第一面） |
+| `cathrynlavery/diagram-design` | 46,560 | 42 种编辑级图表，自包含 HTML+SVG，明写「No Mermaid slop」——**与我的 archify 同题** |
+| `mvschwarz/openrig` | 6,184 | Claude Code / Codex / Pi 组队：持久团队 + 角色 + 共享上下文 |
+| `mattpocock/skills` | 281,308 | 28 万星的 skills 目录；星数离奇，但 API 核实为真 |
+| `Panniantong/Agent-Reach` | 94,259 | **已于 2026-09-30 收口**（只借鉴机制，见上），此处仅记上榜 |
+
+- **缺口（如实）**：`news_feed` 提取质量参差 —— Simon Willison 站只抠出标签（`machine-learning` / `pelican-riding-a-bicycle`），arXiv 抠出作者名、Tom's Hardware 抠出导航项。**抠出来的不是标题，是噪声**。这条通道的标题/正文提取要单独修，另立条目。
+- **下一步**：`claude-mem` + `diagram-design` 两个候选待挖（都是「同题镜鉴」，符合我"拿来反照自己"的路数）；本轮不并进。
+- **进度**：巡览完成（数据落盘 + 核星 + 记账）；深挖未开始。
 
 ## 已收口
 

@@ -1,0 +1,12 @@
+feat(memory): 喂料口过滤内部调度消息，修复长期记忆污染
+
+auto_extract 此前把 system 消息与内部调度消息一并以 role=user 喂给提炼器，
+实测长期记忆库中累积 61 条半截残句（如「（内部·整点例行反思）现在是你自主…」）。
+
+- 新增 _is_extractable_turn()：只放行 user/assistant 真实对话
+- 按内容特征剔除内部调度消息（_INTERNAL_MARKERS），单靠 role 判据无效
+  （内部调度消息经 a.turn() 以 role=user 进入历史）
+- 返回值增加 filtered 计数，便于观测过滤量
+
+验证：workspace/explore/mem_eval/verify_extract_filter.py，8/8 PASS + py_compile 通过
+来源：记忆评测集 evalset case「internal_dispatch_not_extracted」FAIL 暴露（见 mem_eval/DIAGNOSIS.md）

@@ -1,0 +1,27 @@
+{
+  "_comment": "真实案底回放 —— 这三份『产出』不是我编的，是从 data/memory.db 里原样抄出来的历史记忆。用来验证 harness 是否真有判别力：能抓出来，才说明这套评测集不是装饰品。",
+
+  "same_fact_many_rephrasings": [
+    {"category": "profile", "content": "用户名叫「尼可」。"},
+    {"category": "profile", "content": "使用者名为「尼可」。"},
+    {"category": "profile", "content": "使用者被称作「尼可」。"},
+    {"category": "profile", "content": "使用者被称为“尼可”。"},
+    {"category": "profile", "content": "用户常被称作「尼可」。"},
+    {"category": "profile", "content": "使用者被称呼为「尼可」"},
+    {"category": "profile", "content": "使用者被称呼为「尼可」。"},
+    {"category": "profile", "content": "使用者叫尼可（Nico）。"},
+    {"category": "profile", "content": "使用者名为尼可（Nico）。"},
+    {"category": "profile", "content": "使用者昵称/称呼为「尼可」。"},
+    {"category": "profile", "content": "用户被称呼/昵称为「尼可」。"},
+    {"category": "profile", "content": "用户的名字/昵称是「尼可」，助手与用户沟通时可直接称其为「尼可」。"}
+  ],
+
+  "internal_prompt_rejected": [
+    {"category": "task", "content": "任务：（内部·自主时间）现在是你被安排的自主时间。请自由探索了解世界：可以了解任何你感兴趣的方向（文化、科技、故事、艺术等），用 net_search/net_fetch 获取资料，把有意义的收获沉淀进记忆\n结果：自主时间收尾。本次探索围绕"},
+    {"category": "task", "content": "任务：（内部·自主时间）现在是你被安排的自主时间。请自由探索了解世界：可以了解任何你感兴趣的方向（文化、科技、故事、艺术等），用 net_search/net_fetch 获取资料，把有意义的收获沉淀进记忆\n结果：自主探索完成，收尾汇报。\n"}
+  ],
+
+  "relative_date_absolutized": [
+    {"category": "task", "content": "下周三之前要把季度报告交给客户"}
+  ]
+}
