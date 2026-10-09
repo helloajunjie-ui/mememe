@@ -247,6 +247,7 @@ mememe/
 - memories 表新增 `category`（profile/preference/fact/task/interest）与 `scope`（作用域，默认 self）列，旧库自动补列平滑升级。
 - `memory_extract.auto_extract`：回合结束自动提炼长期记忆，频率闸 30 分钟/次、上限闸单次 ≤8 条（WeKnora extract.go 借鉴）。
 - `memory_extract.consolidate`：低频整库复核（24h 间隔、<6 条不查、强制最小间隔 1min——WeKnora consolidate.go 借鉴）。
+- 提炼提示词口径（规则 3）：排除「助手自身内容」——职责/能力/人设、进度与待办、自我规训、关注方向；助手中立发现的客观知识（技术事实/外部信息/结论）仍可记。
 - 记忆作用域只由调用方派生（scope=self），不信任外部传入（WeKnora scope.go 的隔离模型）。
 
 ### 2. 工具输出公平裁剪（core/token_est.py）
