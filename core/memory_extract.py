@@ -30,6 +30,22 @@ CONSOLIDATE_MIN_ITEMS = 6            # 少于该条数不值得复核
 
 CATEGORIES = ("profile", "preference", "fact", "task", "interest")
 
+# 2026-10-09 喂料口过滤：修复内部调度消息污染长期记忆（实测 61 条半截残句）。
+# 内部调度消息由 webui/server.py 注入（_run_study/_run_reflection/_run_workflow），
+# 统一以「（内部·」开头；经 a.turn() 以 role=user 进入历史，故必须按内容特征剔除，单靠 role 无效。
+_INTERNAL_MARKERS = ("（内部·", "请自由探索了解世界")
+_ALLOWED_ROLES = ("user", "assistant")
+
+
+def _is_extractable_turn(m: Dict) -> bool:
+    """该消息是否值得喂给提炼器：只要 user/assistant 的真实对话，
+    剔除系统消息与内部调度消息（后者会以半截残句污染长期记忆）。"""
+    role = str((m or {}).get("role") or "").strip().lower()
+    if role not in _ALLOWED_ROLES:
+        return False
+    content = str((m or {}).get("content") or "")
+    return not any(mk in content for mk in _INTERNAL_MARKERS)
+
 _META_LAST_EXTRACT = "last_extract_at"
 _META_LAST_CONSOLIDATE = "last_consolidate_at"
 
@@ -92,14 +108,17 @@ def auto_extract(llm, memory, turns: List[Dict], scope: str = "self",
         return {"ran": False, "reason": "rate_limit"}
 
     # 上限闸：最多读 EXTRACT_MAX_MESSAGES 条
-    recent = turns[-EXTRACT_MAX_MESSAGES:]
+    # 2026-10-09：只喂 user/assistant 的真实对话，剔除 system 与内部调度消息
+    raw = turns[-EXTRACT_MAX_MESSAGES:]
+    recent = [m for m in raw if _is_extractable_turn(m)]
+    filtered = len(raw) - len(recent)
     texts = []
     for m in recent:
         c = str(m.get("content") or "").strip()
         if c:
             texts.append(f"[{m.get('role','?')}] {c[:300]}")
     if not texts:
-        return {"ran": False, "reason": "empty"}
+        return {"ran": False, "reason": "empty", "filtered": filtered}
 
     try:
         resp = llm.chat(
@@ -137,6 +156,7 @@ def auto_extract(llm, memory, turns: List[Dict], scope: str = "self",
 
     memory.set_meta(_META_LAST_EXTRACT, str(_now()))
     return {"ran": True, "reason": "ok", "extracted": len(items), "written": written,
+            "filtered": filtered,
             "categories": sorted({it.get("category", "fact") for it in items if it.get("category") in CATEGORIES})}
 
 
