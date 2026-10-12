@@ -90,6 +90,7 @@ def _read_lines(local: str):
         },
         "required": ["mode", "repo"],
     },
+    group="工具工程",
 )
 def run(
     mode: str,

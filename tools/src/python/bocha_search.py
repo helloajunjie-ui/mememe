@@ -101,6 +101,7 @@ def _post(payload: dict, key: str, timeout: int = 30):
         },
         "required": ["query"],
     },
+    group="网络",
 )
 def run(query: str, count: int = 8, freshness: str = "noLimit", summary: bool = True) -> dict:
     if not query or not str(query).strip():
