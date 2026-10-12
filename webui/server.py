@@ -1294,28 +1294,10 @@ def main() -> None:
         print(f"端口 {PORT} 绑定失败，无法启动。请检查占用进程。")
         sys.exit(1)
 
-    # ---- 托盘化：常驻系统托盘（悬停气泡 + 左键开网页 + 右键退出） ----
-    # 主线程跑托盘事件循环，HTTP 服务放子线程；托盘"退出素月" → 关闭服务收尾。
-    # 托盘依赖（pystray/Pillow）缺失时自动降级为前台运行（关终端 = 停止）。
-    try:
-        from webui.tray import available, run_tray
-        if available():
-            threading.Thread(target=srv.serve_forever, daemon=True).start()
-            print("  已驻留系统托盘：悬停看状态 / 左键打开网页 / 右键退出（退出 = 停止服务）")
-            try:
-                run_tray(url=f"http://{HOST}:{PORT}", on_quit=srv.shutdown)
-            finally:
-                srv.shutdown()  # 保险：确保 serve_forever 已停止（幂等）
-                srv.server_close()
-                if _ready:
-                    try:
-                        _agent.close()
-                    except Exception:  # noqa: BLE001
-                        pass
-            return
-    except Exception as e:  # noqa: BLE001
-        print(f"  托盘启动失败（降级为前台运行）: {e}")
-
+    # ---- 托盘职责已移交「素月启动器.pyw」----
+    # 2026-10-13：原 webui 自行注册托盘图标，与启动器双图标并存（用户看到"两个月"）。
+    # 现在托盘唯一归属素月启动器（停止/重启/备份/日志/优雅接管都在那里），
+    # 本服务纯前台运行 HTTP，避免重复托盘与双图标。
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
