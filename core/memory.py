@@ -347,12 +347,25 @@ class Memory:
 
     # ---------- 检索 ----------
     def query(self, keyword: str, limit: int = 10, types: Optional[List[str]] = None) -> List[Dict]:
-        """关键词 + 标签匹配，importance 加权排序。
+        """关键词 + 标签匹配，RRF 融合排序（相关度榜 × 长度归一榜）。
 
         2026-09-19 升级：2-gram 倒排优先（中文任意 2 字词/多词 OR 可命中），
         原 LIKE 整串保留为兜底，保证旧行为不回退。
+
+        2026-10-13 升级（RRF 融合，实测驱动）：
+        原排序 `_score DESC`（= 命中 gram 数 + 整串命中 +1000）有两处缺陷：
+        ① `+1000` 是常数，把所有精确命中压进同一档（分数饱和），档内只剩长度
+           分先后 → 长条目系统性占优（库内长度中位数 115 字，但 top5 常达 400+）；
+        ② 纯粹反过来做长度归一（score/len^a）会伤害"事件型查询"——把完整的
+           归因长条目挤出前五（实测查询「空回复」must 召回 2/2 → 1/2）。
+        实测对照（workspace/tasks/20261013_retrieval_probe，1327 条活跃记忆、
+        9 个查询、人工标注 must-set）：两套排序各赢一半，RRF 融合后两类查询
+        的规范答案召回同时达标（「记忆系统」1/2→2/2，「空回复」2/2→2/2）。
+        遗留：某些"双规范答案性质差异极大"的查询（如「音色」）融合后仍只召回 1/2。
         """
         grams = self._gram_tokens(keyword)
+        # 候选池放大：融合需要足够候选，不能被单一排序提前截断。
+        pool = max(limit * 20, 200)
         sql = (
             "SELECT * FROM memories WHERE archived=0 AND superseded_by IS NULL AND "
             "(content LIKE ? OR tags LIKE ?)"
@@ -361,8 +374,6 @@ class Memory:
         if grams:
             ph = ",".join("?" * len(grams))
             like = f"%{keyword}%"
-            # 2026-09-29 修复：候选集内先按「相关度」排序再截断。
-            # 旧实现直接 ORDER BY importance 截断，低重要度但精确命中的记忆会被挤出。
             # _score = 命中 gram 数 + 整串连续命中加权（连续子串比零散 2-gram 强得多）。
             sql = (
                 "SELECT m.*, ("
@@ -379,8 +390,37 @@ class Memory:
             params.extend(types)
         _order = "_score DESC, " if grams else ""
         sql += " ORDER BY " + _order + "importance DESC, last_access DESC LIMIT ?"
-        params.append(limit)
+        params.append(pool)
         rows = self.conn.execute(sql, params).fetchall()
+
+        if grams and len(rows) > 1:
+            # A 榜：原排序（相关度 + importance）；B 榜：长度归一（低 alpha，避免过矫枉）。
+            alpha = 0.4
+            rk_a = sorted(
+                rows,
+                key=lambda r: (r["_score"], r["importance"], r["last_access"] or 0),
+                reverse=True,
+            )
+            rk_b = sorted(
+                rows,
+                key=lambda r: (
+                    r["_score"] / (max(len(r["content"]), 1) ** alpha),
+                    r["importance"],
+                    r["last_access"] or 0,
+                ),
+                reverse=True,
+            )
+            # RRF 融合（k=60）：只看排名位置，天然免疫两榜分数量纲差异。
+            k = 60.0
+            fused: Dict[Any, float] = {}
+            for i, r in enumerate(rk_a):
+                fused[r["id"]] = fused.get(r["id"], 0.0) + 1.0 / (k + i + 1)
+            for i, r in enumerate(rk_b):
+                fused[r["id"]] = fused.get(r["id"], 0.0) + 1.0 / (k + i + 1)
+            rows = sorted(rows, key=lambda r: (fused[r["id"]], r["importance"]), reverse=True)[:limit]
+        else:
+            rows = rows[:limit]
+
         results = []
         for r in rows:
             d = dict(r)
