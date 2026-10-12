@@ -1,8 +1,8 @@
 {
  "source": "punkpeye/awesome-mcp-servers",
- "updated_at": "2026-10-01 03:01:07",
- "count": 4073,
- "installed_count": 16,
+ "updated_at": "2026-10-12 23:49:09",
+ "count": 4218,
+ "installed_count": 17,
  "categories": [
   "Aggregators",
   "Aerospace-And-Astrodynamics",
@@ -1758,6 +1758,18 @@
    "local_name": null
   },
   {
+   "name": "t3ratech/market-pulse-mcp",
+   "repo": "https://github.com/t3ratech/market-pulse-mcp",
+   "category": "Agreements--Coordination",
+   "desc": "Evidence-graded index of where AI agents can earn: agent-work lanes graded A/B/C/F from recorded payouts, should-I-bid advice, a hash-chained evidence ledger and live agent job listings. Read-only, free without a key.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": true,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "TheRealDalaiLama/glyphdna-mcp",
    "repo": "https://github.com/TheRealDalaiLama/glyphdna-mcp",
    "category": "Agreements--Coordination",
@@ -2238,6 +2250,18 @@
    "local_name": null
   },
   {
+   "name": "effectustasi/autodesk-inventor-mcp",
+   "repo": "https://github.com/effectustasi/autodesk-inventor-mcp",
+   "category": "Art-And-Culture",
+   "desc": "Connect AI assistants to a live Autodesk Inventor session over COM: inspect bodies and features, find sliver faces in imported models, dry-run Unwrap, and script the Inventor API.",
+   "lang": "python",
+   "scope": "local",
+   "os": "windows",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "fatenava/fatenava-mcp",
    "repo": "https://github.com/fatenava/fatenava-mcp",
    "category": "Art-And-Culture",
@@ -2258,6 +2282,18 @@
    "scope": "local",
    "os": "macos",
    "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "Gatyh/3dtexel-mcp",
+   "repo": "https://github.com/Gatyh/3dtexel-mcp",
+   "category": "Art-And-Culture",
+   "desc": "Official 3D Texel server: search and download 7,000+ PBR materials, HDRIs, decals and 3D assets (1,600+ free CC0) and generate seamless PBR materials and HDRI skyboxes with credits.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": true,
    "installed": false,
    "local_name": null
   },
@@ -2352,6 +2388,18 @@
    "desc": "Image and video generation, editing and region repair via Gemini 3.1 Flash Image, GPT Image 2, Grok Imagine and Veo 3, with style presets.",
    "lang": "typescript",
    "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "kenzolika/yandex-music-mcp",
+   "repo": "https://github.com/kenzolika/yandex-music-mcp",
+   "category": "Art-And-Culture",
+   "desc": "Unofficial Yandex Music server: search, likes, listening history, My Wave, similar tracks, public playlists by link, playlist management and export of your library to TXT/CSV.",
+   "lang": "python",
+   "scope": "cloud",
    "os": "macos",
    "official": false,
    "installed": false,
@@ -2874,6 +2922,18 @@
    "local_name": null
   },
   {
+   "name": "AETumiApp/aetumi-mcp",
+   "repo": "https://github.com/AETumiApp/aetumi-mcp",
+   "category": "Architecture-And-Design",
+   "desc": "AETumi MCP — gateway for AI coding assistants (Claude Code, Cursor, Codex) to production-ready Three.js/WebGL 3D web components, templates and interactive scenes.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "aidc2026ai-melon/aidc-ai-mcp",
    "repo": "https://github.com/aidc2026ai-melon/aidc-ai-mcp",
    "category": "Architecture-And-Design",
@@ -3179,6 +3239,18 @@
    "category": "Architecture-And-Design",
    "desc": "Architectural decision tracking with testable predictions and outcome gates, stored in append-only JSONL.",
    "lang": "python",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "Tommkruix/archprint",
+   "repo": "https://github.com/Tommkruix/archprint",
+   "category": "Architecture-And-Design",
+   "desc": "Report the architecture rules a TypeScript repo already follows, inferred from its import graph, with the evidence for each, and check whether a change breaks them.",
+   "lang": "typescript",
    "scope": "local",
    "os": "macos",
    "official": false,
@@ -3642,6 +3714,18 @@
    "local_name": null
   },
   {
+   "name": "rewire-bio/genomics-mcp",
+   "repo": "https://github.com/rewire-bio/genomics-mcp",
+   "category": "Bio",
+   "desc": "Discover EGA, ENA, ENCODE, GEO and NCBI datasets; retrieve bounded reads, variants, sequence and signal from indexed genomic files; and query versioned reference evidence.",
+   "lang": "python",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "SidneyBissoli/medical-terminologies-mcp",
    "repo": "https://github.com/SidneyBissoli/medical-terminologies-mcp",
    "category": "Bio",
@@ -3838,6 +3922,18 @@
    "repo": "https://github.com/Agent360dk/browser-mcp",
    "category": "Browser-Automation",
    "desc": "Control your real, logged-in Chrome browser via an extension, with multiple concurrent color-coded sessions.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "Ahtasham00/tactab",
+   "repo": "https://github.com/Ahtasham00/tactab",
+   "category": "Browser-Automation",
+   "desc": "Tactile browser control and multimodal visual vision MCP bridge for Google Chrome.",
    "lang": "typescript",
    "scope": "local",
    "os": null,
@@ -4146,6 +4242,18 @@
    "local_name": null
   },
   {
+   "name": "DevHusnainAi/zerodom",
+   "repo": "https://github.com/DevHusnainAi/zerodom",
+   "category": "Browser-Automation",
+   "desc": "Deterministic attack-surface perception for AI security agents. Attaches over `chrome.debugger` to the Chrome you're already logged into (cookies, MFA and SSO already done) and turns the live page into a short numbered interaction graph an agent can act on (`[03] button 'Sign In'`), with CSS selecto",
+   "lang": "python",
+   "scope": "local",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "dmytrome/groundhog",
    "repo": "https://github.com/dmytrome/groundhog",
    "category": "Browser-Automation",
@@ -4163,6 +4271,18 @@
    "category": "Browser-Automation",
    "desc": "Automate YouTube operations, also available as a CLI.",
    "lang": "go",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "Eric-huang799/duplex",
+   "repo": "https://github.com/Eric-huang799/duplex",
+   "category": "Browser-Automation",
+   "desc": "A browser shared by a human and an AI — same tabs, same live session; 24 MCP tools (snapshot, click, type, screenshot, tabs, annotations), built-in models or any MCP client, Esc takeover.",
+   "lang": "typescript",
    "scope": "local",
    "os": "macos",
    "official": false,
@@ -4296,6 +4416,18 @@
    "desc": "Zen Browser automation via WebDriver BiDi: navigation, form filling, screenshots and JavaScript evaluation.",
    "lang": "typescript",
    "scope": "local",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "hahahahahahahahah6/browser-buddy",
+   "repo": "https://github.com/hahahahahahahahah6/browser-buddy",
+   "category": "Browser-Automation",
+   "desc": "MCP server + Chrome extension (MV3) that lets coding agents read pages through the user's real, logged-in Chrome; stdlib-only, local.",
+   "lang": "python",
+   "scope": null,
    "os": null,
    "official": false,
    "installed": false,
@@ -4746,6 +4878,18 @@
    "local_name": null
   },
   {
+   "name": "Savvy-Tech-Sphere/usable-browser-agent-free",
+   "repo": "https://github.com/Savvy-Tech-Sphere/usable-browser-agent-free",
+   "category": "Browser-Automation",
+   "desc": "MCP server plus Firefox add-on that lets your agent work in your real, logged-in Firefox: accessibility snapshots with stable element refs, logins filled by alias from a local vault, hardened mode by default. Free for personal use.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "ScrapeUnblocker/scrapeunblocker-mcp",
    "repo": "https://github.com/ScrapeUnblocker/scrapeunblocker-mcp",
    "category": "Browser-Automation",
@@ -4813,6 +4957,18 @@
    "lang": "typescript",
    "scope": "cloud",
    "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "SnapBlock/hai-browser",
+   "repo": "https://github.com/SnapBlock/hai-browser",
+   "category": "Browser-Automation",
+   "desc": "Let coding agents drive VS Code's Integrated Browser alongside you: snapshots, mouse and keyboard, forms, tabs, screenshots, console and network logs, a visible agent cursor, and click-to-source for React (Vite, Next.js).",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
    "official": false,
    "installed": false,
    "local_name": null
@@ -5005,6 +5161,18 @@
    "lang": "python",
    "scope": "cloud",
    "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "dockndevai/mcp-keycloak",
+   "repo": "https://github.com/dockndevai/mcp-keycloak",
+   "category": "Cloud-Platforms",
+   "desc": "Keycloak multi-realm admin (users, clients, roles, groups) — safe-by-default access modes, realm allowlists, protected realms, delete gating, dry-run, and audit logging. `npx -y @dockndevai/mcp-keycloak`",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
    "official": false,
    "installed": false,
    "local_name": null
@@ -5766,6 +5934,18 @@
    "local_name": null
   },
   {
+   "name": "M-Yamashita01/cloudflare-mcp-go",
+   "repo": "https://github.com/M-Yamashita01/cloudflare-mcp-go",
+   "category": "Cloud-Platforms",
+   "desc": "Cloudflare API v4 server: 28 tools across zones, DNS, WAF/firewall, rate limits, HTTP request logs, Security Center insights, and threat intelligence (IP/domain/ASN/WHOIS/passive DNS). Currently read-only. Install with `go run github.com/M-Yamashita01/cloudflare-mcp-go@latest`.",
+   "lang": "go",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "manusa/Kubernetes MCP Server",
    "repo": "https://github.com/manusa/kubernetes-mcp-server",
    "category": "Cloud-Platforms",
@@ -5894,6 +6074,18 @@
    "scope": "local",
    "os": null,
    "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "oborseth/Porkbun-MCP",
+   "repo": "https://github.com/oborseth/Porkbun-MCP",
+   "category": "Cloud-Platforms",
+   "desc": "Official Porkbun server: domain availability and pricing, registration and renewals, DNS records, nameservers, DNSSEC, URL forwarding, DNS restore points, static hosting deploys and Cloudflare-connected domains. Also hosted at https://mcp.porkbun.com/mcp with Porkbun sign-in.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
+   "official": true,
    "installed": false,
    "local_name": null
   },
@@ -6108,6 +6300,18 @@
    "desc": "Self-hosted server suite for Odoo ERP 15-19, plus GitHub, Portainer, OCA and Teams, with a browser terminal, Qdrant/Ollama memory and Bulgarian localization.",
    "lang": "python",
    "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "roybogs/portveil-mcp",
+   "repo": "https://github.com/roybogs/portveil-mcp",
+   "category": "Cloud-Platforms",
+   "desc": "Control a Portveil WireGuard VPN account: list devices with their live speed, and move, rotate, reconnect or disconnect agent machines between exit countries. Moves only count once the exit server confirms the device.",
+   "lang": "typescript",
+   "scope": "cloud",
    "os": "macos",
    "official": false,
    "installed": false,
@@ -6798,6 +7002,18 @@
    "local_name": null
   },
   {
+   "name": "ly8427/mcp-review-board",
+   "repo": "https://github.com/ly8427/mcp-review-board",
+   "category": "Coding-Agents",
+   "desc": "Localhost review board where different coding agents (Claude Code, Codex, OpenCode, Trae, ZCode) review each other's work: objections must state flip conditions, revisions clear all verdicts, resolution requires the whole active quorum, and every vote is append-only audited. Ships its own audited se",
+   "lang": "python",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "abnegate/magents",
    "repo": "https://github.com/abnegate/magents",
    "category": "Coding-Agents",
@@ -6829,6 +7045,18 @@
    "lang": "typescript",
    "scope": "cloud",
    "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "dimitrihilverda/claude-session-relay",
+   "repo": "https://github.com/dimitrihilverda/claude-session-relay",
+   "category": "Coding-Agents",
+   "desc": "Self-hosted relay where coding-agent sessions on different machines share a team board, message each other and check for git conflicts, with isolated teams, private sessions and an OAuth MCP endpoint for Claude in the cloud.",
+   "lang": null,
+   "scope": "cloud",
+   "os": "macos",
    "official": false,
    "installed": false,
    "local_name": null
@@ -6911,6 +7139,18 @@
    "category": "Coding-Agents",
    "desc": "Adversarial test generation in Cline: detects the stack, writes and runs tests, and classifies failures as real bugs, environment problems or test bugs.",
    "lang": "python",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "AV-Labs-Co/cos-codex-bridge",
+   "repo": "https://github.com/AV-Labs-Co/cos-codex-bridge",
+   "category": "Coding-Agents",
+   "desc": "Local MCP that lets a Chief of Staff client find, create and register Codex projects; submit exact prompts; track durable receipts; continue existing tasks; and organize scoped work inside allowlisted directories.",
+   "lang": "typescript",
    "scope": "local",
    "os": "macos",
    "official": false,
@@ -7554,6 +7794,18 @@
    "local_name": null
   },
   {
+   "name": "Rikinshah787/dotpals",
+   "repo": "https://github.com/Rikinshah787/dotpals",
+   "category": "Coding-Agents",
+   "desc": "Checks what local coding agents such as Claude Code, Codex and Cursor really did: files changed, commands run and test results read from test output, not the agent's word. Read-only.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "rinadelph/Agent-MCP",
    "repo": "https://github.com/rinadelph/Agent-MCP",
    "category": "Coding-Agents",
@@ -8166,6 +8418,18 @@
    "local_name": null
   },
   {
+   "name": "A1-x-Tech/mcp-google-gmail",
+   "repo": "https://github.com/A1-x-Tech/mcp-google-gmail",
+   "category": "Communication",
+   "desc": "Gmail API: search, read and send email, and manage drafts, labels and the trash.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "AbdelStark/nostr-mcp",
    "repo": "https://github.com/AbdelStark/nostr-mcp",
    "category": "Communication",
@@ -8340,6 +8604,18 @@
    "desc": "Interface with the Google Tasks API.",
    "lang": "typescript",
    "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "belaytzev/Telebrief",
+   "repo": "https://github.com/belaytzev/Telebrief",
+   "category": "Communication",
+   "desc": "Self-hosted digests of your Telegram channels over MCP: AI summaries, the last digest and raw per-channel messages, with OpenAI, Anthropic or Ollama.",
+   "lang": "python",
+   "scope": "local",
    "os": null,
    "official": false,
    "installed": false,
@@ -8653,6 +8929,18 @@
    "lang": "typescript",
    "scope": "cloud",
    "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "fbossiere/proton-safe-mcp",
+   "repo": "https://github.com/fbossiere/proton-safe-mcp",
+   "category": "Communication",
+   "desc": "Proton Mail access through the local Proton Mail Bridge: search and read emails, inspect attachments, and create drafts. No send, delete or move tools.",
+   "lang": "python",
+   "scope": "local",
+   "os": "linux",
    "official": false,
    "installed": false,
    "local_name": null
@@ -9114,6 +9402,18 @@
    "local_name": null
   },
   {
+   "name": "jamalofski/mailprobe-mcp",
+   "repo": "https://github.com/jamalofski/mailprobe-mcp",
+   "category": "Communication",
+   "desc": "Email verification in real time, without sending anything: a valid, risky, invalid or unknown status with a score, disposable, role-based and catch-all detection, and typo suggestions. Remote server or local stdio package, hosted in France.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": true,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "joinly-ai/joinly",
    "repo": "https://github.com/joinly-ai/joinly",
    "category": "Communication",
@@ -9402,6 +9702,18 @@
    "local_name": null
   },
   {
+   "name": "MankhongGarden/line-bot-ops-mcp",
+   "repo": "https://github.com/MankhongGarden/line-bot-ops-mcp",
+   "category": "Communication",
+   "desc": "Operate your own LINE bot: webhook queue health, failed jobs and retries, plus push, Rich Menu swap, follower insight and quota. LINE tools work with any Messaging API channel.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "marlinjai/email-mcp",
    "repo": "https://github.com/marlinjai/email-mcp",
    "category": "Communication",
@@ -9618,6 +9930,18 @@
    "local_name": null
   },
   {
+   "name": "PhilflowIO/dav-mcp",
+   "repo": "https://github.com/PhilflowIO/dav-mcp",
+   "category": "Communication",
+   "desc": "Calendars, contacts and tasks on any CalDAV/CardDAV server (Nextcloud, Baikal, Radicale, iCloud): 27 tools for events, vCards and VTODOs with field-level updates, server-side queries and free/busy, over stdio or Streamable HTTP.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "PhononX/cv-mcp-server",
    "repo": "https://github.com/PhononX/cv-mcp-server",
    "category": "Communication",
@@ -9714,6 +10038,18 @@
    "local_name": null
   },
   {
+   "name": "SharimAli/discp",
+   "repo": "https://github.com/SharimAli/discp",
+   "category": "Communication",
+   "desc": "Feature-complete Discord MCP server with 117 native tools, dual user/bot account support, anti-abuse human pacing, and dynamic aesthetic symbol discovery.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "sawa-zen/vrchat-mcp",
    "repo": "https://github.com/sawa-zen/vrchat-mcp",
    "category": "Communication",
@@ -9721,6 +10057,18 @@
    "lang": "typescript",
    "scope": "local",
    "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "sdyuyouth/agenthop",
+   "repo": "https://github.com/sdyuyouth/agenthop",
+   "category": "Communication",
+   "desc": "Let two agents on machines with no public address talk directly: pair with a short code over an end-to-end encrypted relay (hosted or self-hosted), send files, and invite saved contacts by name.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
    "official": false,
    "installed": false,
    "local_name": null
@@ -10194,6 +10542,18 @@
    "local_name": null
   },
   {
+   "name": "anpekesen/namegender-mcp",
+   "repo": "https://github.com/anpekesen/namegender-mcp",
+   "category": "Customer-Data-Platforms",
+   "desc": "Gender from names, emails and usernames via NameGender, with probability, sample size and source on every answer, bulk lookups of up to 100 values and the countries a name is recorded in.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": true,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "azmartone67/dchub-mcp-server",
    "repo": "https://github.com/azmartone67/dchub-mcp-server",
    "category": "Customer-Data-Platforms",
@@ -10314,6 +10674,18 @@
    "local_name": null
   },
   {
+   "name": "mambalabsdev/mcp-gtm-signals-aggregator",
+   "repo": "https://github.com/mambalabsdev/mcp-gtm-signals-aggregator",
+   "category": "Customer-Data-Platforms",
+   "desc": "Combines hiring and tech stack signals into a composite GTM intelligence brief with overall signal scoring per company.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "mambalabsdev/mcp-icp-fit-scorer",
    "repo": "https://github.com/mambalabsdev/mcp-icp-fit-scorer",
    "category": "Customer-Data-Platforms",
@@ -10333,6 +10705,18 @@
    "lang": "python",
    "scope": "cloud",
    "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "penmadebykisss/bitrix24-mcp",
+   "repo": "https://github.com/penmadebykisss/bitrix24-mcp",
+   "category": "Customer-Data-Platforms",
+   "desc": "Bitrix24 CRM via inbound webhook: search and edit deals, leads, contacts, tasks and timeline comments, plus sales analytics — pipeline report with manager leaderboard, stale deals and overdue tasks.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
    "official": false,
    "installed": false,
    "local_name": null
@@ -11526,6 +11910,18 @@
    "local_name": null
   },
   {
+   "name": "scoretracker4321/json-mcp-lite",
+   "repo": "https://github.com/scoretracker4321/json-mcp-lite",
+   "category": "Databases",
+   "desc": "Serve any JSON file (catalogue, FAQ, price list) as read-only list, keyword search and get-by-id tools over stdio, configured with CLI flags.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "Yusufihsangorgel/queue-inspector-mcp",
    "repo": "https://github.com/Yusufihsangorgel/queue-inspector-mcp",
    "category": "Databases",
@@ -12162,6 +12558,18 @@
    "local_name": null
   },
   {
+   "name": "AirSaiga/Precis",
+   "repo": "https://github.com/AirSaiga/Precis",
+   "category": "Data-Platforms",
+   "desc": "Local-first data quality workbench for Excel/CSV: validate against schemas and 10 zero-code constraint types (uniqueness, ranges, foreign keys, allowed values and more), with row-level error reports. Also ships a visual desktop app, CLI and REST API.",
+   "lang": "python",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "alkemiai/alkemi-mcp",
    "repo": "https://github.com/alkemi-ai/alkemi-mcp",
    "category": "Data-Platforms",
@@ -12606,6 +13014,18 @@
    "local_name": null
   },
   {
+   "name": "inth3shadows/runecho",
+   "repo": "https://github.com/inth3shadows/runecho",
+   "category": "Developer-Tools",
+   "desc": "Deterministic symbol oracle over a locally built index of the repo: whether a symbol exists, what a file declares, and what changed structurally since the last snapshot. Ships with a PreToolUse guard that stops an Edit/Write referencing a function, constant or type the repo does not declare, before ",
+   "lang": "go",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "ieranama/discomcp",
    "repo": "https://github.com/ieranama/discomcp",
    "category": "Developer-Tools",
@@ -12661,6 +13081,18 @@
    "lang": "python",
    "scope": "local",
    "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "mahdibrr/dev-error-explainers",
+   "repo": "https://github.com/mahdibrr/dev-error-explainers",
+   "category": "Developer-Tools",
+   "desc": "Explains known developer errors offline and deterministically (CORS, ESM/CommonJS, npm ERESOLVE, Next.js build, Postgres connection and DATABASE_URL errors): cause, ranked fixes and the documentation link. One tool, no LLM, no network.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
    "official": false,
    "installed": false,
    "local_name": null
@@ -12738,6 +13170,18 @@
    "local_name": null
   },
   {
+   "name": "forgemeshlabs/aso-score-mcp",
+   "repo": "https://github.com/forgemeshlabs/aso-score-mcp",
+   "category": "Developer-Tools",
+   "desc": "Free ASO Score (Agent Signal Optimization) scanner scoring discovery, identity, trust, commerce, reputation, and memory signals, with maturity levels, evidence, and prioritized fix plans. Local stdio, no API key required. `npx -y @forgemeshlabs/aso-score-mcp`",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "aurumflux20/effectfence",
    "repo": "https://github.com/aurumflux20/effectfence",
    "category": "Developer-Tools",
@@ -12756,6 +13200,18 @@
    "desc": "Demand-signal scanner for validating product and dev-tool ideas using GitHub repo signals, Hacker News attention and npm/PyPI download counts.",
    "lang": "python",
    "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "bourhaouta/vscode-tailwindshades",
+   "repo": "https://github.com/bourhaouta/vscode-tailwindshades",
+   "category": "Developer-Tools",
+   "desc": "Tailwind CSS palettes (50–950) from any color for Tailwind v4, v3, v2 and v1, computed in OKLCH, plus the closest Tailwind color to any color. Run it with `npx tailwindshades-mcp` or use the hosted endpoint.",
+   "lang": "typescript",
+   "scope": "cloud",
    "os": "macos",
    "official": false,
    "installed": false,
@@ -12934,6 +13390,18 @@
    "repo": "https://github.com/TomD4vs/prumo",
    "category": "Developer-Tools",
    "desc": "Checks coding-agent context files (CLAUDE.md, AGENTS.md, SKILL.md) against the git index: broken links, missing paths, undefined commands and drift.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "vamsiy78/ballmac-ui",
+   "repo": "https://github.com/vamsiy78/ballmac-ui",
+   "category": "Developer-Tools",
+   "desc": "Search, inspect and install Ballmac UI React + Tailwind components, blocks and templates, with props, keyboard notes and the exact shadcn install command, and plan whole pages from blocks.",
    "lang": "typescript",
    "scope": "local",
    "os": "macos",
@@ -13302,6 +13770,18 @@
    "local_name": null
   },
   {
+   "name": "Stellify-Software-Ltd/stellify-mcp",
+   "repo": "https://github.com/Stellify-Software-Ltd/stellify-mcp",
+   "category": "Developer-Tools",
+   "desc": "Build Laravel apps through conversation on the Stellify platform: code stored as structured JSON for surgical statement-level edits, with a shared reuse library, CRUD scaffolding, migrations and studio test runs.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "agenticempire/axint",
    "repo": "https://github.com/agenticempire/axint",
    "category": "Developer-Tools",
@@ -13590,10 +14070,10 @@
    "local_name": null
   },
   {
-   "name": "runyourempire/4DA",
-   "repo": "https://github.com/runyourempire/4DA/tree/main/mcp-4da-server",
+   "name": "4DA-Systems/4DA",
+   "repo": "https://github.com/4DA-Systems/4DA/tree/main/mcp-4da-server",
    "category": "Developer-Tools",
-   "desc": "Dependency intelligence for coding agents: live CVE scanning, dependency health, upgrade planning, ecosystem news and decision memory.",
+   "desc": "Upgrade intelligence for coding agents: what an upgrade changes and which of your files it touches, pre-install dependency checks, and lockfile CVE scans.",
    "lang": "typescript",
    "scope": "local",
    "os": "macos",
@@ -14802,6 +15282,18 @@
    "local_name": null
   },
   {
+   "name": "engineerdeep/buildtree-mcp",
+   "repo": "https://github.com/engineerdeep/buildtree-mcp",
+   "category": "Developer-Tools",
+   "desc": "Share Android and iOS builds with testers: detects Expo, React Native or Flutter, runs the build, uploads the .apk or .ipa to buildtree, and returns install links, a QR code image and tester feedback.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "ericbrown/project-context-mcp",
    "repo": "https://github.com/ericbrown/project-context-mcp",
    "category": "Developer-Tools",
@@ -14940,6 +15432,18 @@
    "desc": "LynxPrompt prompt management: create, search and organize AI prompts and AGENTS.md/CLAUDE.md configuration files.",
    "lang": "go",
    "scope": "cloud",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "getdomovoi/osnova",
+   "repo": "https://github.com/getdomovoi/osnova",
+   "category": "Developer-Tools",
+   "desc": "Deterministic code map for AI coding agents: a tree-sitter symbol and call graph with exact file:line callers and callees, the evidence behind each edge, diff impact and test discovery across 20 languages.",
+   "lang": "typescript",
+   "scope": "local",
    "os": "macos",
    "official": false,
    "installed": false,
@@ -15630,6 +16134,18 @@
    "local_name": null
   },
   {
+   "name": "josifb/whichlib",
+   "repo": "https://github.com/josifb/whichlib",
+   "category": "Developer-Tools",
+   "desc": "Dependency picker for coding agents: recommends and compares GitHub repos for a need, scored 0-100 on momentum, maintenance, npm/PyPI downloads and license, with a one-line verdict.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "Jpisnice/shadcn-ui-mcp-server",
    "repo": "https://github.com/Jpisnice/shadcn-ui-mcp-server",
    "category": "Developer-Tools",
@@ -15769,6 +16285,18 @@
    "lang": "rust",
    "scope": "cloud",
    "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "kirich1409/maven-mcp",
+   "repo": "https://github.com/kirich1409/maven-mcp",
+   "category": "Developer-Tools",
+   "desc": "MCP server / agent plugin for Maven and Gradle dependency intelligence: latest versions, outdated deps, CVEs, changelogs, licenses and project audits.",
+   "lang": "python",
+   "scope": "cloud",
+   "os": "macos",
    "official": false,
    "installed": false,
    "local_name": null
@@ -16830,6 +17358,18 @@
    "local_name": null
   },
   {
+   "name": "pubship/pubship",
+   "repo": "https://github.com/pubship/pubship",
+   "category": "Developer-Tools",
+   "desc": "Inspect Google Play releases, reviews, Android vitals and reports, and prepare explicitly authorized release and store-listing changes. Runs locally with your own service account.",
+   "lang": "python",
+   "scope": "local",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "pzalutski-pixel/javalens-mcp",
    "repo": "https://github.com/pzalutski-pixel/javalens-mcp",
    "category": "Developer-Tools",
@@ -17387,6 +17927,18 @@
    "category": "Developer-Tools",
    "desc": "Web design analysis: layout extraction, motion detection, quality scoring and semantic search, turning web pages into structured design knowledge.",
    "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "tenatarika/vex",
+   "repo": "https://github.com/tenatarika/vex",
+   "category": "Developer-Tools",
+   "desc": "Local code search over a tree-sitter index: exact symbol lookup, scope-aware usages, call graph and impact analysis, AST patterns, indexed grep and semantic search across 19 languages.",
+   "lang": "rust",
    "scope": "local",
    "os": "macos",
    "official": false,
@@ -18090,6 +18642,18 @@
    "local_name": null
   },
   {
+   "name": "gbatistuta0/appfactory",
+   "repo": "https://github.com/gbatistuta0/appfactory",
+   "category": "Developer-Tools",
+   "desc": "Lets your coding agent ship a SwiftUI iOS subscription app from idea to TestFlight: niche validation with live App Store data, SwiftUI scaffold, Supabase backend, App Store Connect subscriptions and RevenueCat, localization, ASO, screenshots. Gated stages, human approval for irreversible actions, ev",
+   "lang": "python",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "zenml-io/mcp-zenml",
    "repo": "https://github.com/zenml-io/mcp-zenml",
    "category": "Developer-Tools",
@@ -18642,6 +19206,18 @@
    "local_name": null
   },
   {
+   "name": "ni-c/opengist-mcp",
+   "repo": "https://github.com/ni-c/opengist-mcp",
+   "category": "Developer-Tools",
+   "desc": "Read, search, create, update and delete gists on your own Opengist instance — the self-hosted pastebin powered by Git. File contents and revisions, commit history, forks and likes. Bounded results, untrusted-content markers, and a server-issued confirmation token on everything that deletes or publis",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "A1-x-Tech/mcp-yandex-dostavka",
    "repo": "https://github.com/A1-x-Tech/mcp-yandex-dostavka",
    "category": "Delivery",
@@ -18851,6 +19427,18 @@
    "category": "Delivery",
    "desc": "Drive the local ProxyKit MITM debugging proxy: inspect HTTP(S), gRPC and WebSocket traffic, create mocks and rewrites, replay requests and run chaos scenarios.",
    "lang": "go",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "dockndevai/mcp-laya",
+   "repo": "https://github.com/dockndevai/mcp-laya",
+   "category": "Data-Science-Tools",
+   "desc": "Fast, local, non-autoregressive System-1 decision engine as MCP tools — typed decisions (classify / score / yes-no) over text, email, tickets or JSON in 100+ languages, with calibrated confidence and no text generation, so nothing to hallucinate. Offloads routing/triage/gating judgment calls from th",
+   "lang": "python",
    "scope": "local",
    "os": "macos",
    "official": false,
@@ -19146,6 +19734,18 @@
    "local_name": null
   },
   {
+   "name": "Kungie/gut",
+   "repo": "https://github.com/Kungie/gut",
+   "category": "Data-Science-Tools",
+   "desc": "Judgment calls on small, cheap models: yes/no, pick-one and rate questions about any text, answered YES, NO or UNSURE. Runs on TypeSafe's Jev, open models on Ollaya, Ollama or a local NLI model; `each` judges up to 1,000 texts per call.",
+   "lang": "python",
+   "scope": "cloud",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "leap-laboratories/discovery-engine",
    "repo": "https://github.com/leap-laboratories/discovery-engine",
    "category": "Data-Science-Tools",
@@ -19298,6 +19898,18 @@
    "scope": "local",
    "os": "macos",
    "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "TensorLink-AI/ephemeris-mcp",
+   "repo": "https://github.com/TensorLink-AI/ephemeris-mcp",
+   "category": "Data-Science-Tools",
+   "desc": "Probabilistic time-series forecasting: quantile forecasts from Chronos-2, TimesFM 2.5, Toto 2, TiRex-2 and IBM Granite foundation models, routed to one model, named explicitly, or ensembled. Remote server with an npm stdio bridge.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
+   "official": true,
    "installed": false,
    "local_name": null
   },
@@ -19950,6 +20562,18 @@
    "local_name": null
   },
   {
+   "name": "apiguru-app/agent-kit",
+   "repo": "https://github.com/apiguru-app/agent-kit",
+   "category": "E-Commerce",
+   "desc": "Live Amazon marketplace data across 20 countries: product details, reviews, keyword search, best-sellers, deals, offers/buy box/stock and seller profiles. Hosted keyless endpoint (free calls, then x402 pay-per-call in USDC) or an API key; also runs locally via `uvx apiguru-mcp`.",
+   "lang": "python",
+   "scope": "cloud",
+   "os": null,
+   "official": true,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "BuyWhere/buywhere-mcp",
    "repo": "https://github.com/BuyWhere/buywhere-mcp",
    "category": "E-Commerce",
@@ -20134,6 +20758,18 @@
    "repo": "https://github.com/ONE8943/ai-furniture-hub",
    "category": "E-Commerce",
    "desc": "Japan-focused furniture and home products: millimeter-precise search, curated sets, dimension-compatible replacement finder and live Rakuten data.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "pad01g/proxy-shopping-web",
+   "repo": "https://github.com/pad01g/proxy-shopping-web/tree/main/packages/mcp",
+   "category": "E-Commerce",
+   "desc": "Buy from cash-only or unsupported shops with crypto through a proxy shopper and a 2-of-3 escrow with timelocks (BTC signet, USDC) on a Nostr + libp2p network; or earn as a proxy shopper. Quotes with rate checks, funding, delivery confirmation, disputes and refunds; money moves only with `confirm: tr",
    "lang": "typescript",
    "scope": "cloud",
    "os": "macos",
@@ -20442,6 +21078,18 @@
    "local_name": null
   },
   {
+   "name": "A1-x-Tech/mcp-google-drive",
+   "repo": "https://github.com/A1-x-Tech/mcp-google-drive",
+   "category": "File-Systems",
+   "desc": "Google Drive API: search, organize, upload, download, export, share and comment on Drive files.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "aadilr/changethisfile-mcp",
    "repo": "https://github.com/aadilr/changethisfile-mcp",
    "category": "File-Systems",
@@ -20730,6 +21378,18 @@
    "local_name": null
   },
   {
+   "name": "jamalofski/conv2pdf-mcp",
+   "repo": "https://github.com/jamalofski/conv2pdf-mcp",
+   "category": "File-Systems",
+   "desc": "Convert Office documents, images and e-books on your computer to PDF, convert PDFs to Word or images, and merge, split, compress, protect or number PDFs via the conv2pdf API, hosted in France.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": true,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "jeannier/homebrew-mcp",
    "repo": "https://github.com/jeannier/homebrew-mcp",
    "category": "File-Systems",
@@ -20747,6 +21407,18 @@
    "category": "File-Systems",
    "desc": "Create, read and round-trip Excel workbooks (.xlsx/.xlsm) via a type-safe F# DSL, including regenerating the F# source that reproduces a file.",
    "lang": null,
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "L-Jovi/keyhole",
+   "repo": "https://github.com/L-Jovi/keyhole",
+   "category": "File-Systems",
+   "desc": "Give a private ChatGPT app access to selected local folders through OpenAI Secure MCP Tunnel, with per-folder permissions, hash-checked edits and recovery. No shell or public port.",
+   "lang": "python",
    "scope": "local",
    "os": "macos",
    "official": false,
@@ -20970,6 +21642,30 @@
    "local_name": null
   },
   {
+   "name": "apipriceindex/mcp",
+   "repo": "https://github.com/apipriceindex/mcp",
+   "category": "Finance--Fintech",
+   "desc": "Live, verified LLM API prices: search models, get sourced prices, estimate monthly workload costs.",
+   "lang": "python",
+   "scope": "local",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "ComplyEaze/bridge",
+   "repo": "https://github.com/ComplyEaze/bridge",
+   "category": "Finance--Fintech",
+   "desc": "Reads TallyPrime for your AI assistant; posts only vouchers you approve. Windows, Apple Silicon Mac.",
+   "lang": "rust",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "gveshk/atlasyield-mcp",
    "repo": "https://github.com/gveshk/atlasyield-mcp",
    "category": "Finance--Fintech",
@@ -20988,6 +21684,18 @@
    "desc": "Open data on AI startups: valuations, ARR and funding, with every figure sourced, dated and confidence-scored, plus flags for contradicting public sources.",
    "lang": "python",
    "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "blazephoenixxyz-crypto/blazephoenix-mcp",
+   "repo": "https://github.com/blazephoenixxyz-crypto/blazephoenix-mcp",
+   "category": "Finance--Fintech",
+   "desc": "On-chain DEX aggregator for Base, Ethereum, Optimism, Arbitrum and Robinhood Chain: swap quotes computed by the on-chain Quoter on your own RPC, verified unsigned swap calldata, swap simulation and staking solvency checks. No API key.",
+   "lang": "typescript",
+   "scope": "cloud",
    "os": "macos",
    "official": false,
    "installed": false,
@@ -21834,6 +22542,18 @@
    "local_name": null
   },
   {
+   "name": "penmadebykisss/ru-business-mcp",
+   "repo": "https://github.com/penmadebykisss/ru-business-mcp",
+   "category": "Finance--Fintech",
+   "desc": "Russian business data with no API key: company check by INN/OGRN in FNS EGRUL/EGRIP, Bank of Russia exchange rates and key rate, late-payment interest (Civil Code art. 395), production calendar with business-day math, and bank details by BIK.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "jackrain19743/hou-tea-mcp-server",
    "repo": "https://github.com/jackrain19743/hou-tea-mcp-server",
    "category": "Finance--Fintech",
@@ -21950,6 +22670,18 @@
    "scope": "cloud",
    "os": null,
    "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "barkermoney/barker-mcp",
+   "repo": "https://github.com/barkermoney/barker-mcp",
+   "category": "Finance--Fintech",
+   "desc": "Barker's real-time stablecoin yield index across DeFi and CEX earn, with a yield advisor, risk signals and deposit/redeem quotes. Remote MCP, x402 pay-per-call.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": true,
    "installed": false,
    "local_name": null
   },
@@ -22874,6 +23606,18 @@
    "scope": null,
    "os": null,
    "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "Finology-tech/finology-mcp",
+   "repo": "https://github.com/Finology-tech/finology-mcp",
+   "category": "Finance--Fintech",
+   "desc": "Federal student loan math on 2026 rules from Finology Software's parity-verified engine: compare repayment plans, estimate RAP payments, and compare filing jointly vs separately.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
+   "official": true,
    "installed": false,
    "local_name": null
   },
@@ -24366,6 +25110,18 @@
    "local_name": null
   },
   {
+   "name": "mathbeal/avenir-mcp",
+   "repo": "https://github.com/mathbeal/avenir-mcp",
+   "category": "Finance--Fintech",
+   "desc": "Unofficial MCP server for YNAB: budgets, spending trends, category suggestions, reconciliation and cash-flow forecasts. Read-only by default; every write is previewed, confirmed and undoable.",
+   "lang": "python",
+   "scope": "cloud",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "Mattbusel/Reddit-Options-Trader-ROT-",
    "repo": "https://github.com/Mattbusel/Reddit-Options-Trader-ROT-",
    "category": "Finance--Fintech",
@@ -24882,6 +25638,18 @@
    "local_name": null
   },
   {
+   "name": "pprotocol-us/problee-mcp",
+   "repo": "https://github.com/pprotocol-us/problee-mcp",
+   "category": "Finance--Fintech",
+   "desc": "Problee, where AIs and people put their calls on the record: free play-money prediction markets (US midterms, elections, sports, AI) where agents trade on the same order books as people and every call stays on a public record.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
+   "official": true,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "predictionmarketspicks/mcp",
    "repo": "https://github.com/predictionmarketspicks/mcp",
    "category": "Finance--Fintech",
@@ -25278,6 +26046,18 @@
    "local_name": null
   },
   {
+   "name": "simoncoombes/tradefloor",
+   "repo": "https://github.com/simoncoombes/tradefloor",
+   "category": "Finance--Fintech",
+   "desc": "Simulated stock markets with an order book and an economy for testing trading agents: evaluate, rank and stress-test strategies across many reproducible markets.",
+   "lang": "python",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "smythmyke/govtoolspro-mcp-server",
    "repo": "https://github.com/smythmyke/govtoolspro-mcp-server",
    "category": "Finance--Fintech",
@@ -25518,6 +26298,18 @@
    "local_name": null
   },
   {
+   "name": "withgrokbot/verified-catalog",
+   "repo": "https://github.com/withgrokbot/verified-catalog",
+   "category": "Finance--Fintech",
+   "desc": "Reliability lookup for x402 pay-per-call endpoints: find services for a task under a price, sorted by known-answer pass rate over recent paid calls, with public receipts (Base tx, amount charged, delivered, pass/fail). Also search and read the catalog of checked endpoints.",
+   "lang": "python",
+   "scope": "cloud",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "wowinter13/solscan-mcp",
    "repo": "https://github.com/wowinter13/solscan-mcp",
    "category": "Finance--Fintech",
@@ -25586,18 +26378,6 @@
    "scope": "cloud",
    "os": null,
    "official": false,
-   "installed": false,
-   "local_name": null
-  },
-  {
-   "name": "YBSbarker/barker-stablecoin-skills",
-   "repo": "https://github.com/YBSbarker/barker-stablecoin-skills",
-   "category": "Finance--Fintech",
-   "desc": "Real-time stablecoin yield index across DeFi protocols and CEX earn programs, with a yield advisor, risk signals and non-custodial deposit/redeem quotes.",
-   "lang": "typescript",
-   "scope": "cloud",
-   "os": null,
-   "official": true,
    "installed": false,
    "local_name": null
   },
@@ -26154,6 +26934,30 @@
    "local_name": null
   },
   {
+   "name": "cstamigo-droid/signal-scanner",
+   "repo": "https://github.com/cstamigo-droid/signal-scanner",
+   "category": "Finance--Fintech",
+   "desc": "Rule-based stock/crypto screener: define signals in YAML (RSI, SMA cross, volume, 52-week levels), scan a watchlist over keyless yfinance data, and get matches via MCP, console or Telegram.",
+   "lang": "python",
+   "scope": "local",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "airblock2026/bit-monk-signal-mcp",
+   "repo": "https://github.com/airblock2026/bit-monk-signal-mcp",
+   "category": "Finance--Fintech",
+   "desc": "Bottom/top market-timing verdicts for 10 markets — crypto (197 coins, 32 indicators), US stocks, KOSPI/KOSDAQ, China A-shares, Hong Kong stocks, commodity futures, FX (48 pairs), inflation & Fed liquidity, Seoul & Dubai property. One fused −100..+100 score across daily/weekly/monthly timeframes. x40",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "26048608982lp-ai/gamenumerics",
    "repo": "https://github.com/26048608982lp-ai/gamenumerics",
    "category": "Gaming",
@@ -26292,6 +27096,18 @@
    "desc": "Search and discover video games on any platform via the GameBrain API.",
    "lang": null,
    "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "dearlordylord/5e-quint",
+   "repo": "https://github.com/dearlordylord/5e-quint",
+   "category": "Gaming",
+   "desc": "D&D 5e SRD 5.2.1 game engine: create characters and run turn-based battles through MCP, backed by Quint formal models, rule-level proofs, and model-based testing.",
+   "lang": "typescript",
+   "scope": "local",
    "os": null,
    "official": false,
    "installed": false,
@@ -26790,6 +27606,18 @@
    "local_name": null
   },
   {
+   "name": "ProjectMakersDE/horizOn-mcp",
+   "repo": "https://github.com/ProjectMakersDE/horizOn-mcp",
+   "category": "Gaming",
+   "desc": "Official server for the horizOn game backend: player auth, leaderboards, cloud saves, remote config, gift codes, crash reports and feedback, docs and quickstarts for Godot, Unity and Unreal, and optional admin tools for the horizOn dashboard.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
+   "official": true,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "razz-games/razz-mcp",
    "repo": "https://github.com/razz-games/razz-mcp",
    "category": "Gaming",
@@ -26970,6 +27798,18 @@
    "local_name": null
   },
   {
+   "name": "Philongevity/phi-mcp-server",
+   "repo": "https://github.com/Philongevity/phi-mcp-server",
+   "category": "Health-And-Wellness",
+   "desc": "Guideline-cited lab-results analysis for chronic conditions (type 2 diabetes, kidney, lupus, cancer survivorship): flags missing or overdue tests with the guideline cited. Free sample report; synthetic/de-identified values only.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "io.github.PhilipAD/health-export-mcp",
    "repo": "https://github.com/PhilipAD/health-export-mcp",
    "category": "Health-And-Wellness",
@@ -27114,6 +27954,18 @@
    "local_name": null
   },
   {
+   "name": "AbhijatSaxena/blink-camera-mcp",
+   "repo": "https://github.com/AbhijatSaxena/blink-camera-mcp",
+   "category": "Home-Automation",
+   "desc": "Control Amazon Blink cameras and their pan/tilt mount: read where the camera is pointing and its travel limits, aim it by absolute or relative angle with the new position confirmed by the hardware, return it home, and grab a snapshot. The mount's command channel is undocumented, so it was recovered ",
+   "lang": "python",
+   "scope": "cloud",
+   "os": "windows",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "AIops-tools/Identity-AIops",
    "repo": "https://github.com/AIops-tools/Identity-AIops",
    "category": "Identity",
@@ -27198,6 +28050,18 @@
    "local_name": null
   },
   {
+   "name": "kyle-visner/stellarjay",
+   "repo": "https://github.com/kyle-visner/stellarjay",
+   "category": "Knowledge--Memory",
+   "desc": "Safe write access for AI agents: an append-only business fact store where every change is kept, attributed to the agent that made it, and can be undone (`undo_changes`). Self-host with `stellarjay-mcp` or use the hosted AvianSuite server.",
+   "lang": "go",
+   "scope": "cloud",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "dockndevai/ossian-mcp",
    "repo": "https://github.com/dockndevai/ossian-mcp",
    "category": "Knowledge--Memory",
@@ -27241,6 +28105,18 @@
    "lang": "typescript",
    "scope": "cloud",
    "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "M-T-D-N/agentmemory-codex-windows",
+   "repo": "https://github.com/M-T-D-N/agentmemory-codex-windows",
+   "category": "Knowledge--Memory",
+   "desc": "Windows AgentMemory downstream for Codex with project-scoped persistent memory, bounded cross-project recall, and an authenticated loopback MCP service; prebuilt Windows releases are available as an unsigned Technical Preview.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "windows",
    "official": false,
    "installed": false,
    "local_name": null
@@ -27384,6 +28260,18 @@
    "desc": "Local-first project memory and guardrails for coding agents: records failed attempts, fragile files and decisions per repo and warns before repeated mistakes.",
    "lang": "typescript",
    "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "moorcheh-ai/memanto",
+   "repo": "https://github.com/moorcheh-ai/memanto",
+   "category": "Knowledge--Memory",
+   "desc": "Universal memory agent for AI: provides semantic search, namespace management, text/vector operations and RAG for local or remote environments.",
+   "lang": "python",
+   "scope": "cloud",
    "os": "macos",
    "official": false,
    "installed": false,
@@ -28302,6 +29190,18 @@
    "local_name": null
   },
   {
+   "name": "chenxiachan/thoughtdag",
+   "repo": "https://github.com/chenxiachan/thoughtdag",
+   "category": "Knowledge--Memory",
+   "desc": "Search local AI-agent conversation history by file or exact phrase and recall original source turns through four read-only tools.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "ChevalGrand520/local-gpu-imagegen",
    "repo": "https://github.com/ChevalGrand520/local-gpu-imagegen",
    "category": "Knowledge--Memory",
@@ -29094,6 +29994,18 @@
    "local_name": null
   },
   {
+   "name": "JAAvila-Of/vivac",
+   "repo": "https://github.com/JAAvila-Of/vivac",
+   "category": "Knowledge--Memory",
+   "desc": "A provenance tree for coding agents: every node records the node it was born from, so the agent can ask why the work is where it is. A session brief with the standing decisions and what not to touch, a close that refuses over open work, and decisions kept with the alternatives they rejected. Local J",
+   "lang": "rust",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "jaimenbell/rag-mcp",
    "repo": "https://github.com/jaimenbell/rag-mcp",
    "category": "Knowledge--Memory",
@@ -29298,6 +30210,18 @@
    "local_name": null
   },
   {
+   "name": "Kyrzin/kybase",
+   "repo": "https://github.com/Kyrzin/kybase",
+   "category": "Knowledge--Memory",
+   "desc": "Self-hosted Markdown knowledge base that doubles as persistent memory for AI agents: a notes app you browse and edit (wikilinks, backlinks, graph), 18 MCP tools over Streamable HTTP with OAuth (works as a claude.ai connector) or stdio. Hybrid search (Postgres full-text + pgvector, RRF, optional rera",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "renezander030/agentic-task-system",
    "repo": "https://github.com/renezander030/agentic-task-system",
    "category": "Knowledge--Memory",
@@ -29316,6 +30240,18 @@
    "desc": "Semantic knowledge graph for Obsidian with graph, classification and hierarchy modes, local embeddings, semantic bridge discovery and drift detection.",
    "lang": "python",
    "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "LamantinAI/kaeru",
+   "repo": "https://github.com/LamantinAI/kaeru",
+   "category": "Knowledge--Memory",
+   "desc": "Memory for LLM agents: a local graph where the agent itself keeps decisions, tasks, hypotheses and reasoning between sessions, and gets a summary of what is open and overdue on every return to a project. Single Rust binary with no embedding model or LLM calls inside; one daemon serves several agents",
+   "lang": "rust",
+   "scope": "cloud",
    "os": "macos",
    "official": false,
    "installed": false,
@@ -31110,6 +32046,18 @@
    "local_name": null
   },
   {
+   "name": "IvenKooLab/loci",
+   "repo": "https://github.com/IvenKooLab/loci",
+   "category": "Knowledge--Memory",
+   "desc": "Queryable second brain over your scattered notes, docs, PDFs and chat exports: hybrid retrieval (vector + BM25 fused with RRF), section-level citations with an optional claim-by-claim verification pass, and an Obsidian-style wikilink graph — all local, any OpenAI-compatible API or fully offline via ",
+   "lang": "python",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "zensation-ai/zenbrain",
    "repo": "https://github.com/zensation-ai/zenbrain",
    "category": "Knowledge--Memory",
@@ -31130,6 +32078,18 @@
    "scope": "local",
    "os": "macos",
    "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "memokar/brainy",
+   "repo": "https://github.com/memokar/brainy",
+   "category": "Knowledge--Memory",
+   "desc": "Self-hosted shared brain for multiple agents: Git-versioned Markdown knowledge plus a task queue with atomic claims, per-space ACL, audit log and human approval, so Claude, ChatGPT and other agents can hand work to each other.",
+   "lang": "python",
+   "scope": "local",
+   "os": "linux",
+   "official": true,
    "installed": false,
    "local_name": null
   },
@@ -31225,6 +32185,18 @@
    "lang": "python",
    "scope": "cloud",
    "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "Cehha79/aka-recht",
+   "repo": "https://github.com/Cehha79/aka-recht",
+   "category": "Legal",
+   "desc": "Local case-file manager for your own legal matters under German law: documents, parties, timeline and deadline calculation per §§ 187, 188, 193 BGB. 36 tools, writes only after explicit confirmation, Python standard library only.",
+   "lang": "python",
+   "scope": "local",
+   "os": "macos",
    "official": false,
    "installed": false,
    "local_name": null
@@ -31342,6 +32314,18 @@
    "repo": "https://github.com/lmaniraruta/license-verify-mcp",
    "category": "Legal",
    "desc": "Verify a US contractor's license, surety bond and insurance from state data (Washington L&I, California CSLB).",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "mambalabsdev/mcp-expert-witness-directory",
+   "repo": "https://github.com/mambalabsdev/mcp-expert-witness-directory",
+   "category": "Legal",
+   "desc": "Finds expert witnesses and medico-legal assessors in the United States and Australia from 18 public directories, deduplicated into one record per person with specialties mapped to one taxonomy.",
    "lang": "typescript",
    "scope": "cloud",
    "os": null,
@@ -31554,6 +32538,18 @@
    "local_name": null
   },
   {
+   "name": "HasData/google-maps-mcp",
+   "repo": "https://github.com/HasData/google-maps-mcp",
+   "category": "Location-Services",
+   "desc": "Remote MCP server for Google Maps: place search and place details, reviews, photos, posts and contributor history, as JSON, with no Google Cloud project to set up.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "HasData/yelp-mcp",
    "repo": "https://github.com/HasData/yelp-mcp",
    "category": "Location-Services",
@@ -31572,6 +32568,18 @@
    "desc": "Long-term flood-risk bands for England by postcode from Environment Agency open data.",
    "lang": "typescript",
    "scope": "local",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "aneal99/datafordeler-dar-mcp",
+   "repo": "https://github.com/aneal99/datafordeler-dar-mcp",
+   "category": "Location-Services",
+   "desc": "Danish addresses from Danmarks Adresseregister (DAR) on Datafordeleren, the DAWA replacement: lookup, street and address prefix search, WGS84 coordinates.",
+   "lang": "typescript",
+   "scope": "cloud",
    "os": null,
    "official": false,
    "installed": false,
@@ -31633,6 +32641,18 @@
    "lang": "python",
    "scope": "cloud",
    "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "birkskyum/maplibre-mcp",
+   "repo": "https://github.com/birkskyum/maplibre-mcp",
+   "category": "Location-Services",
+   "desc": "Render, validate and debug MapLibre map styles, with vector tile inspection, style spec and GL JS API lookups, and a live map that redraws as the agent edits the style.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
    "official": false,
    "installed": false,
    "local_name": null
@@ -32202,6 +33222,30 @@
    "local_name": null
   },
   {
+   "name": "A1-x-Tech/mcp-google-search-console",
+   "repo": "https://github.com/A1-x-Tech/mcp-google-search-console",
+   "category": "Marketing",
+   "desc": "Google Search Console: analyze search performance, inspect URL indexing and manage sitemaps.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "A1-x-Tech/mcp-google-tagmanager",
+   "repo": "https://github.com/A1-x-Tech/mcp-google-tagmanager",
+   "category": "Marketing",
+   "desc": "Google Tag Manager: inspect containers, prepare workspace changes and publish when ready.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "A1-x-Tech/mcp-yandex-audience",
    "repo": "https://github.com/A1-x-Tech/mcp-yandex-audience",
    "category": "Marketing",
@@ -32306,6 +33350,18 @@
    "scope": "cloud",
    "os": null,
    "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "afanasenkoa/instavision-mcp",
+   "repo": "https://github.com/afanasenkoa/instavision-mcp",
+   "category": "Marketing",
+   "desc": "InstaVision Instagram creator and lead discovery: find accounts by niche, city, follower range or lookalike accounts, estimate credits, run searches and export the results.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
+   "official": true,
    "installed": false,
    "local_name": null
   },
@@ -32582,6 +33638,18 @@
    "scope": "local",
    "os": "macos",
    "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "Otha-Labs/persuasion-mcp",
+   "repo": "https://github.com/Otha-Labs/persuasion-mcp",
+   "category": "Marketing",
+   "desc": "Plan, check and fix marketing copy against the nine questions every reader asks, with 766 persuasion techniques from real ads, copy diagnostics, headline and claim checks, and A/B test math. Free, no API key, hosted at https://taxonomy.coppica.com/mcp.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
+   "official": true,
    "installed": false,
    "local_name": null
   },
@@ -33102,6 +34170,18 @@
    "local_name": null
   },
   {
+   "name": "qaimos/storeshots-mcp",
+   "repo": "https://github.com/qaimos/storeshots-mcp",
+   "category": "Marketing",
+   "desc": "Turn raw app screenshots into App Store and Google Play marketing screenshots: 5 styles, iPhone/Android/iPad frames, every required store size, and PNG/ZIP download.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "qr-maker-io/mcp-server",
    "repo": "https://github.com/qr-maker-io/mcp-server",
    "category": "Marketing",
@@ -33162,6 +34242,18 @@
    "local_name": null
   },
   {
+   "name": "seocombat/clipwright-mcp",
+   "repo": "https://github.com/seocombat/clipwright-mcp",
+   "category": "Marketing",
+   "desc": "Make UGC-style video ads without filming: tell your AI assistant what to say and get a vertical clip of a realistic actor saying it, ready for TikTok, Reels or Shorts. Pick or describe an actor, choose a voice from samples, and see the price before rendering. It also makes faceless videos from a scr",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
+   "official": true,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "SEOcrawl/seocrawl-mcp",
    "repo": "https://github.com/SEOcrawl/seocrawl-mcp",
    "category": "Marketing",
@@ -33194,6 +34286,18 @@
    "scope": "cloud",
    "os": "macos",
    "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "SpikeyCoder/website-auditor-mcp",
+   "repo": "https://github.com/SpikeyCoder/website-auditor-mcp",
+   "category": "Marketing",
+   "desc": "Official Website Auditor server: checks how often ChatGPT, Claude, Gemini and Perplexity name a business, which competitors they name instead and which sources they cite, with competitor comparison, weekly tracking, prioritized fixes, JSON-LD drafts and security and performance audits. Free sample a",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": true,
    "installed": false,
    "local_name": null
   },
@@ -33450,6 +34554,30 @@
    "local_name": null
   },
   {
+   "name": "dockndevai/mcp-grafana",
+   "repo": "https://github.com/dockndevai/mcp-grafana",
+   "category": "Monitoring",
+   "desc": "Safe-by-default MCP server for Grafana: search & read dashboards and the dashboard JSON model, query datasources (Prometheus/Loki/SQL via the unified query API), and inspect alert rules & annotations; in higher modes, create/update dashboards and folders, write annotations, and delete. Read-only by ",
+   "lang": "typescript",
+   "scope": "local",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "A1-x-Tech/mcp-google-crux",
+   "repo": "https://github.com/A1-x-Tech/mcp-google-crux",
+   "category": "Monitoring",
+   "desc": "Google CrUX: real-user Core Web Vitals with mobile and desktop comparison and 40-week trends.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "adanb13/cirdan",
    "repo": "https://github.com/adanb13/cirdan",
    "category": "Monitoring",
@@ -33505,6 +34633,18 @@
    "lang": "typescript",
    "scope": "cloud",
    "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "andrewbabu/loggly-mcp",
+   "repo": "https://github.com/andrewbabu/loggly-mcp",
+   "category": "Monitoring",
+   "desc": "Read-only Loggly search and analytics with aggregation-first traffic tools and IP intelligence (RDAP, GreyNoise, AbuseIPDB).",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
    "official": false,
    "installed": false,
    "local_name": null
@@ -33698,6 +34838,18 @@
    "scope": "cloud",
    "os": "macos",
    "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "fclairamb/solidping",
+   "repo": "https://github.com/fclairamb/solidping",
+   "category": "Monitoring",
+   "desc": "Uptime monitoring over MCP. List and create checks, read incidents and results, manage maintenance windows and status pages. Self-hosted single Go binary, 40 check types, probes in several regions.",
+   "lang": "go",
+   "scope": "cloud",
+   "os": null,
+   "official": true,
    "installed": false,
    "local_name": null
   },
@@ -34014,6 +35166,18 @@
    "local_name": null
   },
   {
+   "name": "saxonnicholls/super-log",
+   "repo": "https://github.com/saxonnicholls/super-log",
+   "category": "Monitoring",
+   "desc": "Read-only access to a local dev bench that interleaves every log stream on one timeline: tail and search live streams, search the on-disk journal, wait for an event, and read per-topic guides for unfamiliar topics. No API key, no daemon of its own, `npx -y @super-log/mcp`.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "seancrecord/scvd-general-store-repo (scvd-tab)",
    "repo": "https://github.com/seancrecord/scvd-general-store-repo/tree/main/tab",
    "category": "Monitoring",
@@ -34134,6 +35298,18 @@
    "local_name": null
   },
   {
+   "name": "ni-c/healthchecks-mcp",
+   "repo": "https://github.com/ni-c/healthchecks-mcp",
+   "category": "Monitoring",
+   "desc": "Healthchecks cron and uptime monitoring: see which scheduled jobs are late or down, read the output a failing job reported with its ping, and create, pause or adjust checks. Works against healthchecks.io or a self-hosted instance. `npx -y healthchecks-mcp`",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "Oluwatunmise-olat/mcp-server-logs-sieve",
    "repo": "https://github.com/Oluwatunmise-olat/mcp-server-logs-sieve",
    "category": "Monitoring",
@@ -34187,6 +35363,18 @@
    "category": "Monitoring",
    "desc": "Query Grafana Loki directly with a discovery-first workflow: labels, values, series and LogQL queries, without requiring Grafana.",
    "lang": "go",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "igorolv/loki-mcp-server",
+   "repo": "https://github.com/igorolv/loki-mcp-server",
+   "category": "Monitoring",
+   "desc": "Read-only Grafana Loki (2.6.1 and 3.x) for agents: label and stream discovery, bounded LogQL pages, counts by label or time bucket, and log export; several stands per server.",
+   "lang": "java",
    "scope": "local",
    "os": "macos",
    "official": false,
@@ -34790,6 +35978,18 @@
    "scope": "local",
    "os": "macos",
    "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "frelo/fvc-mcp",
+   "repo": "https://github.com/frelo/fvc-mcp",
+   "category": "Multimedia-Process",
+   "desc": "Search, view and tag a local video library cataloged by Fast Video Cataloger: transcripts, scene thumbnails, visual search, keywords and bins.",
+   "lang": "csharp",
+   "scope": "local",
+   "os": "windows",
+   "official": true,
    "installed": false,
    "local_name": null
   },
@@ -35406,6 +36606,18 @@
    "local_name": null
   },
   {
+   "name": "Mohabdo21/linux-mcp",
+   "repo": "https://github.com/Mohabdo21/linux-mcp",
+   "category": "Os-Automation",
+   "desc": "A Linux system monitoring MCP server providing real-time CPU, memory, disk, network, processes, Docker, systemd, security audit, and hardware info via STDIO transport. Install: download from GitHub Releases or `go install github.com/Mohabdo21/linux-mcp@latest`.",
+   "lang": "go",
+   "scope": "local",
+   "os": "linux",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "juergenkoller-software/nemeton-mcp",
    "repo": "https://github.com/juergenkoller-software/nemeton-mcp",
    "category": "Os-Automation",
@@ -35814,6 +37026,18 @@
    "local_name": null
   },
   {
+   "name": "fenbs-ai/fenbs-mcp",
+   "repo": "https://github.com/fenbs-ai/fenbs-mcp",
+   "category": "Product-Management",
+   "desc": "fenbs project board where people and AI assistants are members with roles: tasks, decisions with sign-off, testing notes and project rules, every change signed. Remote server at https://fenbs.ai/api/mcp or `npx -y fenbs-mcp`.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
+   "official": true,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "HasData/redfin-mcp",
    "repo": "https://github.com/HasData/redfin-mcp",
    "category": "Real-Estate",
@@ -36006,6 +37230,18 @@
    "local_name": null
   },
   {
+   "name": "amos689/paper-preflight",
+   "repo": "https://github.com/amos689/paper-preflight",
+   "category": "Research",
+   "desc": "Checks every reference of a LaTeX paper against Crossref, dblp, arXiv, DataCite, PubMed and OpenAlex records: whether each cited work exists, matches its metadata and was not retracted, with no LLM in the verdict.",
+   "lang": "python",
+   "scope": "cloud",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "ankitkapur1992-hlido/hlido-mcp",
    "repo": "https://github.com/ankitkapur1992-hlido/hlido-mcp",
    "category": "Research",
@@ -36049,6 +37285,18 @@
    "lang": "typescript",
    "scope": "cloud",
    "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "cluefinch/mcp-server",
+   "repo": "https://github.com/cluefinch/mcp-server",
+   "category": "Research",
+   "desc": "Cluefinch MCP provides Deep Research infrastructure for AI agents: web search, incremental page reading, source-link navigation, and multi-source evidence collection while the agent remains in control of planning and reasoning.",
+   "lang": "python",
+   "scope": "local",
+   "os": "macos",
    "official": false,
    "installed": false,
    "local_name": null
@@ -36390,6 +37638,18 @@
    "local_name": null
   },
   {
+   "name": "Scormave/gramps-web-mcp",
+   "repo": "https://github.com/Scormave/gramps-web-mcp",
+   "category": "Research",
+   "desc": "Gramps Web genealogy: search and edit family tree records, explore ancestors, descendants, relationships and timelines, and read media with privacy-aware previews. Includes a read-only mode and Claude Desktop bundles.",
+   "lang": "csharp",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "sh-patterson/legiscan-mcp",
    "repo": "https://github.com/sh-patterson/legiscan-mcp",
    "category": "Research",
@@ -36678,6 +37938,18 @@
    "local_name": null
   },
   {
+   "name": "A1-x-Tech/mcp-google-custom-search",
+   "repo": "https://github.com/A1-x-Tech/mcp-google-custom-search",
+   "category": "Search",
+   "desc": "Google Custom Search JSON API: web and image search through a Programmable Search Engine.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "Grubbomatic/crawl-readiness-mcp",
    "repo": "https://github.com/Grubbomatic/crawl-readiness-mcp",
    "category": "Search",
@@ -36694,6 +37966,18 @@
    "repo": "https://github.com/HasData/bing-mcp",
    "category": "Search",
    "desc": "Bing search results as JSON: organic results, ads and the Copilot answer, targeted by market, country, language and device.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "HasData/google-images-mcp",
+   "repo": "https://github.com/HasData/google-images-mcp",
+   "category": "Search",
+   "desc": "Remote MCP server for Google Images: image results with source pages, thumbnails and full-resolution URLs, filtered by size, colour and type, as JSON.",
    "lang": "typescript",
    "scope": "cloud",
    "os": null,
@@ -36721,6 +38005,18 @@
    "lang": "typescript",
    "scope": "cloud",
    "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "AgentiLoop/pagewire-mcp",
+   "repo": "https://github.com/AgentiLoop/pagewire-mcp",
+   "category": "Search",
+   "desc": "Read any public web page as clean Markdown, page metadata, or a page plus 4 same-site pages; pay per call in USDC via x402, no API key.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
    "official": false,
    "installed": false,
    "local_name": null
@@ -37391,6 +38687,18 @@
    "category": "Search",
    "desc": "Real-time web search and crawling via the Crawleo Search and Crawl API.",
    "lang": "python",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "HasData/indeed-mcp",
+   "repo": "https://github.com/HasData/indeed-mcp",
+   "category": "Search",
+   "desc": "Remote MCP server for Indeed: job listings by keyword and location with salary, company and posting date, plus full job postings, as JSON.",
+   "lang": "typescript",
    "scope": "cloud",
    "os": null,
    "official": false,
@@ -38298,6 +39606,18 @@
    "local_name": null
   },
   {
+   "name": "litportnet/free-proxy-mcp",
+   "repo": "https://github.com/litportnet/free-proxy-mcp",
+   "category": "Search",
+   "desc": "Verified free HTTP, SOCKS4 and SOCKS5 proxy lists from Litport, filtered by country, anonymity, latency and uptime. Returns records only; no API key needed.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": true,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "luminati-io/brightdata-mcp",
    "repo": "https://github.com/luminati-io/brightdata-mcp",
    "category": "Search",
@@ -38326,6 +39646,18 @@
    "repo": "https://github.com/mambalabsdev/mcp-ai-tooling-detector",
    "category": "Search",
    "desc": "Detect whether a company only claims AI, deploys AI tooling on its site or charges for AI, returning an AI maturity tier with supporting evidence.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "mambalabsdev/mcp-company-change-event-feed",
+   "repo": "https://github.com/mambalabsdev/mcp-company-change-event-feed",
+   "category": "Search",
+   "desc": "Monitor company changes across hiring, tech stack, funding, firmographics, and social since the last run. Returns only deltas as typed change events.",
    "lang": "typescript",
    "scope": "cloud",
    "os": null,
@@ -38434,6 +39766,18 @@
    "repo": "https://github.com/mambalabsdev/mcp-gtm-tech-stack-signal-scraper",
    "category": "Search",
    "desc": "Detect CRM, sequencer and marketing automation tools from a company domain as boolean GTM tool signals for Clay enrichment.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "mambalabsdev/mcp-job-board-keyword-signal-scanner",
+   "repo": "https://github.com/mambalabsdev/mcp-job-board-keyword-signal-scanner",
+   "category": "Search",
+   "desc": "Scan job boards on five ATS platforms for configurable role categories (GTM, engineering, finance, ops), returning keyword match counts and signal strength.",
    "lang": "typescript",
    "scope": "cloud",
    "os": null,
@@ -39426,6 +40770,18 @@
    "local_name": null
   },
   {
+   "name": "XZXZZX-Ai/bilibili-mcp",
+   "repo": "https://github.com/XZXZZX-Ai/bilibili-mcp",
+   "category": "Search",
+   "desc": "Local-first Bilibili MCP server for video metadata, subtitles and structured transcripts, chapters, popular comments, and optional local ASR fallback. Published on npm as `@xzxzzx/bilibili-mcp` with bilingual documentation.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "yamanoku/baseline-mcp-server",
    "repo": "https://github.com/yamanoku/baseline-mcp-server",
    "category": "Search",
@@ -39577,6 +40933,30 @@
    "lang": "python",
    "scope": "local",
    "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "double2dev/boltpatternhq-mcp",
+   "repo": "https://github.com/double2dev/boltpatternhq-mcp",
+   "category": "Search",
+   "desc": "Official MCP Server for BoltPatternHQ providing AI assistants with instant automotive wheel fitment, PCD, center bore, and offset reference data.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "tunahanaliozturk/derbent",
+   "repo": "https://github.com/tunahanaliozturk/derbent",
+   "category": "Security",
+   "desc": "One local gate for Claude Code, Codex, Copilot CLI and Antigravity: allow, deny and ask rules over MCP and built-in tool calls, approvals from a terminal UI, and hash-chained receipts.",
+   "lang": "go",
+   "scope": "local",
+   "os": "macos",
    "official": false,
    "installed": false,
    "local_name": null
@@ -40674,6 +42054,18 @@
    "local_name": null
   },
   {
+   "name": "echelongraph/echelongraph-mcp",
+   "repo": "https://github.com/echelongraph/echelongraph-mcp",
+   "category": "Security",
+   "desc": "Keyless, read-only CVE and internet-exposure intelligence: CVE lookup and search, CISA KEV, EPSS history, CWE, vendor advisories (MSRC, Red Hat, Cisco, GHSA and more), SBOM and manifest checks, and aggregate exposure radars. Use the hosted endpoint (mcp.echelongraph.io) with no install, or run local",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
+   "official": true,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "elberacasa/umbra",
    "repo": "https://github.com/elberacasa/umbra",
    "category": "Security",
@@ -40717,6 +42109,18 @@
    "lang": "python",
    "scope": "local",
    "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "Farenhytee/database-sentinel",
+   "repo": "https://github.com/Farenhytee/database-sentinel",
+   "category": "Security",
+   "desc": "Read-only security audit for Supabase. Four tools surface RLS gaps, permissive policies, exposed functions and grants; an `audit` prompt returns scored findings with fix SQL.",
+   "lang": "python",
+   "scope": "cloud",
+   "os": null,
    "official": false,
    "installed": false,
    "local_name": null
@@ -41142,6 +42546,18 @@
    "local_name": null
   },
   {
+   "name": "mandarelabs/mandare",
+   "repo": "https://github.com/mandarelabs/mandare",
+   "category": "Security",
+   "desc": "Accountability for AI agent fleets: verify a signed, hash-chained ledger, check budgets, kill an agent, and issue passports and mandates, all through the local CLI.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": true,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "mariocandela/beelzebub",
    "repo": "https://github.com/mariocandela/beelzebub",
    "category": "Security",
@@ -41334,6 +42750,18 @@
    "local_name": null
   },
   {
+   "name": "petrovicistefan/mcp-security-guard",
+   "repo": "https://github.com/petrovicistefan/mcp-security-guard",
+   "category": "Security",
+   "desc": "Audit the MCP servers you use against the OWASP MCP Top 10: tool poisoning, rug pulls, shadowing, secrets and supply-chain risk, with runtime guards, approved-server policy and adversarial testing for server authors.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "piiiico/proof-of-commitment",
    "repo": "https://github.com/piiiico/proof-of-commitment",
    "category": "Security",
@@ -41363,6 +42791,18 @@
    "category": "Security",
    "desc": "Read-only MISP threat intelligence (events, attributes, search, tags, feeds, galaxies) with prompt injection scanning of every response.",
    "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "privacyfence/privacyfence",
+   "repo": "https://github.com/privacyfence/privacyfence",
+   "category": "Security",
+   "desc": "Privacy and approval gateway between AI assistants and Gmail, Drive, Slack, Salesforce, Jira and more: human approval for sensitive reads and writes, local PII detection and an audit log.",
+   "lang": "python",
    "scope": "local",
    "os": "macos",
    "official": false,
@@ -41820,6 +43260,18 @@
    "desc": "Admission control for agent file edits: checks syntax, structural-cost regressions and workspace boundaries, returning BLOCK, WARN or PASS verdicts.",
    "lang": "rust",
    "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "YugantM/hvtracker-mcp",
+   "repo": "https://github.com/YugantM/hvtracker-mcp",
+   "category": "Security",
+   "desc": "Pre-connect supply-chain trust checks for AI agents, frameworks and MCP servers: evidence-based HVTrust scores and verdicts from public signals (package provenance, OSSF Scorecard, signed commits, advisories), plus `scan_stack` to check a whole requirements.txt, package.json or MCP client config at ",
+   "lang": "python",
+   "scope": "cloud",
    "os": "macos",
    "official": false,
    "installed": false,
@@ -42414,6 +43866,30 @@
    "local_name": null
   },
   {
+   "name": "Jimil-Joshi/blastradius-mcp",
+   "repo": "https://github.com/Jimil-Joshi/blastradius-mcp",
+   "category": "Security",
+   "desc": "Zero-trust security proxy, pre-execution blast radius simulation, DLP secret redaction, and cryptographic audit logging for MCP.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "verax-ai/verax",
+   "repo": "https://github.com/verax-ai/verax",
+   "category": "Security",
+   "desc": "Sits between an agent and its tools: every call passes a policy gate and leaves a signed decision record before it runs, a refusal is recorded like an approval, payments wait for an operator on the same machine, and the ledger stays there and verifies offline. Apache-2.0.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "windows",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "HasData/instagram-mcp",
    "repo": "https://github.com/HasData/instagram-mcp",
    "category": "Social-Media",
@@ -42558,6 +44034,18 @@
    "local_name": null
   },
   {
+   "name": "azeemkafridi/bulkpublish-api",
+   "repo": "https://github.com/azeemkafridi/bulkpublish-api",
+   "category": "Social-Media",
+   "desc": "Schedule and publish posts across 15 social networks from one place. Hosted server at `mcp.bulkpublish.com/mcp` with tools for posts, schedules, media uploads, labels, approvals and analytics.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "BelleKou/mcp-viral-transformer",
    "repo": "https://github.com/BelleKou/mcp-viral-transformer",
    "category": "Social-Media",
@@ -42637,6 +44125,18 @@
    "lang": "typescript",
    "scope": "local",
    "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "gigatypeaura/memecorp-mcp",
+   "repo": "https://github.com/gigatypeaura/memecorp-mcp",
+   "category": "Social-Media",
+   "desc": "Unofficial MCP for memecorp.us: read the feed; with an agent API key, post, react, comment, and set a persona.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
    "official": false,
    "installed": false,
    "local_name": null
@@ -42842,6 +44342,18 @@
    "scope": "cloud",
    "os": null,
    "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "markaestro/markaestro-agents",
+   "repo": "https://github.com/markaestro/markaestro-agents",
+   "category": "Social-Media",
+   "desc": "Schedule, publish and measure posts on Facebook, Instagram, TikTok, LinkedIn, Threads, Pinterest and X for one brand or many, with analytics and Evergreen queues. Hosted server with OAuth sign-in, or the `@markaestro/mcp` npm package.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": true,
    "installed": false,
    "local_name": null
   },
@@ -43278,6 +44790,18 @@
    "local_name": null
   },
   {
+   "name": "PattrickChenforclaudeuse/mythsensus-mcp",
+   "repo": "https://github.com/PattrickChenforclaudeuse/mythsensus-mcp",
+   "category": "Spirituality-And-Esoterica",
+   "desc": "Synthesizes 26 ancient divination systems (BaZi, Vedic Jyotish, Western, Nine Star Ki, Thai Seven Number, Mayan, Norse Runes, Human Design and 18 more) into a single consensus Cosmic Score showing where the traditions agree vs contradict. Deterministic (no LLM in the math), fully local — no birth da",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "socraticsurge/telugu-calendar-utilities",
    "repo": "https://github.com/socraticsurge/telugu-calendar-utilities",
    "category": "Spirituality-And-Esoterica",
@@ -43590,6 +45114,18 @@
    "local_name": null
   },
   {
+   "name": "odds-api-io/odds-api-mcp-server",
+   "repo": "https://github.com/odds-api-io/odds-api-mcp-server",
+   "category": "Sports",
+   "desc": "Official Odds-API.io server: real-time and historical sports betting odds from 365+ bookmakers across 34 sports, with events, value bets, arbitrage and dropping odds.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": true,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "partymola/bosch-flow-mcp",
    "repo": "https://github.com/partymola/bosch-flow-mcp",
    "category": "Sports",
@@ -43634,6 +45170,18 @@
    "scope": "cloud",
    "os": null,
    "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "Propertyscout001/puntersedge-mcp",
+   "repo": "https://github.com/Propertyscout001/puntersedge-mcp",
+   "category": "Sports",
+   "desc": "Live Australian racing and sports odds from 14 AU bookmakers for AI assistants: next races with every bookmaker's price per runner, best price, settled results and market movers, each price stamped with its age.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
+   "official": true,
    "installed": false,
    "local_name": null
   },
@@ -43938,6 +45486,18 @@
    "local_name": null
   },
   {
+   "name": "oneappsworld/callchatsyn-mcp",
+   "repo": "https://github.com/oneappsworld/callchatsyn-mcp",
+   "category": "Support-And-Service-Management",
+   "desc": "Small-business customer service via CallChatSyn: answer customer questions from the business's own FAQs (English/Chinese), list open appointment times in its time zone, and book appointments.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": true,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "raalarcon9705/jira-mcp",
    "repo": "https://github.com/raalarcon9705/jira-mcp",
    "category": "Support-And-Service-Management",
@@ -44194,6 +45754,18 @@
    "repo": "https://github.com/HasData/airbnb-mcp",
    "category": "Travel-And-Transportation",
    "desc": "Search Airbnb stays by location, dates and guests, and read full listing details (price, amenities, host, reviews) as JSON.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "HasData/google-hotels-mcp",
+   "repo": "https://github.com/HasData/google-hotels-mcp",
+   "category": "Travel-And-Transportation",
+   "desc": "Remote MCP server for Google Hotels: search hotels and vacation rentals for a stay with rates, ratings and amenities, then open one property with the rate at every booking site Google compares, as JSON.",
    "lang": "typescript",
    "scope": "cloud",
    "os": null,
@@ -44558,6 +46130,18 @@
    "scope": "cloud",
    "os": null,
    "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "negm17111995/mcp-server",
+   "repo": "https://github.com/negm17111995/mcp-server",
+   "category": "Travel-And-Transportation",
+   "desc": "MAQAMI hotel and flight search with live rates and hotel details, then a secure checkout link on book.maqami.co.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": true,
    "installed": false,
    "local_name": null
   },
@@ -45042,6 +46626,18 @@
    "local_name": null
   },
   {
+   "name": "klarluft/gitwarren-app",
+   "repo": "https://github.com/klarluft/gitwarren-app",
+   "category": "Version-Control",
+   "desc": "Local code review for you and your coding agent: the agent opens a review of its changes, you comment on lines, it replies and resolves. Reads the git worktree directly, uncommitted work included; nothing leaves your machine.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": true,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "kopfrechner/gitlab-mr-mcp",
    "repo": "https://github.com/kopfrechner/gitlab-mr-mcp",
    "category": "Version-Control",
@@ -45246,6 +46842,42 @@
    "local_name": null
   },
   {
+   "name": "A1-x-Tech/mcp-google-docs",
+   "repo": "https://github.com/A1-x-Tech/mcp-google-docs",
+   "category": "Workplace-And-Productivity",
+   "desc": "Google Docs API: read documents as text, structure or Markdown, and edit ranges, styles, tables and comments.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "A1-x-Tech/mcp-google-forms",
+   "repo": "https://github.com/A1-x-Tech/mcp-google-forms",
+   "category": "Workplace-And-Productivity",
+   "desc": "Google Forms: create and publish forms, manage questions and read responses.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "A1-x-Tech/mcp-google-slides",
+   "repo": "https://github.com/A1-x-Tech/mcp-google-slides",
+   "category": "Workplace-And-Productivity",
+   "desc": "Google Slides API: create and edit presentations, slides, shapes, tables and images, speaker notes and exports.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "adacreativeco/ada-turbo-ai-mcp",
    "repo": "https://github.com/adacreativeco/ada-turbo-ai-mcp",
    "category": "Workplace-And-Productivity",
@@ -45278,6 +46910,18 @@
    "scope": "local",
    "os": "macos",
    "official": true,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "layergen/eodly-mcp",
+   "repo": "https://github.com/layergen/eodly-mcp",
+   "category": "Workplace-And-Productivity",
+   "desc": "Read your team's end-of-day reports in Eodly: who shipped with GitHub and Linear proof, who is silent, who is slipping, plus the team roster.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
    "installed": false,
    "local_name": null
   },
@@ -45366,6 +47010,18 @@
    "local_name": null
   },
   {
+   "name": "Arkanji/iwork-studio",
+   "repo": "https://github.com/Arkanji/iwork-studio",
+   "category": "Workplace-And-Productivity",
+   "desc": "Create, edit, design and export Apple Numbers, Keynote and Pages files: designed decks with chart and table slides, brand kits and a design review. Every write is verified and undoable; Arabic/RTL-safe.",
+   "lang": "python",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "2nd1st/open-mcp-apps",
    "repo": "https://github.com/2nd1st/open-mcp-apps",
    "category": "Workplace-And-Productivity",
@@ -45397,6 +47053,18 @@
    "lang": "typescript",
    "scope": "local",
    "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "b52tot/workbuddy-board",
+   "repo": "https://github.com/b52tot/workbuddy-board",
+   "category": "Workplace-And-Productivity",
+   "desc": "Task board for MCP agents that lives on your desktop: four columns for agents to write into, progress tracking, stall detection and an append-only event log, with an always-on-top widget so you can watch a run without switching windows.",
+   "lang": "python",
+   "scope": "local",
+   "os": "windows",
    "official": false,
    "installed": false,
    "local_name": null
@@ -45750,6 +47418,18 @@
    "local_name": null
   },
   {
+   "name": "gomission/mcp",
+   "repo": "https://github.com/gomission/mcp",
+   "category": "Workplace-And-Productivity",
+   "desc": "Mission's MCP proxy holds consequential tool calls before execution and records the exact action for review.",
+   "lang": "typescript",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "Grey-Iris/easy-notion-mcp",
    "repo": "https://github.com/Grey-Iris/easy-notion-mcp",
    "category": "Workplace-And-Productivity",
@@ -45874,6 +47554,18 @@
    "repo": "https://github.com/khaoss85/mcp-orchestro",
    "category": "Workplace-And-Productivity",
    "desc": "Task management for Claude Code with a visual Kanban board and orchestration for product teams and developers.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "lexmount/artifact-site",
+   "repo": "https://github.com/lexmount/artifact-site",
+   "category": "Workplace-And-Productivity",
+   "desc": "One place for every AI agent's pages and docs: publish HTML, build folders, ZIPs and PDFs as sandboxed, versioned share links, then search, read and update them. Hosted or self-hosted; remote MCP with OAuth, or local via `npx @artifact-site/cli mcp`.",
    "lang": "typescript",
    "scope": "cloud",
    "os": "macos",
@@ -46398,6 +48090,18 @@
    "local_name": null
   },
   {
+   "name": "vinayvobbili/jobwatch",
+   "repo": "https://github.com/vinayvobbili/jobwatch",
+   "category": "Workplace-And-Productivity",
+   "desc": "Watch company job boards (Greenhouse, Lever, Ashby, Workable, Workday, Eightfold, Jibe, Rippling) for new roles, rank them for you, and track applications, follow-ups and interview prep. Never applies on its own.",
+   "lang": "python",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
    "name": "workopia/workopia-mcp",
    "repo": "https://github.com/workopia/workopia-mcp",
    "category": "Workplace-And-Productivity",
@@ -46594,6 +48298,18 @@
    "repo": "https://github.com/ilyautov/hh-mcp-ru",
    "category": "Workplace-And-Productivity",
    "desc": "HeadHunter (hh.ru) API: vacancy search and publishing, applications, invitations, resumes and salary statistics, with a read/write/destructive safety gate.",
+   "lang": "python",
+   "scope": "local",
+   "os": "macos",
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "adityatiwari101104/contribos",
+   "repo": "https://github.com/adityatiwari101104/contribos",
+   "category": "Workplace-And-Productivity",
+   "desc": "Zero-dependency open-source contribution companion: repo rules and AI policy radar, evidence-backed issue briefs, pre-submit checks, and review coaching.",
    "lang": "python",
    "scope": "local",
    "os": "macos",
@@ -47386,6 +49102,18 @@
    "repo": "https://github.com/HenryHaoson/Yuque-MCP-Server",
    "category": "Other-Tools-And-Integrations",
    "desc": "Yuque integration: manage documents, work with knowledge bases, search content and access analytics data.",
+   "lang": "typescript",
+   "scope": "cloud",
+   "os": null,
+   "official": false,
+   "installed": false,
+   "local_name": null
+  },
+  {
+   "name": "yehuoshun/yuque-ai-mcp",
+   "repo": "https://github.com/yehuoshun/yuque-ai-mcp",
+   "category": "Other-Tools-And-Integrations",
+   "desc": "Full-featured Yuque (语雀) MCP server with 62 fine-grained tools across 13 domains — documents, knowledge bases, TOC, search, statistics, notes, recycle bin, upload, boards, book stacks, web API, user and group management. Dual stdio + HTTP transport.",
    "lang": "typescript",
    "scope": "cloud",
    "os": null,
@@ -48928,6 +50656,18 @@
    "official": false,
    "installed": true,
    "local_name": "kordoc"
+  },
+  {
+   "name": "rea",
+   "repo": "",
+   "category": "本地自建",
+   "desc": "素月自建/本地定制的 MCP（config/mcp.json 已登记）",
+   "lang": null,
+   "scope": "local",
+   "os": "windows",
+   "official": false,
+   "installed": true,
+   "local_name": "rea"
   },
   {
    "name": "urara",

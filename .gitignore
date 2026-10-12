@@ -142,3 +142,7 @@ workspace/reflection/
 workspace/tools/
 workspace/explore/dig/_cm_tree.json
 workspace/explore/mem_audit.py
+
+# explore tmp scripts (suyue, 2026-10-13)
+workspace/explore/tmp/
+_battest_out.txt
