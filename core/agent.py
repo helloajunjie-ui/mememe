@@ -1061,6 +1061,11 @@ class Agent:
                  ".mp4", ".mp3", ".wav")
     _ART_IMG_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp")
     _MAX_ARTIFACTS = 6
+    _ART_VIDEO_EXTS = (".mp4", ".webm", ".mov", ".mkv")
+    _ART_AUDIO_EXTS = (".mp3", ".wav", ".m4a", ".ogg")
+    # 过程目录 / 过程文件名：不进交付区（2026-10-13 用户反馈：过程文件无需展示）
+    _ART_PROC_DIRS = ("explore", "dig", "backups", "logs", ".git")
+    _ART_PROC_NAMES = ("stages.md", "ledger.md", "readme.md", "plan.md", "notes.md", "todo.md")
 
     def _artifact_roots(self) -> List[str]:
         """允许展示的产物根：工作区 + webui 上传区 + 项目根（排除库目录）。"""
@@ -1076,7 +1081,12 @@ class Agent:
         return roots, proj
 
     def _collect_artifacts(self, result: Any) -> None:
-        """从工具结果递归提取产物路径（文件真实存在 + 扩展名白名单 + 根目录白名单）。"""
+        """从工具结果递归提取产物路径（文件真实存在 + 扩展名白名单 + 根目录白名单）。
+
+        2026-10-13 用户反馈「过程文件无需展示」：增加过程目录/过程文件名黑名单——
+        探索笔记、任务档案(stages.md)、台账(ledger.md)、dig 缓存等一律不进交付区，
+        只留用户真正想看的成品（图片/视频/文档）。
+        """
         if len(self.last_round_artifacts) >= self._MAX_ARTIFACTS:
             return
         try:
@@ -1126,8 +1136,23 @@ class Agent:
                                 allowed = True
                     if not allowed:
                         return
+                    # ---- 过程文件过滤（2026-10-13）：过程目录 / 过程文件名不进交付区 ----
+                    low = norm.lower()
+                    if any((os.sep + d + os.sep) in low for d in self._ART_PROC_DIRS):
+                        return
+                    if os.path.basename(low) in self._ART_PROC_NAMES:
+                        return
                     seen.add(norm)
-                    kind = "image" if ext in self._ART_IMG_EXTS else ("pdf" if ext == ".pdf" else "file")
+                    if ext in self._ART_IMG_EXTS:
+                        kind = "image"
+                    elif ext in self._ART_VIDEO_EXTS:
+                        kind = "video"
+                    elif ext in self._ART_AUDIO_EXTS:
+                        kind = "audio"
+                    elif ext == ".pdf":
+                        kind = "pdf"
+                    else:
+                        kind = "file"
                     self.last_round_artifacts.append({
                         "path": norm, "name": os.path.basename(norm), "kind": kind,
                     })
