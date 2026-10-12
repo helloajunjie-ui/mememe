@@ -238,10 +238,10 @@ func (g *Gateway) ScanAll() map[string]ScanSummary {
 		wg.Add(1)
 		go func(src Source) {
 			defer wg.Done()
-			models, err := g.FetchModelsFor(src.BaseURL, src.APIKey)
 			sum := ScanSummary{}
-			if err != nil {
-				sum.Error = err.Error()
+			models := src.Models
+			if len(models) == 0 {
+				sum.Error = "未配置模型白名单（source.models 为空），已跳过扫描"
 				results <- res{src.BaseURL, sum}
 				return
 			}
@@ -281,14 +281,8 @@ func (g *Gateway) ScanAll() map[string]ScanSummary {
 		out[r.base] = r.sum
 	}
 	g.health.Save()
-	// 回写各渠道可用模型列表（仅 ok）
-	_ = g.cfg.Update(func(c *LLMConfig) {
-		for i := range c.Sources {
-			if s, ok := out[strings.TrimRight(c.Sources[i].BaseURL, "/")]; ok {
-				c.Sources[i].Models = s.OkModels
-			}
-		}
-	})
+	// 注意：不回写 source.Models —— 它是「扫描范围（白名单）」，
+	// 可用性以 health 表为准（OkModels）。避免探测失败/部分失败时白名单被裁剪收缩。
 	return out
 }
 
