@@ -1414,6 +1414,18 @@ function toggleArtifactPreview(btn, url, name) {
 }
 
 /* 产物渲染：图片直接显示（点击看大图）；文件按需展开预览、可下载 */
+/* 产物渲染（2026-10-13 重排）：图片/视频/音频直接看；其余文件→图标卡片（标题+本地打开+下载） */
+var _ART_ICONS = {pdf:"\uD83D\uDCD5",doc:"\uD83D\uDCD8",docx:"\uD83D\uDCD8",xls:"\uD83D\uDCD7",xlsx:"\uD83D\uDCD7",
+                  ppt:"\uD83D\uDCD9",pptx:"\uD83D\uDCD9",csv:"\uD83D\uDCCA",zip:"\uD83D\uDDDC",rar:"\uD83D\uDDDC",
+                  txt:"\uD83D\uDCDD",md:"\uD83D\uDCDD",html:"\uD83C\uDF10",json:"\uD83E\uDDFE",exe:"\u2699"};
+function _artExt(name){ var m=/\.([A-Za-z0-9]+)(?:\?|#|$)/.exec(name||""); return m?m[1].toLowerCase():""; }
+function _artIcon(name){ return _ART_ICONS[_artExt(name)] || "\uD83D\uDCCE"; }
+function _openLocal(url, name){
+  fetch("/api/open", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({url:url})})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if(!d || !d.ok){ alert("\u6253\u5f00\u5931\u8d25\uff1a" + ((d&&d.error)||"\u672a\u77e5\u9519\u8bef") + "\n" + name); } })
+    .catch(function(){ alert("\u6253\u5f00\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u786e\u8ba4 webui \u670d\u52a1\u5728\u8fd0\u884c"); });
+}
 function renderArtifacts(artifacts) {
   if (!artifacts || !artifacts.length) return;
   var wraps = document.querySelectorAll(".msg-wrap.bailing .bubble");
@@ -1422,24 +1434,36 @@ function renderArtifacts(artifacts) {
   var box = document.createElement("div");
   box.className = "artifact-box";
 
-  var imgs = artifacts.filter(function(a){ return a.kind === "image"; });
-  var files = artifacts.filter(function(a){ return a.kind !== "image"; });
+  var isMedia = function(a){ return a.kind === "image" || a.kind === "video" || a.kind === "audio"; };
+  var media = artifacts.filter(isMedia);
+  var files = artifacts.filter(function(a){ return !isMedia(a); });
 
-  if (imgs.length) {
-    var imgRow = document.createElement("div");
-    imgRow.className = "artifact-imgs";
-    imgs.forEach(function(art){
+  if (media.length) {
+    var row = document.createElement("div");
+    row.className = "artifact-imgs";
+    media.forEach(function(art){
       var card = document.createElement("div");
       card.className = "artifact";
-      var nm = escapeHtml(art.name || "图片");
-      card.innerHTML = '<a class="artifact-img" title="点击查看大图">'
-        + '<img src="'+art.url+'" alt="'+nm+'" loading="lazy"></a>'
+      var nm = escapeHtml(art.name || "\u5a92\u4f53");
+      var inner;
+      if (art.kind === "video") {
+        inner = '<video src="'+art.url+'" controls preload="metadata" style="max-width:100%;border-radius:8px;display:block"></video>';
+      } else if (art.kind === "audio") {
+        inner = '<audio src="'+art.url+'" controls preload="metadata" style="width:100%"></audio>';
+      } else {
+        inner = '<a class="artifact-img" title="\u70b9\u51fb\u67e5\u770b\u5927\u56fe"><img src="'+art.url+'" alt="'+nm+'" loading="lazy"></a>';
+      }
+      card.innerHTML = inner
         + '<div class="artifact-name">'+nm+'</div>'
-        + '<div class="artifact-actions"><a href="'+art.url+'" download="'+nm+'">下载</a></div>';
-      card.querySelector(".artifact-img").onclick = function(){ openArtifactModal(art.url); };
-      imgRow.appendChild(card);
+        + '<div class="artifact-actions"><a class="open-btn">\u6253\u5f00</a>'
+        + '<a href="'+art.url+'" download="'+nm+'">\u4e0b\u8f7d</a></div>';
+      if (art.kind === "image") {
+        card.querySelector(".artifact-img").onclick = function(){ openArtifactModal(art.url); };
+      }
+      card.querySelector(".open-btn").onclick = function(){ _openLocal(art.url, nm); };
+      row.appendChild(card);
     });
-    box.appendChild(imgRow);
+    box.appendChild(row);
   }
 
   if (files.length) {
@@ -1447,7 +1471,7 @@ function renderArtifacts(artifacts) {
     if (files.length > 2) {
       var toggle = document.createElement("div");
       toggle.className = "artifact-files-toggle";
-      toggle.innerHTML = '<span class="caret">▶</span>文件 · '+files.length+' 项（点击展开）';
+      toggle.innerHTML = '<span class="caret">\u25b8</span>\u6587\u4ef6 \u00b7 '+files.length+' \u9879\uff08\u70b9\u51fb\u5c55\u5f00\uff09';
       toggle.onclick = function(){
         toggle.classList.toggle("open");
         filesWrap.classList.toggle("open");
@@ -1462,22 +1486,19 @@ function renderArtifacts(artifacts) {
     files.forEach(function(art){
       var card = document.createElement("div");
       card.className = "artifact";
-      var nm = escapeHtml(art.name || "产物");
-      var isPdf = /\.pdf(\?|$)/i.test(art.url);
-      var icon = isPdf ? "📕" : "📄";
-      card.innerHTML = '<div class="artifact-file"><span class="artifact-icon">'+icon+'</span>'
+      var nm = escapeHtml(art.name || "\u4ea7\u7269");
+      card.innerHTML = '<div class="artifact-file"><span class="artifact-icon">'+_artIcon(art.name||"")+'</span>'
         + '<span class="artifact-name">'+nm+'</span></div>'
         + '<div class="artifact-actions">'
-        + '<a class="preview-btn">预览</a>'
-        + '<a href="'+art.url+'" download="'+nm+'">下载</a>'
+        + '<a class="open-btn" title="\u7528\u672c\u673a\u9ed8\u8ba4\u7a0b\u5e8f\u6253\u5f00">\u6253\u5f00</a>'
+        + '<a href="'+art.url+'" download="'+nm+'">\u4e0b\u8f7d</a>'
         + '</div>';
-      card.querySelector(".preview-btn").onclick = function(ev){ toggleArtifactPreview(ev.currentTarget, art.url, nm); };
+      card.querySelector(".open-btn").onclick = function(){ _openLocal(art.url, nm); };
       filesWrap.appendChild(card);
     });
   }
 
   host.appendChild(box);
-  maybeScroll();
 }
 
 function renderTaskError(panel, error) {

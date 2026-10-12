@@ -162,18 +162,82 @@ def _artifact_url(abspath: str) -> str:
     return None
 
 
-def _collect_task_artifacts(a) -> list:
-    """agent 本轮产物 → 带 URL 的展示卡片列表（图片/PDF/文件）。"""
-    out = []
+_RE_MD_LINK = re.compile(r"\[[^\]]*\]\(\s*([^)\s]+)\s*\)")
+_ART_KIND_MAP = {
+    ".png": "image", ".jpg": "image", ".jpeg": "image", ".gif": "image",
+    ".webp": "image", ".svg": "image", ".bmp": "image",
+    ".mp4": "video", ".webm": "video", ".mov": "video", ".mkv": "video",
+    ".mp3": "audio", ".wav": "audio", ".m4a": "audio", ".ogg": "audio",
+    ".pdf": "pdf",
+}
+
+
+def _collect_task_artifacts(a, reply: str = None) -> list:
+    """agent 本轮产物 → 带 URL 的展示卡片列表（图片/视频/文档）。
+
+    2026-10-13 用户反馈：过程文件无需展示。自动收集侧已在 core 过滤过程目录/文件名；
+    本函数额外做「显式交付」——回复里用 markdown 链接点名的文件，视为素月主动想给人看的
+    成品，即使不在自动收集列表里也补上并置顶（呼应交付规范）。
+    """
+    out, seen = [], set()
     for art in getattr(a, "last_round_artifacts", []) or []:
         url = _artifact_url(art.get("path", ""))
-        if url:
-            out.append({
-                "name": art.get("name") or os.path.basename(art.get("path", "")),
-                "kind": art.get("kind") or "file",
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        out.append({
+            "name": art.get("name") or os.path.basename(art.get("path", "")),
+            "kind": art.get("kind") or "file",
+            "url": url,
+        })
+    if reply:
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        for rawname in _RE_MD_LINK.findall(str(reply)):
+            link = rawname.strip().strip('"').strip("'")
+            if not link or link.startswith(("http://", "https://", "/", "#")):
+                continue
+            p = os.path.normpath(os.path.join(base, link.replace("/", os.sep)))
+            url = _artifact_url(p)
+            if not url or url in seen or not os.path.isfile(p):
+                continue
+            seen.add(url)
+            ext = os.path.splitext(p)[1].lower()
+            out.insert(0, {
+                "name": os.path.basename(p),
+                "kind": _ART_KIND_MAP.get(ext, "file"),
                 "url": url,
             })
-    return out
+    return out[:8]
+
+
+def _open_local_file(url: str) -> dict:
+    """用系统默认程序打开 workspace / uploads 内的文件（对话内点「打开」）。"""
+    try:
+        m = re.match(r"^/files/(\w+)/(.+)$", str(url or ""))
+        if not m:
+            return {"ok": False, "error": "bad url"}
+        tag, rel = m.group(1), unquote(m.group(2))
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        roots = {
+            "ws": os.path.normpath(os.path.join(base, "workspace")),
+            "up": os.path.normpath(os.path.join(base, "webui", "uploads")),
+        }
+        root = roots.get(tag)
+        if not root:
+            return {"ok": False, "error": "bad tag"}
+        target = os.path.normpath(os.path.join(root, rel))
+        if not (target == root or target.startswith(root + os.sep)):
+            return {"ok": False, "error": "forbidden"}
+        if not os.path.isfile(target):
+            return {"ok": False, "error": "not found"}
+        if hasattr(os, "startfile"):
+            os.startfile(target)  # noqa: S606  Windows：默认程序打开
+        else:
+            subprocess.Popen(["xdg-open", target])
+        return {"ok": True, "opened": os.path.basename(target)}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
 
 
 def _run_task(tid: str, message: str, attachments: list = None) -> None:
@@ -191,7 +255,7 @@ def _run_task(tid: str, message: str, attachments: list = None) -> None:
         with _turn_lock:  # 本地单用户，串行化 turn，避免历史交错
             reply = a.turn(message, attachments=attachments, cancel_event=cancel_ev,
                            stage_callback=lambda ev: _tasks.append_event(tid, ev))
-        _tasks.finish(tid, reply, _collect_task_artifacts(a))
+        _tasks.finish(tid, reply, _collect_task_artifacts(a, reply))
         _session.append("assistant", str(reply or ""))  # 回复落盘 → 刷新可恢复
     except TaskCancelled as e:  # 用户主动停止（agent 已封存断点，可续接）
         cancel_reply = f"（任务已停止：{e}。已保存断点，需要继续时对我说「继续」即可。）"
@@ -608,6 +672,13 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_llm_sources_save()
         elif path == "/api/study":
             self._handle_study()
+        elif path == "/api/open":
+            try:
+                _n = int(self.headers.get("Content-Length") or 0)
+                _d = json.loads(self.rfile.read(_n).decode("utf-8") or "{}") if _n else {}
+            except Exception:
+                _d = {}
+            self._send_json(200, _open_local_file(_d.get("url", "")))
         elif path == "/api/upload":
             self._handle_upload()
         elif path.startswith("/api/jobs/") and path.endswith("/kill"):
