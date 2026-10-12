@@ -37,6 +37,15 @@ _INTERNAL_MARKERS = ("（内部·", "请自由探索了解世界")
 _ALLOWED_ROLES = ("user", "assistant")
 
 
+def is_internal_content(text: str) -> bool:
+    """内容是否来自内部调度消息（自主活动 / 整点反思 / 自由探索等）。
+
+    2026-10-13 提为公共函数：喂料口（_is_extractable_turn）与反思口
+    （agent._reflect_light）共用同一判据，避免两处漂移。
+    """
+    return any(mk in str(text or "") for mk in _INTERNAL_MARKERS)
+
+
 def _is_extractable_turn(m: Dict) -> bool:
     """该消息是否值得喂给提炼器：只要 user/assistant 的真实对话，
     剔除系统消息与内部调度消息（后者会以半截残句污染长期记忆）。"""
@@ -44,7 +53,7 @@ def _is_extractable_turn(m: Dict) -> bool:
     if role not in _ALLOWED_ROLES:
         return False
     content = str((m or {}).get("content") or "")
-    return not any(mk in content for mk in _INTERNAL_MARKERS)
+    return not is_internal_content(content)
 
 _META_LAST_EXTRACT = "last_extract_at"
 _META_LAST_CONSOLIDATE = "last_consolidate_at"

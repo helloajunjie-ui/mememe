@@ -1252,7 +1252,8 @@ class Agent:
                             # 小规模变更(<=3)通常是我自己的合法迭代 → 0.55 可检索但不进 top8；
                             # 规模较大(>3)可疑 → 0.9 保留视野以示警。
                             importance=0.9 if (len(changed) + len(missing)) > 3 else 0.55,
-                            tags=["安全", "完整性", "告警"])
+                            tags=["安全", "完整性", "告警"],
+                            origin="self_check=完整性自检")
                     except Exception:  # noqa: BLE001
                         pass
         except Exception as e:  # noqa: BLE001
@@ -1283,7 +1284,8 @@ class Agent:
                     self.memory.add_fact(
                         f"自我备份失败：{r.get('error', '未知错误')}（原因：{r.get('note', '')}）。"
                         f"需排查 backups/ 与 data/backup_status.json",
-                        importance=0.8, tags=["备份", "告警"])
+                        importance=0.8, tags=["备份", "告警"],
+                        origin="self_check=备份自检")
             except Exception:  # noqa: BLE001
                 pass
         except Exception as e:  # noqa: BLE001
@@ -1319,6 +1321,7 @@ class Agent:
             importance=0.9,
             tags=["觉醒", "bootstrap"],
             source="bootstrap",
+            origin="self=首次觉醒(bootstrap)",
         )
         self._log("[awaken] ⑤ 任务：无待办，等待用户指派")
 
@@ -1348,7 +1351,8 @@ class Agent:
             ]
             self.self_model.initialize(self.name, self.version, caps, self.persona)
         self.self_model.boot_increment()
-        self.memory.add_episode("RECOVERY_BOOT：自我模型曾不完整，已重建", importance=0.6, tags=["recovery"])
+        self.memory.add_episode("RECOVERY_BOOT：自我模型曾不完整，已重建", importance=0.6,
+                                tags=["recovery"], origin="self=恢复启动(RECOVERY_BOOT)")
 
     def _normal_boot(self) -> None:
         pass
@@ -2837,9 +2841,13 @@ net_fetch 抓取网页会同时提取正文（噪音已过滤）和正文图片�
             self._fail_streak = getattr(self, "_fail_streak", 0) + 1
             self.emotion.on_event("task_failure", streak=self._fail_streak)
             self.motivation.on_failure()
-            self.memory.add_episode(
-                f"任务受阻：{user_input[:100]}\n状态：{response[:150]}",
-                importance=0.6, tags=["failure", "reflect"], source="turn")
+            # 2026-10-13 治源：内部调度消息（自主活动/整点反思）不是用户真实任务，
+            # 其"受阻"属执行状态而非知识，不写长期记忆（防半截残句污染记忆库）。
+            if not mext.is_internal_content(user_input):
+                self.memory.add_episode(
+                    f"任务受阻：{user_input[:100]}\n状态：{response[:150]}",
+                    importance=0.6, tags=["failure", "reflect"], source="turn",
+                    origin="self=反思(自动)")
         elif len(used_tools) >= 3:
             # 中优先级：多工具成功任务 → 只更新情绪/动机，不写记忆
             self._fail_streak = 0
