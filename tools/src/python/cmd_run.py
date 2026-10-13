@@ -23,13 +23,13 @@ from tools.base import tool
 _DESTRUCTIVE_PATTERNS = [
     # 跨平台/通用
     "rm -rf", "rm -fr", "rm -r -f", "mkfs", "dd if=", "shutdown", "reboot",
-    "diskpart", "fdisk /", ":(){", "chmod -R 777 /",
+    "diskpart", "fdisk /", ":(){", "chmod -r 777 /",
     # Windows
     "del /f", "del /s", "remove-item", "rmdir /s", "rd /s",
     "reg delete", "reg.exe delete", "wmic process call terminate",
     "bcdedit", "vssadmin delete", "cipher /w",
     # Linux
-    "rm /", "find / -delete", "chown -R", "> /dev/sda",
+    "rm /", "find / -delete", "chown -r", "> /dev/sda",
 ]
 
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "logs", "cmd.log")
