@@ -404,6 +404,23 @@ class Agent:
     def _save_user_llm_cfg(self, over: Dict) -> None:
         with self._llm_cfg_lock:
             p = self._llm_cfg_path()
+            # 防腐（2026-10-13 事故）：本函数是整份写入，调用方若只传「字段子集」，
+            # 未提到的顶层键会被静默抹平（曾导致 sources 整段消失、LLM 链路全瘫）。
+            # 写前回读磁盘：incoming 缺失的顶层键一律从磁盘继承，只增不丢。
+            if not isinstance(over, dict):
+                raise TypeError("_save_user_llm_cfg requires dict")
+            if os.path.exists(p):
+                try:
+                    with open(p, "r", encoding="utf-8") as f:
+                        _disk = json.load(f)
+                    if isinstance(_disk, dict):
+                        _missing = [k for k in _disk if k not in over]
+                        for k in _missing:
+                            over[k] = _disk[k]
+                        if _missing:
+                            self._log("[llm] save llm.json: inherit missing top-level keys " + str(_missing))
+                except (OSError, json.JSONDecodeError):
+                    pass
             os.makedirs(os.path.dirname(p), exist_ok=True)
             tmp = p + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
