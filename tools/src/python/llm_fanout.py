@@ -11,6 +11,13 @@
 - 子任务按 round-robin 分配到各线；失败的任务自动换到另一条线重试一次（跨源容灾）。
 - 每条线用该源自己的 model（取 models[0]）——模型名是 per-source 的，跨源复用同一个模型名会 404。
 
+补全机制（2026-10-13 共建者尼可：「如果他们截断了或者发生一些问题，需要重试尝试，继续完成」）：
+- 失败（网络错 / 空正文）→ 重试，默认最多 2 轮；retry_other_line=true 时每轮换一条线（跨源容灾）。
+- 已知失败模式「推理模型把 max_tokens 吃光」→ 重试时 max_tokens 自动翻倍（上限 8192）。
+- 成功但 finish_reason=length（被截断）→ 把半截文本回灌成 assistant 前缀要求「从中断处继续」，
+  续写次数上限 max_continue（默认 2，上限 5）；续写请求本身失败也会重试（可换线）。
+- 成本护栏：条数 × (1+重试轮数+续写上限) 最坏请求数超过 ~80 时，自动下调重试轮数/续写上限。
+
 边界：子任务必须互相独立（无先后依赖）；一次上限 20 条，防止误触发巨额计费。
 """
 from __future__ import annotations
@@ -104,12 +111,21 @@ def _endpoint(base: str) -> str:
     return b + "/chat/completions"
 
 
-def _one(src: dict, model: str, system: str, prompt: str, max_tokens, temperature, timeout) -> dict:
+_CONTINUE_HINT = ("上一条回复被截断了。请【从中断处继续】，直接从断开的位置往下写："
+                  "不要重复已经写过的部分，不要复述这条要求，不要分析任务，不要任何说明或客套。")
+
+
+def _one(src: dict, model: str, system: str, prompt: str, max_tokens, temperature, timeout,
+         partial: str = "") -> dict:
+    """单次调用。partial 非空 = 续写模式（把半截文本回灌成 assistant 前缀，要求接着写）。"""
     import httpx
     msgs = []
     if system:
         msgs.append({"role": "system", "content": system})
     msgs.append({"role": "user", "content": prompt})
+    if partial:
+        msgs.append({"role": "assistant", "content": partial})
+        msgs.append({"role": "user", "content": _CONTINUE_HINT})
     t0 = time.time()
     try:
         r = httpx.post(
@@ -125,19 +141,23 @@ def _one(src: dict, model: str, system: str, prompt: str, max_tokens, temperatur
         d = r.json()
         ch = (d.get("choices") or [{}])[0]
         msg = ch.get("message") or {}
-        text, note = msg.get("content"), None
+        fr = ch.get("finish_reason")
+        text, note, degraded = msg.get("content"), None, False
         if not text:
             rc = msg.get("reasoning_content")
             if rc:
-                text, note = rc, "正文为空，返回的是推理内容 reasoning_content"
+                text, note, degraded = rc, "正文为空，返回的是推理内容 reasoning_content", True
             else:
-                note = "content 为空（可能 max_tokens 被推理耗尽，finish_reason=%s）" % ch.get("finish_reason")
+                note = "content 为空（可能 max_tokens 被推理耗尽，finish_reason=%s）" % fr
         u = d.get("usage") or {}
         out = {"ok": bool(text), "secs": secs, "model": model,
+               "finish_reason": fr, "truncated": (fr == "length"),
                "tokens": (u.get("total_tokens") if isinstance(u.get("total_tokens"), int) else None),
                "text": text}
         if note:
             out["note"] = note
+        if degraded:
+            out["degraded"] = True
         return out
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "secs": round(time.time() - t0, 2),
@@ -170,12 +190,90 @@ def _run_lane(lane: dict, idxs: list, items: list, system: str, max_tokens, temp
     return res
 
 
+def _fill(i: int, lanes: list, items: list, system: str, base_max_tokens, temperature,
+          timeout, max_retries: int, continue_on_truncate: bool, retry_other_line: bool,
+          max_continue: int, first: dict) -> dict:
+    """补全单个子任务：失败 → 重试（可换线），被截断 → 接着写。
+
+    - 失败重试：默认换另一条线（跨源容灾）；命中已知失败模式（推理吃光 max_tokens）时预算翻倍。
+    - 截断续写：把已产出的半截文本回灌，要求从中断处继续，最多 2 次。
+    返回补全后的结果，带 attempts / lane / retried_from / continued / truncated 标记。
+    """
+    r = dict(first or {"ok": False, "error": "无结果"})
+    r.setdefault("lane", lanes[i % len(lanes)]["name"])
+    attempts = 1
+    budget = float(base_max_tokens)
+    lane_k = i % len(lanes)
+
+    # ① 失败 → 重试
+    while not r.get("ok") and attempts <= max_retries:
+        if retry_other_line and len(lanes) > 1:
+            lane_k = (lane_k + 1) % len(lanes)
+        lane = lanes[lane_k]
+        hint = str(r.get("note") or r.get("error") or "")
+        if ("reasoning" in hint) or ("max_tokens" in hint):
+            budget = min(budget * 2, 8192)     # 推理模型吃光额度 → 加倍再试
+        try:
+            r2 = _one(lane, lane["model"], system, items[i], budget, temperature, timeout)
+        except Exception as e:  # noqa: BLE001
+            r2 = {"ok": False, "error": "%s: %s" % (type(e).__name__, e)}
+        attempts += 1
+        r2["attempts"] = attempts
+        r2["retried_from"] = r.get("lane")
+        r2["lane"] = lane["name"]
+        r = r2
+
+    # ② 成功但被截断 → 接着写
+    cont = 0
+    if continue_on_truncate and r.get("ok") and r.get("truncated"):
+        base_k = i % len(lanes)
+        cur = None
+        for l in lanes:
+            if l["name"] == r.get("lane"):
+                cur = l
+                break
+        cur = cur or lanes[base_k]
+        buf = r.get("text") or ""
+        while r.get("ok") and r.get("truncated") and cont < max_continue:
+            r3 = None
+            for t in range(1 + max_retries):     # 续写本身也重试（首试沿用原线，重试可换线）
+                if t:
+                    if retry_other_line and len(lanes) > 1:
+                        cur = lanes[(base_k + t) % len(lanes)]
+                    r["continue_retries"] = t
+                try:
+                    r3 = _one(cur, cur["model"], system, items[i], budget, temperature,
+                              timeout, partial=buf)
+                except Exception as e:  # noqa: BLE001
+                    r3 = {"ok": False, "error": "%s: %s" % (type(e).__name__, e)}
+                attempts += 1
+                if r3.get("ok") and (r3.get("text") or ""):
+                    break
+            if not (r3 and r3.get("ok") and (r3.get("text") or "")):
+                r["continue_error"] = ((r3 or {}).get("error")
+                                       or (r3 or {}).get("note") or "续写无产出")
+                break
+            buf += r3["text"]
+            cont += 1
+            r["text"] = buf
+            r["truncated"] = bool(r3.get("truncated"))
+            r["finish_reason"] = r3.get("finish_reason")
+            r["continued"] = cont
+            r["lane"] = cur["name"]
+            t1, t2 = r.get("tokens"), r3.get("tokens")
+            if isinstance(t1, int) and isinstance(t2, int):
+                r["tokens"] = t1 + t2
+    r["attempts"] = attempts
+    return r
+
+
 @tool(
     name="llm_fanout",
     description=(
         "批量把一个【互相独立】的子任务列表【按服务商分线】并发外包给 LLM：每条线（一个 provider）"
         "内部串行、线与线之间并行——避免单源并发撞自己的限流。子任务按 round-robin 分配到各线，"
-        "单条失败不影响其他，失败项会自动换另一条线重试一次（跨源容灾）。返回结果按原顺序对齐。"
+        "单条失败不影响其他；失败项自动重试（默认 2 轮、可换线；推理模型被 max_tokens 吃光时自动加倍预算），"
+        "回复被截断时自动接着写（最多 2 次）。返回结果按原顺序对齐，每条带 attempts/lane/truncated 标记。"
         "默认 sources='auto' 用 config/llm.json 里全部启用源。"
     ),
     parameters={
@@ -194,7 +292,10 @@ def _run_lane(lane: dict, idxs: list, items: list, system: str, max_tokens, temp
             "max_tokens": {"type": "number", "description": "单条回复上限，默认 1024"},
             "temperature": {"type": "number", "description": "默认 0.3"},
             "timeout": {"type": "number", "description": "单条超时秒数，默认 120"},
-            "retry_other_line": {"type": "boolean", "description": "失败项是否换另一条线重试一次，默认 true"},
+            "retry_other_line": {"type": "boolean", "description": "失败项重试时是否换另一条线（跨源容灾），默认 true"},
+            "max_retries": {"type": "number", "description": "失败项重试轮数，默认 2（0=不重试；上限 3，条数多时自动下调）"},
+            "continue_on_truncate": {"type": "boolean", "description": "回复被 max_tokens 截断时自动接着写，默认 true"},
+            "max_continue": {"type": "number", "description": "截断后最多续写几次，默认 2（上限 5；设 0 = 只保留截断前的部分）"},
             "source": {"type": "string", "description": "（兼容旧调用）单源名；若给了 sources 则忽略此参数"},
         },
         "required": ["prompts"],
@@ -202,7 +303,9 @@ def _run_lane(lane: dict, idxs: list, items: list, system: str, max_tokens, temp
 )
 def run(prompts: list, model: str = "", system: str = "", sources: str = "auto",
         max_concurrency: float = 1, max_tokens: float = 1024, temperature: float = 0.3,
-        timeout: float = 120, retry_other_line: bool = True, source: str = "") -> dict:
+        timeout: float = 120, retry_other_line: bool = True, source: str = "",
+        max_retries: float = 2, continue_on_truncate: bool = True,
+        max_continue: float = 2) -> dict:
     if not prompts or not isinstance(prompts, list):
         return {"ok": False, "error": "prompts 不能为空，且需为字符串数组"}
     items = [str(p) for p in prompts][:_MAX_ITEMS]
@@ -236,35 +339,43 @@ def run(prompts: list, model: str = "", system: str = "", sources: str = "auto",
             except Exception as e:  # noqa: BLE001
                 pass
 
-    # 跨线重试：失败项换另一条线再试一次（串行，不再并发）
-    retried = 0
-    if retry_other_line and len(lanes) > 1:
-        for i in range(n):
-            r = results[i]
-            if r is None or r.get("ok"):
-                continue
-            alt = lanes[(i % len(lanes) + 1) % len(lanes)]
-            try:
-                r2 = _one(alt, alt["model"], system, items[i], max_tokens, temperature, timeout)
-            except Exception as e:  # noqa: BLE001
-                r2 = {"ok": False, "error": "%s: %s" % (type(e).__name__, e)}
-            r2["lane"] = alt["name"]
-            r2["retried_from"] = (r or {}).get("lane")
-            if r2.get("ok"):
-                results[i] = r2
-                retried += 1
-            else:
-                r.setdefault("retry_error", r2.get("error"))
+    # 补全阶段：失败项重试（可换线）+ 被截断项接着写；各子任务并行，互不影响
+    mr = max(0, min(int(max_retries or 0), 3))
+    mc = max(0, min(int(max_continue or 0), 5))
+    while n * (1 + mr + mc) > 80 and (mr > 0 or mc > 1):   # 成本护栏：最坏上游请求数不超过 ~80
+        if mr > 0:
+            mr -= 1
+        else:
+            mc -= 1
+    need_fix = [i for i in range(n)
+                if results[i] is None
+                or not results[i].get("ok")
+                or (continue_on_truncate and mc > 0 and results[i].get("truncated"))]
+    if need_fix and (mr > 0 or (continue_on_truncate and mc > 0)):
+        with ThreadPoolExecutor(max_workers=max(1, min(len(lanes), len(need_fix)))) as ex:
+            futs = {ex.submit(_fill, i, lanes, items, system, max_tokens, temperature,
+                              timeout, mr, continue_on_truncate, retry_other_line,
+                              mc, results[i]): i for i in need_fix}
+            for f, i in futs.items():
+                try:
+                    results[i] = f.result()
+                except Exception as e:  # noqa: BLE001
+                    pass
 
     wall = round(time.time() - wall0, 2)
-    out, tot, okc = [], 0, 0
+    out, tot, okc, retried, continued, trunc = [], 0, 0, 0, 0, 0
     for i, r in enumerate(results):
         r = dict(r or {"ok": False, "error": "无结果"})
         r["i"] = i
         okc += 1 if r.get("ok") else 0
+        retried += 1 if (r.get("retried_from") and r.get("ok")) else 0
+        continued += 1 if r.get("continued") else 0
+        trunc += 1 if (r.get("ok") and r.get("truncated")) else 0
         if isinstance(r.get("tokens"), int):
             tot += r["tokens"]
         out.append(r)
     return {"ok": okc > 0, "mode": "lanes", "lanes": lane_info,
-            "total": n, "ok_count": okc, "retried_ok": retried, "wall_secs": wall,
+            "total": n, "ok_count": okc, "retried_ok": retried, "continued": continued,
+            "still_truncated": trunc, "max_retries_effective": mr,
+            "max_continue_effective": mc, "wall_secs": wall,
             "total_tokens": tot, "results": out}
