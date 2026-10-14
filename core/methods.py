@@ -328,7 +328,7 @@ class MethodStore:
             return 0
         return len(bigrams(text) & bigrams(scene))
 
-    def match(self, text: str, limit: int = 5) -> List[Dict]:
+    def match_scored(self, text: str, limit: int = 5) -> list:
         """世界书触发：输入含条目关键词（大小写不敏感）→ 命中；或与 scene 有 ≥2 个 2 字词重叠 → 兜底命中。
 
         排序（2026-10-14 修订）：相关性（命中关键词总长）为主 + importance 微调（权重 2.0）。
@@ -349,7 +349,18 @@ class MethodStore:
                 rel = ov * 0.5
             scored.append((rel + m.get("importance", 0) * 2.0, m))
         scored.sort(key=lambda t: -t[0])
-        return [m for _, m in scored[:limit]]
+        return scored[:limit]
+
+    def match(self, text: str, limit: int = 5) -> List[Dict]:
+        """世界书触发（兼容旧接口）：只返回条目，丢弃分数。"""
+        return [m for _, m in self.match_scored(text, limit)]
+
+    def confidence(self, text: str, limit: int = 5):
+        """置信度：返回 (命中数, top1分, 是否低置信)。判据：命中<3 或 top1<5.0。"""
+        _s = self.match_scored(text, limit=limit)
+        _n = len(_s)
+        _top = _s[0][0] if _s else 0.0
+        return _n, _top, (_n < 3 or _top < 5.0)
     # ---- 三层激活：常驻 / 场景预加载 / 关键词命中 ----
 
     # 常驻层：最高频行为准则，每次都在 system prompt（不靠关键词碰运气）
