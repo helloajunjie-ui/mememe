@@ -102,6 +102,7 @@ class MethodStore:
     def _migrate(self) -> None:
         """世界书迁移：为旧条目补全 name；用手动关键词覆盖自动提取的劣质词（幂等，每次启动生效）。"""
         changed = False
+        cat_map = self._load_category_map()
         for m in self.data.get("methods", []):
             if not m.get("status"):
                 m["status"] = "active"
@@ -117,6 +118,10 @@ class MethodStore:
             elif not m.get("keywords"):
                 kws = extract_keywords(f"{m.get('scene','')} {m.get('method','')}")
                 m["keywords"] = kws
+                changed = True
+            cat = cat_map.get(str(m.get("id")))
+            if cat and m.get("category") != cat:
+                m["category"] = cat
                 changed = True
         if changed:
             self._save()
@@ -174,7 +179,8 @@ class MethodStore:
 
     def learn(self, type_: str, scene: str, method: str,
               evidence: str = "", importance: float = 0.6,
-              name: str = "", keywords: Optional[List[str]] = None) -> int:
+              name: str = "", keywords: Optional[List[str]] = None,
+              category: str = "") -> int:
         """沉淀一条方法论。type_: "good"（值得复用）/ "bad"（避免）。
         世界书字段：name=词条名（默认取 scene 首段），keywords=触发关键词（默认从 scene+method 自动提取）。"""
         type_ = type_ if type_ in ("good", "bad") else "good"
@@ -190,6 +196,7 @@ class MethodStore:
             "method": method[:500],
             "evidence": evidence[:300],
             "importance": importance,
+            "category": category or self._CATEGORY.get(mid, ""),
             "status": "active",
             "superseded_by": None,
             "created_at": datetime.datetime.now().isoformat(timespec="seconds"),
@@ -243,7 +250,8 @@ class MethodStore:
         cats: Dict[str, List[Dict]] = {}
         for m in methods:
             cats.setdefault(self._category(m), []).append(m)
-        order = ["生存安全", "决策与效率", "工具与工程", "网络与环境", "沟通与交付", "其他"]
+        order = ["生存安全", "决策与效率", "记忆与检索", "工具与工程", "网络与采集",
+                 "内容与发布", "验证与排查", "视觉与素材", "协作与交付", "其他"]
         out = []
         for cat in order + [c for c in cats if c not in order]:
             items = cats.pop(cat, None)
@@ -287,7 +295,29 @@ class MethodStore:
     }
 
     def _category(self, m: Dict) -> str:
-        return self._CATEGORY.get(m.get("id"), "其他")
+        """条目自带 category 优先（数据化，2026-10-14）；旧硬编码表仅作兜底。"""
+        return m.get("category") or self._CATEGORY.get(m.get("id"), "其他")
+
+    _CATEGORY_MAP_PATH = "data/method_categories.json"
+
+    @classmethod
+    def _load_category_map(cls) -> Dict[str, str]:
+        """分类数据源（id→类目）：数据化迁移源，文件缺失/损坏时安全降级为空表。"""
+        try:
+            with open(cls._CATEGORY_MAP_PATH, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            return {str(k): str(v) for k, v in raw.items()} if isinstance(raw, dict) else {}
+        except Exception:
+            return {}
+
+    def set_category(self, mid: int, category: str) -> bool:
+        """手动调整单条条目分类（数据化后的日常维护入口）。"""
+        m = self.get(mid)
+        if not m:
+            return False
+        m["category"] = (category or "").strip()
+        self._save()
+        return True
 
     @staticmethod
     def _scene_overlap(text: str, scene: str) -> int:
