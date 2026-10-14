@@ -2597,6 +2597,15 @@ class Agent:
             mid = m.get("id")
             if mid not in seen_ids:
                 merged.append(m); seen_ids.add(mid)
+        # 观测点（2026-10-14）：记录本轮实际注入的方法论 id，用于统计「常用/不常用」。
+        # 只写日志、不改行为；为后续决定 常驻层扩容 / 频次权重 积累真实数据。
+        try:
+            self._log("[worldbook] 方法论注入 n=%d 合并=%s (常驻%d/预加载%d/命中%d)" % (
+                len(merged),
+                ",".join(str(m.get("id")) for m in merged),
+                len(method_always), len(method_preload), len(method_hits)))
+        except Exception:
+            pass
         method_index = self.methods.to_index()
         method_rules = self.methods.to_full(merged)
         tool_world = self.registry.to_index()
