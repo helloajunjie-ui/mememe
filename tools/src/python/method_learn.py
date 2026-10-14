@@ -26,11 +26,15 @@ from tools.base import tool
                          "description": "证据/为什么有效或无效（可选，如 '实测跑通' / '报错 xxx'）"},
             "importance": {"type": "number",
                            "description": "重要性 0~1，默认 0.6。影响在上下文中的优先级"},
+            "category": {"type": "string",
+                         "description": "分类（可选）。留空自动归类；也可手动指定：生存安全/决策与效率/"
+                                        "记忆与检索/工具与工程/网络与采集/内容与发布/验证与排查/视觉与素材/协作与交付"},
         },
         "required": ["type", "scene", "method"],
     },
 )
-def run(type: str, scene: str, method: str, evidence: str = "", importance: float = 0.6) -> dict:
+def run(type: str, scene: str, method: str, evidence: str = "", importance: float = 0.6,
+        category: str = "") -> dict:
     if type not in ("good", "bad"):
         return {"ok": False, "error": "type 必须为 good（值得复用）或 bad（避免）"}
     if not method or not method.strip():
@@ -38,11 +42,12 @@ def run(type: str, scene: str, method: str, evidence: str = "", importance: floa
     from core.methods import MethodStore
 
     ms = MethodStore()
-    mid = ms.learn(type, scene, method, evidence, importance)
+    mid = ms.learn(type, scene, method, evidence, importance, category=category)
     kind = "正面方法" if type == "good" else "反面教训"
     return {
         "ok": True,
         "method_id": mid,
         "kind": kind,
+        "category": (ms.get(mid) or {}).get("category", ""),
         "note": f"已沉淀{kind}，后续上下文会注入此经验。当前库：{ms.summary()}",
     }
