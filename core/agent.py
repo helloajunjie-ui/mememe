@@ -2576,6 +2576,14 @@ class Agent:
         method_always = self.methods.always_on()
         method_preload = self.methods.preload_by_activity(recent_tools[-10:], " ".join(recent_thinking[-3:]))
         method_hits = self.methods.match(match_text) if match_text else []
+        # 触发面补强（2026-10-14）：用户那句常只是"继续/看个东西"，真正决定该想起什么的是
+        # "我正在做的事"。实测：仅凭用户输入，短句时命中塌缩到 0~1 条；补上我的思考后，
+        # top 命中直指当前动作（改 core 后验证→#652，清理 workspace→#654）。
+        # 注意：只喂 thinking、不喂 recent_tools——工具名（fs_read/cmd_run）区分度太低，
+        # 实测会把 #470/#459/#455 一串无关条目捞上来。
+        _act_text = " ".join(recent_thinking[-2:]).strip()
+        if len(_act_text) >= 8:
+            method_hits = method_hits + self.methods.match(_act_text, limit=3)
         # 合并去重：常驻 + 场景预加载 + 关键词命中
         seen_ids = set()
         merged = []
