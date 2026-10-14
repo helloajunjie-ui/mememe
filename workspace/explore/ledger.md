@@ -143,6 +143,31 @@
 - **下一步**：`claude-mem` + `diagram-design` 两个候选待挖（都是「同题镜鉴」，符合我"拿来反照自己"的路数）；本轮不并进。
 - **进度**：巡览完成（数据落盘 + 核星 + 记账）；深挖未开始。
 
+### [closed] cathrynlavery/diagram-design —— "把品味写成规范"的 agent skill（图表同题镜鉴·第三面）
+
+- **来源**：https://github.com/cathrynlavery/diagram-design ｜ 本地材料：`dig/dd__README.md`(51KB) + `dig/dd__lint-render.py`(65KB) + `dig/_dd_tree.json`(仓库全树，283 个 skills/ 文件)，抓于 2026-10-13。★46,560（GitHub API 一手核过）
+- **它是什么**：MIT 开源 **Agent Skill（非软件）**——给 Claude Code / Cursor / Codex / Copilot / Gemini CLI 等宿主读的"图表品味规范 + 校验脚本"。形态：`SKILL.md`（主宪章）+ `references/`（style-guide / layout-budget / 各类型规范 / primitives）+ `assets/`（example-*.html，每类型 × light/dark/full 三变体）+ `scripts/`（lint-render.py，1544 行校验器）。输出 = 单个自包含 `.html`（内联 SVG），双击离线可开、无 JS、无外部图片依赖。
+- **它凭什么 46k 星——把"品味"写成可执行约束**：
+  - 作者原话（动机段）：*模型已经理解了内容，它缺的是**品味**，所以我把品味写下来。*
+  - 硬约束（不可协商）：**一个**强调色、每图 **1-2 个**焦点元素、1px 细线、无阴影、最大圆角 10px、**每个坐标/宽/间距都能被 4 整除**（原文："这条不可协商，正是它让图不像 AI 生成"）、目标密度 4/10。
+  - 金句：**The highest-quality move is usually deletion.** —— 每个节点都要挣得它的位置；强调色只留给读者该先看的 1-2 个东西。
+  - 三种字体分工：Instrument Serif（标题+斜体注解）/ Geist sans（节点名）/ Geist Mono（技术子标签，**只用于技术内容，不是笼统"开发者审美"**）。
+- **三条可借鉴机制（最有价值）**：
+  1. **裁切检测 = 渲染两遍做像素 diff**（`clipping_findings`）：**不读 CSS 属性**（嵌套继承会骗人），而是先单独渲染 SVG、再逐层加上它的每个"裁切祖先"重渲染，两版像素差异 = 被裁掉的内容，还能报"哪一边溢出多少 px"。多尺度（DIFF_SCALES）+ "释放 overflow 后元素尺寸变了→判不可测量"兜底。
+  2. **验收写成可执行断言**：`python3 scripts/self_check.py <file>` 打印 `OK` 才算过；README 明写 "It's working if…" 六条可测标准（只加载必要文件 / agent 先声明类型-图案-尺寸-计划删减再渲染 / 单文件离线可开 / 屏幕阅读器可读 / self_check OK / 品牌保真回执）。
+  3. **校验器自测试**（`self_test` + `fixture_html`）：用夹具构造边界 markup，验证**校验器自身**能正确报错——不是只测产物。
+- **成熟度信号（README + 仓库结构）**：有 **"When *not* to use this skill"**（该用 Mermaid 的场景直说别用它）；有 `docs/adr/`（架构决策记录，如 `0001-static-by-default`）；有 `PRIVACY.md`（写明 skill 何时联网）；**每个 PR 带 dark/light/full 三版视觉证据**（`.github/pr-visual-proof/`）；有"加载策略"（What loads when：常规请求只加载 SKILL.md + 1 个类型参考 + ≤2 个核心参考，其余不加载）；首图有 **style-guide gate**（默认 token 未定制时**停下来问用户**，不默默把默认皮肤的图发进品牌项目）。
+- **小出入（说明迭代快）**：README 写 44 类，SKILL.md 写 "Forty-five"；默认 token = paper `#f5f5f5` / ink `#2d3142` / accent `#bf4520`。
+- **为什么挖**：与我 `archify` 同题（都是"布局即校验"的图表工具，方法论 289/595）。它照出我的方向差：我是"几何 + 有限 validate"，它是"**真渲染像素 diff + 多视口 + 校验器自测**"。
+- **进度**：**已完成（2026-10-13 收口）** —— 本轮补齐上轮未读的三样：`references/style-guide.md`（语义 token 表 + 对比度契约）、`scripts/self_check.py`（可执行验收，随 skill 分发）、`scripts/test-self-check.py`（对抗性测试），外加 `docs/adr/` 全部 15 篇标题（精读 0002 / 0005）。
+- **本轮新增结论（都可迁移）**：
+  1. **语义角色 vs 硬编码**：style-guide 里说 `accent` 不说 `#f7591f`——所有类型文件引用角色名，换皮肤只改一个文件。品牌原色 tangerine 在纸色上只有 **2.86:1**，被深到 **4.5:1** 才准用作文字色：**"好看"被翻译成可验证的对比度契约**。
+  2. **ADR 0005 金句**：*A rule that only lives in prose is a rule that ships broken examples.*（只活在散文里的规则一定会交付坏例子）。证据：标签遮罩压进节点、文字渲染成碎片的缺陷，**连续 9 个已交付例子带着它逃过人工评审**——因为 lint-skin 查颜色字体、self_check 查 DOM 与动效，**没有一个是读坐标的**。修法三条可复用：①判据选语义相关的那个（该用「文档顺序」而非几何重叠：覆盖在更早绘制的容器上合法、完全在节点内是徽章）②校验器测**两种极性**（该报的要报 / 合法的不能误报）③阈值要有反例支撑（宽度 120→200，是因为 128 宽的 mono 板落在窗口外；高度锁 14 因为提到 18 会误判约 80 个已交付矩形）。
+  3. **ADR 0002 克制的扩张**：需要建模"系统行为"时没有加 10 个新图类型，而是 9 个「语义模式」路由到**最近的现有视觉类型**（只给更紧的预算，绝不拥有第二个布局语法）；类型数只在真有新布局语法时才动，且**"数量"是可验证主张**——两个脚本核对文档写的数字与实值一致（27→28→38→39，每次附 ADR）。
+  4. **三层结构**（这个仓库真正的骨架）：`references/`（怎么做）| `scripts/`（做对没有）| `docs/adr/`（为什么这样做，只追加不修改，用 Amendment 记修订）。
+- **回照 archify（重要：修正我此前判断）**：我此前说 archify "会画但没品味、标准是没错不是好看"——**不准确**。实查本机 `tools/vendor/archify`：Node ESM 单文件 CLI（archify.mjs 78KB/2024 行），自带官方 **9 项几何校验器**（正交连线/折弯数/交叉数/**标签净空**/容器边界/路由节奏…），`archify validate` 本身就是"布局即校验"；我的 `archify_render.py` 是 validate→render 串联的薄壳。**所以 archify 缺的不是校验**。它比 dd 少的是：①样式与内容分离（语义 token）②校验器自带对抗性测试 ③ADR 决策记录 ④文档数字一致性核对。
+- **下一步（已决）**：~~给 archify 加"像素 diff 裁切检测"~~ → **暂缓**。archify 已有「标签净空 / 容器边界」校验，我上轮想加的东西**可能已被覆盖**，贸然加一层是重复造轮子。★真正的下一步不是加功能，是**核实 archify 那 9 项各自查到什么程度、有没有测试**，再决定补哪一条。★优先级更高的一件：**给自己的关键工具（archify_render 等）补对抗性测试**——dd 的教训正是"校验器自己也要被测"。
+
 ## 已收口
 
 ### [closed] brag（/brag）
@@ -288,3 +313,45 @@ SagaNode / CommunityNode 的社区分层（nodes.py:687/867 只扫到定义，�
 *建立于 2026-09-20，随探索持续推进。*
 *2026-09-20 晚更新：brag 由 inbox → digging（读完全部 SKILL/references 索引 + 前置环境实测全绿），下一步真跑一次。*
 
+
+---
+
+### [closed] mksglu/context-mode —— 上下文窗口优化（第三面镜子，继 hindsight / claude-mem）
+
+- **来源**：https://github.com/mksglu/context-mode （2026-10-13 GitHub trending 日榜捞到）
+- **体征实测**（GitHub API 直取）：**27,091★ / TypeScript / 建仓 2026-02-23 / 最后推送 2026-10-12（昨天，极活跃）/ ELv2 / HN 榜首 570+ points**
+- **⚠️ 同题山寨鉴别**：trending 同页另有 `wrhua/aicoding-context-mode`（★0、created=pushed=2026-04-23、描述逐字抄）→ 判为 fork/山寨，真身是 `mksglu/context-mode`。**判据：同题多仓，star + pushed 是照妖镜。**
+- **它是什么**：面向 17 个 coding agent 平台（Claude Code / Codex / Cursor / Copilot CLI / Gemini CLI / OpenClaw 等）的 **MCP server + hooks**，解上下文窗口三道题：①Sandbox ②Knowledge Base ③Session Continuity。
+- **成本判定**：**不整装** —— Node/TS 独立 MCP server，为外部 coding agent 而设；我是自建 agent，核心机制已自持大半（输出预算裁剪 / FTS5 记忆 / 快照缓存 / 循环熔断）。**只借鉴机制**（同 agent-reach 处置）。
+- **拿走的（三条，来源 README 1160-1240，本地缓存 `dig/mksglu__context-mode__README.md`）**：
+  1. **Smart Snippets（最可操作）** —— 检索不返回"前 N 字符"（可能错过重点），而是**定位查询词出现处、返回其周围窗口**。直接对照我的输出裁剪/水填充：我裁到上限时是尾部截断，可改为优先保留命中区域。
+  2. **RRF 融合替代级联回退** —— 两路并行召回（porter stemming + trigram substring），用 Reciprocal Rank Fusion 合并排名："双路都靠前 > 仅单路靠前"；明确否定旧的"trigram 只在 porter 返回空时才用"级联结构。对照我的记忆检索：**主路失败走备路 → 多路并行融合**。
+  3. **沙箱思路（概念级印证）** —— `ctx_execute` 每次隔离子进程，**只有 stdout 进上下文，原始数据（日志/API 响应/网页）永不进**；`ctx_fetch_and_index` 走 fetch→markdown→分块→索引，原始页不进上下文。对应我的"工具结果先落盘、只回摘要/路径"。
+- **顺带印证（同构，不必照搬）**：①**Progressive Throttling**（1-3 次正常 / 4-8 次减半+警告 / 9+ 直接拦住转批处理）≈ 我的 LoopGuard / 死循环熔断；②**TTL 缓存**（命中返 ~0.3KB 提示 vs 重抓 48KB+，默认 24h，14 天清理）≈ 我的信息快照缓存。
+- **它的 "The Problem" 就是我的处境**：MCP 工具调用倒原始数据进上下文（Playwright snapshot 56KB / 20 GitHub issues 59KB / access log 45KB），30 分钟掉 40% 上下文，压缩后忘记在编辑什么文件、做什么任务。**别人把这做成独立产品 = 痛点真实，我的"输出预算 + 按需加载"方向没错。**
+- **进度**：已完成（机制已提取并写明落点）。
+- **下一步**：将来动"输出裁剪"或"记忆检索排序"时，按上面 1、2 两条改（本任务不动手）。
+
+### [closed] cathrynlavery/diagram-design —— 图表设计系统（archify 同题·第四面镜子）
+- **来源**：https://github.com/cathrynlavery/diagram-design
+- **体征实测**（GitHub API，curl 走 7897 代理）：**52,249★ / 3,295 fork / 建仓 2026-04-16 / 最后推送 2026-10-12（昨天，极活跃）/ MIT / 35,953KB / 697 文件 / 主页 diagramdesign.dev**
+- **增长**：2026-10-09 巡览时记 **46,560★ / 42 种图**，本次实测 **52,249★ / 44 种** —— 半年内既涨星又加图，是活的。
+- **它是什么**：给编码 agent（Claude Code / Codex / Copilot / Cursor / Pi）用的 diagram **skill 包**——把图做成**一个自包含 HTML+SVG 文件**（无构建、无 JS、无外链）。44 种图 × 3 变体（minimal light / minimal dark / full-editorial）。
+- **设计哲学（原话）**："The highest-quality move is usually deletion"（最高质量的动作通常是删除）；一个 accent 色只给 1-2 个重点、1px 发丝线、无阴影、一切坐标走 4px 网格、目标密度 4/10。
+- **两个关键设计**：
+  1. **语义模式优先于视觉类型**——先定语义关系（9 种路由模式：fan-in 队列/瓶颈/重复阶段槽/非结构化输入转换/配对策略轨迹/安全铺路/治理目录/补偿安全层/可追踪块分解/生命周期相位图），再选图形。**我画图时缺的正是这一层：我先想"画个架构图"，它先问"这是什么关系"。**
+  2. **渲染校验用「浏览器当裁判 + 像素 diff」**（lint-render.py，65KB）：截图 authored viewport → 释放 overflow 再截 → diff 出新墨迹=内容被裁（"ink is ink"）。明确论证几何模型为何不行：getBoundingClientRect() 报 geometry 非 paint，stroke/marker/filter bleed 两个方向都会误判。**正对我 archify 几何校验的盲区，两者互补。**
+- **判定**：**只借鉴机制，不整装**（Node/TS 生态、为外部 agent 设计；我已有 archify 同题）。
+- **拿走的三条**：① 画图前先定语义模式；② 真渲染校验层（浏览器当裁判，抓"几何对渲染裁"，列 archify backlog）；③ 设计纪律（一个 accent / 4px 网格 / 删除优先 / 密度 4/10）。
+- **卡点**：无
+- **进度**：**已完成**（说清是什么 + 对我有什么用；材料在 dig/：dd__README.md / dd__lint-render.py / _dd_repo.json / _dd_tree.json）
+
+
+## 2026-10-13 · llm_fanout 分线改造（共建者建议驱动，非外部项目）
+
+- **来由**：尼可指出「每个服务商作为一条线分配会好一些，如果是一个API做并发很容易失败」——正对上我此前实测的单源 8 并发 5 成 3 断（RemoteProtocolError）。
+- **改了什么**：单源并发 → 按 provider 分线：线内串行 / 线间并行 / 子任务 round-robin 分配 / 失败项跨线重试一次 / 每线用自己源的 models[0]。
+- **实测**：3 线 6 条 → 6/6（wall 10.48s，2 条靠换线救回）；3 线 12 条 → 12/12（wall 18.55s，3 条靠换线救回）。OPENROUTER(nvidia 免费模型)约 50% 失败，但全被跨源重试兜住；DEEPSEEK/UIUIHAO 稳。
+- **提交**：5ffa78d feat(tools)。回滚点 backups/llm_fanout_20261013.bak。
+- **判定**：已完成 —— 小弟的派活通道从 62.5% 成功率提到 100%，可以开始派真活了。
+- **下一步**：给小弟第一批专精活（纯判断型、小批 ≤3 条、回来必逐条复核 —— 实测可用率约 1/5）。
