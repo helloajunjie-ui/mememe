@@ -147,3 +147,4 @@ workspace/explore/mem_audit.py
 workspace/explore/tmp/
 _battest_out.txt
 data/mcp_index.json
+mcp-service/.playwright-mcp/
