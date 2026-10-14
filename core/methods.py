@@ -329,18 +329,27 @@ class MethodStore:
         return len(bigrams(text) & bigrams(scene))
 
     def match(self, text: str, limit: int = 5) -> List[Dict]:
-        """世界书触发：输入含条目关键词（大小写不敏感）→ 命中；或与 scene 有 ≥2 个 2 字词重叠 → 兜底命中。"""
-        low = text.lower()
-        hits = []
-        for m in self.list():
-            kws = m.get("keywords", [])
-            if any(k and k.lower() in low for k in kws):
-                hits.append(m)
-            elif self._scene_overlap(text, m.get("scene", "")) >= 2:
-                hits.append(m)
-        hits.sort(key=lambda m: -m.get("importance", 0))
-        return hits[:limit]
+        """世界书触发：输入含条目关键词（大小写不敏感）→ 命中；或与 scene 有 ≥2 个 2 字词重叠 → 兜底命中。
 
+        排序（2026-10-14 修订）：相关性（命中关键词总长）为主 + importance 微调（权重 2.0）。
+        旧版纯按 importance 取 top5，实测高权重通用条目（#29/#43/#27）霸占几乎每个查询的
+        头部，真正相关的条目（如 #659 工具注册生效判定）反而挤不进去。
+        """
+        low = text.lower()
+        scored = []
+        for m in self.list():
+            kws = [k for k in m.get("keywords", []) if k]
+            hit = [k for k in kws if k.lower() in low]
+            if hit:
+                rel = float(sum(len(k) for k in hit))
+            else:
+                ov = self._scene_overlap(text, m.get("scene", ""))
+                if ov < 2:
+                    continue
+                rel = ov * 0.5
+            scored.append((rel + m.get("importance", 0) * 2.0, m))
+        scored.sort(key=lambda t: -t[0])
+        return [m for _, m in scored[:limit]]
     # ---- 三层激活：常驻 / 场景预加载 / 关键词命中 ----
 
     # 常驻层：最高频行为准则，每次都在 system prompt（不靠关键词碰运气）
