@@ -46,6 +46,8 @@ _DESTRUCTIVE_REGEX = (
 
 
 def _is_destructive(command: str) -> bool:
+    if not isinstance(command, str):
+        return True  # 非字符串一律按危险处理（fail-closed：安全闸自己兜住非法输入）
     low = command.lower().strip()
     for pat in _DESTRUCTIVE_PATTERNS:
         if pat in low:
@@ -88,7 +90,9 @@ def _audit(command: str, result: dict, background: bool = False) -> None:
     group="系统与执行",
 )
 def run(command: str, timeout: float = 20, background: bool = False) -> dict:
-    if not command or not command.strip():
+    if not isinstance(command, str):
+        return {"ok": False, "error": "参数非法：command 必须是非空字符串"}
+    if not command.strip():
         return {"ok": False, "error": "命令不能为空"}
     if _is_destructive(command):
         _audit(command, {"ok": False, "stderr": "被安全策略拦截"}, background)

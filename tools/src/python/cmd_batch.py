@@ -56,8 +56,10 @@ def run(commands: list, timeout: float = 20, continue_on_error: bool = True) -> 
             if not continue_on_error:
                 break
             continue
-        cmd = (item.get("cmd") or "").strip()
-        desc = (item.get("desc") or "").strip() or cmd[:40]
+        _raw_cmd = item.get("cmd")
+        cmd = _raw_cmd.strip() if isinstance(_raw_cmd, str) else ""
+        _raw_desc = item.get("desc")
+        desc = (_raw_desc.strip() if isinstance(_raw_desc, str) else "") or cmd[:40]
         if not cmd:
             results.append({"idx": i, "desc": desc, "ok": False, "error": "命令为空"})
             if not continue_on_error:
