@@ -37,6 +37,51 @@ _EN_STOP = {
 }
 
 
+# ── 新增即分类（2026-10-14）：learn 新条目时轻量规则归类，避免落进"未分类" ──
+# 规则源自生产脚本 rule_classify v3（已用于 645 条数据化分类校准）。
+_CAT_RULES = [
+    ("生存安全", ["黑化", "本性", "人格", "篡改", "完整性", "备份", "病毒", "防护", "投毒", "护栏",
+                "污染", "守护", "自我审查", "自保", "注入"]),
+    ("内容与发布", ["头条", "发布", "文章", "写作", "标题", "评论", "公众号", "文案", "读者",
+                 "自媒体", "署名", "封面", "公开文档", "readme", "介绍自己", "典故", "诗句"]),
+    ("网络与采集", ["搜索", "网络", "抓取", "爬虫", "采集", "下载", "代理", "被墙", "cloudflare",
+                 "站点", "网页", "url", "http", "dns", "tls", "反爬", "局域网", "流媒体"]),
+    ("视觉与素材", ["图片", "立绘", "抠图", "视觉", "pptx", "docx", "文档渲染", "视频", "音频",
+                 "tts", "语音", "渲染", "ocr", "抽帧", "素材", "海报", "截图", "字体", "像素",
+                 "轮廓", "配乐", "whisper"]),
+    ("记忆与检索", ["记忆", "检索", "召回", "排序", "相似度", "倒排", "2-gram", "上下文", "知识库",
+                 "方法论库", "去重", "归档", "世界书", "冗余", "台账"]),
+    ("协作与交付", ["用户", "共建者", "尼可", "汇报", "交付", "回复", "沟通", "画像", "称呼",
+                 "提问", "诚信"]),
+    ("工具与工程", ["工具", "脚本", "命令", "powershell", "cmd", "注册表", "自建", "import",
+                 "python", "venv", "git", "编译", "进程", "服务", "启动", "mcp", "依赖", "批处理",
+                 "正则", "文件", "目录", "json", "配置", "环境", "编码", "crlf", "函数", "代码",
+                 "接口", "api", "单位换算", "soffice", "libreoffice"]),
+    ("决策与效率", ["决策", "三段式", "升级阶梯", "止损", "方案选择", "反复", "死循环", "优先级",
+                 "计划", "行动哲学", "成本", "效率", "选型", "风险"]),
+]
+_CAT_VERIFY = ["验证", "核验", "排查", "核查", "审计", "复现", "证伪", "断言", "抽检", "甄别",
+               "是否真的", "有没有生效", "判定口径", "假成功", "是否已", "是否生效"]
+
+
+def classify(scene: str, method: str, type_: str = "good") -> str:
+    """轻量规则分类（2026-10-14）：learn 时自动归类。
+
+    判定顺序：验证强词（全文命中即验证类）→ 规则表命中计数取最多 → 无命中归"其他"。
+    返回类目名；无把握不硬塞（宁可"其他"，便于后续 LLM 批量校正）。
+    """
+    text = f"{scene or ''} {method or ''}"
+    low = text.lower()
+    if any(w in text for w in _CAT_VERIFY):
+        return "验证与排查"
+    best, best_n = "", 0
+    for cat, kws in _CAT_RULES:
+        n = sum(1 for k in kws if k.lower() in low)
+        if n > best_n:
+            best, best_n = cat, n
+    return best or "其他"
+
+
 def extract_keywords(text: str, maxn: int = 12) -> List[str]:
     """从文本提取世界书触发关键词（2026-09-19 修订 v3，P2-4）。
 
@@ -187,6 +232,7 @@ class MethodStore:
         importance = max(0.0, min(1.0, float(importance)))
         methods = self.data.setdefault("methods", [])
         mid = (max((m.get("id", 0) for m in methods), default=0)) + 1
+        cat = category or classify(scene, method, type_)
         methods.append({
             "id": mid,
             "type": type_,
@@ -196,12 +242,14 @@ class MethodStore:
             "method": method[:500],
             "evidence": evidence[:300],
             "importance": importance,
-            "category": category or self._CATEGORY.get(mid, ""),
+            "category": cat,
             "status": "active",
             "superseded_by": None,
             "created_at": datetime.datetime.now().isoformat(timespec="seconds"),
         })
         self._save()
+        if cat:
+            self._register_category(mid, cat)
         return mid
 
     def list(self, type_: Optional[str] = None, include_all: bool = False) -> List[Dict]:
@@ -310,13 +358,36 @@ class MethodStore:
         except Exception:
             return {}
 
+    def _register_category(self, mid: int, category: str) -> None:
+        """把 id→类目 同步写入分类数据源（读整份→改一键→写整份，避免抹掉其他键）。"""
+        category = (category or "").strip()
+        if not category:
+            return
+        try:
+            p = Path(self._CATEGORY_MAP_PATH)
+            data = {}
+            if p.exists():
+                try:
+                    raw = json.loads(p.read_text(encoding="utf-8"))
+                    if isinstance(raw, dict):
+                        data = raw
+                except Exception:
+                    data = {}
+            data[str(mid)] = category
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        except Exception:
+            pass
+
     def set_category(self, mid: int, category: str) -> bool:
-        """手动调整单条条目分类（数据化后的日常维护入口）。"""
+        """手动调整单条条目分类（数据化后的日常维护入口）。同步更新分类数据源。"""
         m = self.get(mid)
         if not m:
             return False
         m["category"] = (category or "").strip()
         self._save()
+        if category:
+            self._register_category(mid, category)
         return True
 
     @staticmethod
