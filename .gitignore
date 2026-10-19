@@ -148,3 +148,6 @@ workspace/explore/tmp/
 _battest_out.txt
 data/mcp_index.json
 mcp-service/.playwright-mcp/
+
+# 归档合数据（不入版本库）
+data/archive/
