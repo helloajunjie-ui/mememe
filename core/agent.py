@@ -44,6 +44,25 @@ MAX_TOOL_STEPS = 16  # 单轮最多工具调用总数（含并行，成本精确
 # ---------- 上下文防线（20 回合滚动 + 阶段性总结，非硬截断） ----------
 _ROLLING_ROUNDS = 20       # 任务内 messages 保持的完整回合数（1 回合 = 1 次 LLM 往返 + 其工具结果）
 _MAX_TOOL_RESULT_CHARS = 3000   # 单条 tool 结果写入上下文的最大字符（超长截断，防单条爆炸）
+
+def _head_tail_snippet(text: str, limit: int, head_ratio: float = 0.45) -> str:
+    """长文本裁剪保留头+尾双窗口，而不是只留前 N 字符（借鉴 context-mode Smart Snippets）。
+
+    纯头部截断会把结论/报错/最新日志（多在尾部）整段丢掉，只剩文件头或目录；
+    改保留头尾两个窗口、中间以省略标记衔接，总长仍受 limit 约束。
+    """
+    if not text or len(text) <= limit:
+        return text
+    marker_reserve = 40
+    budget = max(0, limit - marker_reserve)
+    head_len = int(budget * head_ratio)
+    tail_len = budget - head_len
+    omitted = len(text) - head_len - tail_len
+    return (text[:head_len]
+            + "\n...[中间省略{0}字符]...\n".format(omitted)
+            + text[len(text) - tail_len:])
+
+
 _MAX_MSGS_CHARS = 60000         # messages 总字符阈值（超限提前滚动最老回合，作为总量防线）
 
 # ---------- 回想机制（用户引用早期内容 → 提示 AI 用 ctx_search 回想） ----------
@@ -1853,8 +1872,7 @@ class Agent:
                     try:
                         _tool_content = fair_trim_json(_tool_content, _MAX_TOOL_RESULT_CHARS)
                     except Exception:  # noqa: BLE001
-                        _tool_content = (_tool_content[:_MAX_TOOL_RESULT_CHARS]
-                                         + f"...[已截断,原{len(_tool_content)}字符]")
+                        _tool_content = _head_tail_snippet(_tool_content, _MAX_TOOL_RESULT_CHARS)
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc["id"],
