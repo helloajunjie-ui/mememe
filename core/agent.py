@@ -2584,10 +2584,18 @@ class Agent:
         recent = self.history[-20:] if self.history else []
         recent_tools = []
         recent_thinking = []
+        recent_args = []  # 工具调用参数（路径等）——区分度高，补进触发面
         for m in recent:
             if m.get("role") == "assistant":
                 for tc in (m.get("tool_calls") or []):
-                    recent_tools.append(tc.get("function", {}).get("name", ""))
+                    _fn = tc.get("function", {}) or {}
+                    recent_tools.append(_fn.get("name", ""))
+                    _a = _fn.get("arguments")
+                    if isinstance(_a, str) and _a.strip():
+                        recent_args.append(_a[:160])
+                    elif isinstance(_a, dict) and _a:
+                        import json as _json
+                        recent_args.append(_json.dumps(_a, ensure_ascii=False)[:160])
                 txt = m.get("content", "") or ""
                 if txt:
                     recent_thinking.append(txt)
@@ -2599,7 +2607,7 @@ class Agent:
         # top 命中直指当前动作（改 core 后验证→#652，清理 workspace→#654）。
         # 注意：只喂 thinking、不喂 recent_tools——工具名（fs_read/cmd_run）区分度太低，
         # 实测会把 #470/#459/#455 一串无关条目捞上来。
-        _act_text = " ".join(recent_thinking[-2:]).strip()
+        _act_text = " ".join(recent_thinking[-2:] + recent_args[-3:]).strip()[:1500]
         _scored_act = self.methods.match_scored(_act_text, limit=3) if len(_act_text) >= 8 else []
         method_hits = [m for _, m in _scored_user] + [m for _, m in _scored_act]
         # 低置信可见：让我自己知道"这次抽得准不准"（判据见 MethodStore.confidence）
