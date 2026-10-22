@@ -12,14 +12,19 @@ import threading
 from tools.base import tool
 from core import platform as plat
 
+# 2026-10-22：ICMP ping 经常被防火墙/运营商拦，测出"百度不通"但 TCP 明明是通的
+# （实测 net_quality 报"百度 不通"的同时 net_diag 的 TLS 握手 125ms 成功），
+# 于是把三个延迟探测改成 TCP 443 握手耗时——更接近"这个站到底能不能用"。
+_TCP_PROBE = ("$sw=[Diagnostics.Stopwatch]::StartNew(); "
+              "try { $c=New-Object Net.Sockets.TcpClient; "
+              "$c.Connect('%s',443); $c.Close(); "
+              "[math]::Round($sw.Elapsed.TotalMilliseconds,0) } catch { 'unreachable' }")
+
 _QUERIES = [
     # (key, 命令)
-    ("ping_ali", "Test-Connection -ComputerName 223.5.5.5 -Count 3 -ErrorAction SilentlyContinue | "
-                 "Measure-Object -Property ResponseTime -Average | ForEach-Object { if ($_.Average) {[math]::Round($_.Average,0)} else {'unreachable'} }"),
-    ("ping_baidu", "Test-Connection -ComputerName www.baidu.com -Count 3 -ErrorAction SilentlyContinue | "
-                   "Measure-Object -Property ResponseTime -Average | ForEach-Object { if ($_.Average) {[math]::Round($_.Average,0)} else {'unreachable'} }"),
-    ("ping_tencent", "Test-Connection -ComputerName 119.29.29.29 -Count 3 -ErrorAction SilentlyContinue | "
-                     "Measure-Object -Property ResponseTime -Average | ForEach-Object { if ($_.Average) {[math]::Round($_.Average,0)} else {'unreachable'} }"),
+    ("ping_ali", _TCP_PROBE % "223.5.5.5"),
+    ("ping_baidu", _TCP_PROBE % "www.baidu.com"),
+    ("ping_tencent", _TCP_PROBE % "119.29.29.29"),
     ("dns", "Resolve-DnsName www.baidu.com -Type A -ErrorAction SilentlyContinue | "
             "Where-Object {$_.IPAddress} | Select-Object -First 2 -ExpandProperty IPAddress | ConvertTo-Json -Compress"),
     ("adapters", "Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | "
