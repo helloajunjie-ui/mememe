@@ -287,7 +287,7 @@ def _tool_preview(result, ok: bool, err: str = "", limit: int = 180) -> str:
     def _pairs(d, maxn=4) -> str:
         out = []
         for k, v in d.items():
-            if k in ("ok", "error", "stderr", "code"):
+            if k in ("ok", "error", "stderr", "code", "is_error"):
                 continue
             if isinstance(v, bool) or isinstance(v, (int, float)):
                 if isinstance(v, float) and v > 1e9:      # 纪元时间戳，对人没意义
@@ -325,6 +325,10 @@ def _tool_preview(result, ok: bool, err: str = "", limit: int = 180) -> str:
         pairs = _pairs(result)
         if pairs:
             return _flat(pairs)[:limit]
+        # MCP 的返回信封常见形态：{"ok": true, "result": "", "is_error": false}
+        # —— 真的什么都没返回时，别把 is_error=False 当结果显示出来
+        if inner is not None and isinstance(inner, str) and not inner.strip():
+            return "（无返回内容）"
         try:
             return _flat(json.dumps(result, ensure_ascii=False))[:limit]
         except (TypeError, ValueError):

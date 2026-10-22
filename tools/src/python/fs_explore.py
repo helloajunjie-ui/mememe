@@ -236,7 +236,22 @@ def fs_delete(path: str = "", paths=None, confirm: str = "") -> dict:
     """删除文件或空目录（支持批量）。为防误删，仅允许删除文件或空目录；非空目录需先清空内容。"""
     try:
         if confirm != "DELETE":
-            return {"ok": False, "error": "未确认删除：请传入 confirm=\"DELETE\" 以二次确认"}
+            # 2026-10-22：这条错误占了 fs_delete 全部失败的绝大部分（近 7 天 25 次调用失败 9 次）。
+            # 旧文案只说"请传入 confirm"——模型看到还是可能漏，把可以直接照抄的调用示例给它，
+            # 参数里带的真实目标路径也一并回显（减少一次"先问路径再删"的往返）。
+            _t = ""
+            if path:
+                _t = str(path)
+            elif isinstance(paths, str):
+                _t = paths
+            elif isinstance(paths, (list, tuple)) and paths:
+                _t = str(paths[0])
+            _shown = _t.replace('"', '\\"') if _t else "<目标路径>"
+            return {"ok": False, "error": (
+                "未确认删除：需要二次确认（这是保护机制，不是工具坏了）。"
+                '直接照抄这条调用即可：fs_delete(path="%s", confirm="DELETE")；'
+                '批量删除用 fs_delete(paths=["A","B"], confirm="DELETE")，一次 confirm 覆盖整批。'
+                % _shown)}
 
         # 归一化目标列表：path 与 paths 可任传其一或并存
         targets = []

@@ -1142,11 +1142,27 @@ var TOOL_VERBS = {
   account_add:{v:"ADD",zh:"添加凭据"}, account_list:{v:"LIST",zh:"账户列表"},
   account_remove:{v:"DEL",zh:"删除账户"}, account_test:{v:"TEST",zh:"校验账户"},
   dropbox_list:{v:"DBX",zh:"列目录"}, dropbox_read:{v:"DBX",zh:"读文件"},
-  gdrive_list:{v:"GDRV",zh:"列目录"}, gdrive_read:{v:"GDRV",zh:"读文件"}
+  gdrive_list:{v:"GDRV",zh:"列目录"}, gdrive_read:{v:"GDRV",zh:"读文件"},
+  /* MCP 管理类工具（不是某个 server 的 tool，别被 mcp_ 前缀拆成 "server · tool"） */
+  mcp_list:{v:"MCP",zh:"接口列表"}, mcp_job_status:{v:"MCP",zh:"后台任务状态"},
+  mcp_job_list:{v:"MCP",zh:"后台任务列表"}, mcp_job_kill:{v:"MCP",zh:"终止后台任务"},
+  mcp_source_search:{v:"MCP",zh:"搜索接口源"}, mcp_source_install:{v:"MCP",zh:"安装接口源"},
+  mcp_source_update:{v:"MCP",zh:"更新接口源"}, mcp_key_set:{v:"MCP",zh:"保存凭据"},
+  mcp_key_list:{v:"MCP",zh:"查看凭据"}, mcp_key_remove:{v:"MCP",zh:"删除凭据"},
+  mcp_deps:{v:"MCP",zh:"检查依赖"}, mcp_install:{v:"MCP",zh:"安装依赖"}
 };
 function toolAction(name) {
   var m = TOOL_VERBS[name];
   if (m) return m;
+  // MCP 工具名是 mcp_<server>_<tool>：拆成「MCP  server · tool」，
+  // 否则会退化成 "MCP" + toolLabel() 的 "MCP·server tool"，标题里出现两个 MCP。
+  if (name.indexOf("mcp_") === 0) {
+    var rest = name.slice(4);
+    var i = rest.indexOf("_");
+    var srv = i > 0 ? rest.slice(0, i) : "";
+    var tl = (i > 0 ? rest.slice(i + 1) : rest).replace(/_/g, " ");
+    return { v: "MCP", zh: (srv ? srv + " · " : "") + tl };
+  }
   return {v: (name.split("_")[0] || name).toUpperCase(), zh: toolLabel(name)};
 }
 function toolLabel(name) {
@@ -1176,7 +1192,19 @@ function argsSummary(args) {
     if (Array.isArray(v)) return v.slice(0, 3).join(", ").slice(0, 90);
     if (typeof v === "object") { try { return JSON.stringify(v).slice(0, 90); } catch (e) {} }
   }
-  return "";
+  // MCP 工具的参数名千奇百怪（scene_name / expression / query_obj…），白名单经常全不中；
+  // 这时退一步取前两个标量参数，至少让人看出"这一步传了什么"。
+  var out = [];
+  for (var k in args) {
+    if (!Object.prototype.hasOwnProperty.call(args, k)) continue;
+    var v2 = args[k];
+    if (v2 === null || v2 === undefined) continue;
+    var sv = (typeof v2 === "object") ? JSON.stringify(v2) : String(v2);
+    if (!sv) continue;
+    out.push(k + "=" + sv.slice(0, 40));
+    if (out.length >= 2) break;
+  }
+  return out.join(", ").slice(0, 90);
 }
 function fmtClock(ts) {
   var d = ts ? new Date(ts) : new Date();

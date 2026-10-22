@@ -324,7 +324,10 @@ def cloud_webdav_delete(path: str, base_url: str = "", username: str = "", confi
     try:
         base_url, username, password = _resolve(account, base_url, username)
         if confirm != "DELETE":
-            return {"ok": False, "error": "未确认删除：请传入 confirm=\"DELETE\" 以二次确认"}
+            # 2026-10-22：同 fs_delete —— 把可照抄的调用示例直接给出来，别让模型再猜一次
+            return {"ok": False, "error": (
+                "未确认删除：需要二次确认（保护机制）。直接照抄："
+                'cloud_webdav_delete(path="%s", confirm="DELETE")' % (path or "<远端路径>"))}
         scheme, netloc, base_path = _normalize_base(base_url)
         url = _join(base_path, path)
         with _client(base_url, username, password) as c:
