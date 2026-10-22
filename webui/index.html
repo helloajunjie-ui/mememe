@@ -376,6 +376,24 @@
     margin: 2px 0 2px 6px; text-decoration: underline dotted;
   }
   .step-detail .raw-toggle:hover { color: #4B5570; }
+  .step-detail .retry-btn {
+    display: inline-block; font-size: 10.5px; color: #B03A2E; cursor: pointer;
+    margin: 2px 0 2px 8px; padding: 1px 8px; border-radius: 10px;
+    border: 1px solid #F0DAD6; background: #FDF6F5;
+  }
+  .step-detail .retry-btn:hover { background: #F8E9E7; }
+  /* 本步产出的文件：行内小徽标 + 详情里的可点卡片 */
+  .step-art-flag {
+    font-size: 9.5px; color: #8A7E63; background: #F4F2EA; border: 1px solid #E7E3D6;
+    border-radius: 8px; padding: 0 5px; margin-left: 4px; flex-shrink: 0;
+  }
+  .step-arts { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 2px 6px; }
+  .step-art {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #4B5570;
+    background: #F4F2EA; border: 1px solid #E7E3D6; border-radius: 14px; padding: 2px 9px;
+    cursor: pointer; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .step-art:hover { background: #EDE9DC; }
   .step-detail pre.blk.raw {
     max-height: 220px; overflow: auto; white-space: pre-wrap; word-break: break-word;
     margin-top: 3px;
@@ -1332,14 +1350,36 @@ function ensureStep(panel, step) {
     t.manual = true;                       // 用户手动开合过 → 之后不再自动收起
     setStepOpen(panel, step, !t.open);
   });
-  // 「查看原文」：展开这一步工具返回的原始片段（详情区重绘不丢状态，状态存在 t.rawOpen）
+  // 「查看原文」/「重试」/产物卡片：详情区重绘不丢状态（状态存在 t 上）
   el.querySelector(".step-detail").addEventListener("click", function(e){
     var t = panel._tools[step];
-    var a = (e.target && e.target.closest) ? e.target.closest(".raw-toggle") : null;
-    if (!a || !t) return;
-    e.stopPropagation();
-    t.rawOpen = !t.rawOpen;
-    renderStep(panel, step);
+    if (!t || !e.target || !e.target.closest) return;
+    var a = e.target.closest(".raw-toggle");
+    if (a) {
+      e.stopPropagation();
+      t.rawOpen = !t.rawOpen;
+      renderStep(panel, step);
+      return;
+    }
+    var art = e.target.closest(".step-art");
+    if (art) {                       // 本步产出的文件 → 复用现有的预览弹层
+      e.stopPropagation();
+      openArtifactModal(art.dataset.url, art.dataset.name);
+      return;
+    }
+    var rb = e.target.closest(".retry-btn");
+    if (rb) {                        // 失败重试：把重试意图填进输入框，由用户确认后发送
+      e.stopPropagation();
+      var act = toolAction(t.name);
+      var prompt = "（重试）上一步 " + act.v + " " + act.zh +
+        (t.arg ? "（" + t.arg + "）" : "") + " 失败了" +
+        (t.preview ? "：" + String(t.preview).slice(0, 100) : "") +
+        "。请换一种方式完成同一目标。";
+      input.value = prompt;
+      input.focus();
+      try { input.dispatchEvent(new Event("input")); } catch (e2) {}
+      toast("已把重试指令填进输入框，确认后回车发送");
+    }
   });
   box.appendChild(el);
   setTimeout(function(){ el.classList.remove("enter"); }, 320);
@@ -1362,7 +1402,11 @@ function renderStep(panel, step) {
   var obj = t.arg || "";
   el.querySelector(".step-title").innerHTML =
     '<span class="actv">' + escapeHtml(act.v) + '</span> ' + escapeHtml(act.zh) +
-    (obj ? ' <span class="obj">' + escapeHtml(obj) + '</span>' : '');
+    (obj ? ' <span class="obj">' + escapeHtml(obj) + '</span>' : '') +
+    (t.artifacts && t.artifacts.length
+      ? '<span class="step-art-flag" title="本步产出 ' + t.artifacts.length + ' 个文件">📎' +
+        t.artifacts.length + '</span>'
+      : '');
   el.querySelector(".step-meta").textContent =
     (t.status === "run") ? "执行中" : fmtDur(t.ms);
 
@@ -1377,6 +1421,17 @@ function renderStep(panel, step) {
   }
   if (t.ts) {
     html += '<div class="blk"><span class="lbl">时刻</span>' + fmtClock(t.ts) + '</div>';
+  }
+  if (t.artifacts && t.artifacts.length) {
+    html += '<div class="step-arts">' + t.artifacts.map(function(a){
+      var nm = escapeHtml(a.name || "文件");
+      return '<a class="step-art" data-url="' + escapeHtml(a.url || "") +
+             '" data-name="' + nm + '" title="点击预览：' + nm + '">' +
+             _artIcon(a.name || "") + " " + nm + '</a>';
+    }).join("") + '</div>';
+  }
+  if (t.status === "err") {
+    html += '<a class="retry-btn" title="把重试指令填进输入框">↻ 重试</a>';
   }
   if (t.detail) {
     html += '<a class="raw-toggle">' + (t.rawOpen ? "收起原文" : "查看原文") + '</a>' +
@@ -1526,6 +1581,7 @@ function renderEvent(panel, ev) {
       if (typeof ev.ms === "number") t2.ms = ev.ms;
       if (ev.preview) t2.preview = ev.preview;
       if (ev.detail) t2.detail = ev.detail;
+      if (ev.artifacts && ev.artifacts.length) t2.artifacts = ev.artifacts;
       if (!t2.manual) t2.open = false;     // 完成即收：只留一行摘要，点击再展开
       renderStep(panel, ev.step);
       syncSteps(panel);

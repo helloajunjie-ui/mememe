@@ -1881,6 +1881,7 @@ class Agent:
                 step += 1
                 name, args = tc["name"], self._safe_args(tc["arguments"])
                 _t_tool = time.time()   # 单步耗时（前端时间线显示"1.2s"用）
+                _art_before = len(self.last_round_artifacts)   # 本步新产的产物 = 之后的增量
                 used_tools.append(name)
                 self._log_decision(name, args)
                 _emit({"type": "tool", "name": name, "ok": True, "step": step,
@@ -1923,11 +1924,13 @@ class Agent:
                 # 2026-10-22：补 ms（单步耗时）/ preview（单行结果摘要）/ detail（原文片段），
                 # 供前端时间线展开显示——此前前端只有工具名+参数，点开也看不到"这一步得到了什么"。
                 _tool_json = json.dumps(result, ensure_ascii=False)
+                _new_arts = self.last_round_artifacts[_art_before:]
                 _emit({"type": "stage", "name": name, "ok": ok, "step": step,
                        "args": args,
                        "ms": int((time.time() - _t_tool) * 1000),
                        "preview": _tool_preview(result, ok, _tool_err),
-                       "detail": _tool_json[:_UI_DETAIL_CHARS]})
+                       "detail": _tool_json[:_UI_DETAIL_CHARS],
+                       "artifacts": _new_arts[:4]})
                 self._log(f"[tool] {name} → {'ok' if ok else 'error'}")
                 if not ok:
                     err_msg = _tool_err or str(result.get("error", "") or result.get("stderr", ""))[:80]

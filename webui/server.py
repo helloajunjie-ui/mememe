@@ -240,6 +240,30 @@ def _open_local_file(url: str) -> dict:
 
 
 
+def _attach_artifact_urls(ev: dict) -> dict:
+    """把 stage 事件里的产物路径补成可访问 URL（前端步骤详情里直接可预览/下载）。
+
+    2026-10-22：产物原本只在任务结束的统一产物区出现，看不出"是哪一步产出的"。
+    agent 侧只给 path/name/kind，URL 换算留在服务层（白名单根由 _artifact_url 统一管）。
+    """
+    arts = ev.get("artifacts")
+    if not arts:
+        return ev
+    out = []
+    for art in arts:
+        url = _artifact_url(art.get("path", ""))
+        if not url:
+            continue
+        out.append({"name": art.get("name") or os.path.basename(art.get("path", "")),
+                    "kind": art.get("kind") or "file", "url": url})
+    if not out:
+        ev.pop("artifacts", None)
+        return ev
+    ev = dict(ev)
+    ev["artifacts"] = out
+    return ev
+
+
 def _run_task(tid: str, message: str, attachments: list = None) -> None:
     """后台线程执行一轮 turn，阶段事件实时入列。"""
     from core.agent import TaskCancelled
@@ -254,7 +278,7 @@ def _run_task(tid: str, message: str, attachments: list = None) -> None:
     try:
         with _turn_lock:  # 本地单用户，串行化 turn，避免历史交错
             reply = a.turn(message, attachments=attachments, cancel_event=cancel_ev,
-                           stage_callback=lambda ev: _tasks.append_event(tid, ev))
+                           stage_callback=lambda ev: _tasks.append_event(tid, _attach_artifact_urls(ev)))
         _tasks.finish(tid, reply, _collect_task_artifacts(a, reply))
         _session.append("assistant", str(reply or ""))  # 回复落盘 → 刷新可恢复
     except TaskCancelled as e:  # 用户主动停止（agent 已封存断点，可续接）
