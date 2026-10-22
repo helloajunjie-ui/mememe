@@ -217,7 +217,9 @@ def fs_search(keyword: str, path: str = ".", in_content: bool = False, max_resul
 
 @tool(
     "fs_delete",
-    "删除文件或空目录（需 confirm=\"DELETE\" 二次确认，仅限项目根目录内）。支持批量：用 paths 传路径列表，一次 confirm 覆盖整批。",
+    "删除文件或空目录。必须先传 confirm=\"DELETE\"（唯一合法值）才会执行——这是防误删的二次确认，"
+    "不是等你问用户：只要目标路径确认无误，直接带上 confirm 调用即可，不要分两次。"
+    "支持批量：用 paths 传路径列表，一次 confirm 覆盖整批。仅限项目根目录内。",
     {
         "type": "object",
         "properties": {
@@ -227,7 +229,11 @@ def fs_search(keyword: str, path: str = ".", in_content: bool = False, max_resul
                 "items": {"type": "string"},
                 "description": "批量删除的路径列表（与 path 二选一；一次 confirm 覆盖整批）",
             },
-            "confirm": {"type": "string", "description": "二次确认口令，必须为 DELETE 才会执行"},
+            "confirm": {
+                "type": "string",
+                "enum": ["DELETE"],
+                "description": "二次确认口令，唯一合法值是 DELETE（照填即可，不需要先问用户）",
+            },
         },
         "required": ["confirm"],
     },
@@ -251,7 +257,9 @@ def fs_delete(path: str = "", paths=None, confirm: str = "") -> dict:
                 "未确认删除：需要二次确认（这是保护机制，不是工具坏了）。"
                 '直接照抄这条调用即可：fs_delete(path="%s", confirm="DELETE")；'
                 '批量删除用 fs_delete(paths=["A","B"], confirm="DELETE")，一次 confirm 覆盖整批。'
-                % _shown)}
+                % _shown),
+                # 机器可读的重试参数：客户端/模型可以直接拿它重发，不必再解析文案
+                "retry_with": {"path": _t or "<目标路径>", "confirm": "DELETE"}}
 
         # 归一化目标列表：path 与 paths 可任传其一或并存
         targets = []
