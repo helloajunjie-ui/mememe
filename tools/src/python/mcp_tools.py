@@ -52,17 +52,25 @@ def run_list(server: str = "") -> dict:
     "mcp_connect",
     "激活一个 MCP 软件接口（如 filesystem/blender/godot/playwright）：拉取其工具清单并注入对话，"
     "激活后即可直接调用 mcp_<软件>_<工具>。激活失败会返回原因（软件未运行/未安装等）。"
-    "【流程】mcp_list 看目录确定软件 → 本工具激活 → 使用 → 用完 mcp_disconnect 释放。",
+    "【流程】mcp_list 看目录确定软件 → 本工具激活 → 使用 → 用完 mcp_disconnect 释放。"
+    "参数用 name 或 server 都可以（同一个意思，两种都收）。",
     {
         "type": "object",
         "properties": {
             "name": {"type": "string",
                      "description": "要激活的软件接口名（目录里的 name），如 filesystem / blender"},
+            "server": {"type": "string",
+                       "description": "同 name，别名（模型常这么叫，两种都收）"},
         },
-        "required": ["name"],
+        "required": [],
     },
 )
-def run_connect(name: str) -> dict:
+def run_connect(name: str = "", server: str = "") -> dict:
+    # 2026-10-22：name / server 两个名字都收——历史上有 7 次因为把 server 当参数名
+    # 直接 TypeError 失败（"got an unexpected keyword argument 'server'"）。
+    name = (name or server or "").strip()
+    if not name:
+        return {"ok": False, "error": "请传 name（或别名 server）：要激活的软件接口名，如 filesystem"}
     if not _NAME_RE.fullmatch(name or ""):
         return {"ok": False, "error": "软件接口名只能含小写字母/数字/下划线/连字符"}
     mcp = get_mcp_manager()
@@ -102,16 +110,20 @@ def run_connect(name: str) -> dict:
 @tool(
     "mcp_disconnect",
     "释放一个已激活的 MCP 软件接口：其工具从对话上下文移除（不再注入）。"
-    "释放后需要再次使用须重新 mcp_connect。",
+    "释放后需要再次使用须重新 mcp_connect。参数用 name 或 server 都可以。",
     {
         "type": "object",
         "properties": {
             "name": {"type": "string", "description": "要释放的软件接口名，如 filesystem"},
+            "server": {"type": "string", "description": "同 name，别名（两种都收）"},
         },
-        "required": ["name"],
+        "required": [],
     },
 )
-def run_disconnect(name: str) -> dict:
+def run_disconnect(name: str = "", server: str = "") -> dict:
+    name = (name or server or "").strip()
+    if not name:
+        return {"ok": False, "error": "请传 name（或别名 server）：要释放的软件接口名"}
     mcp = get_mcp_manager()
     if not mcp.ensure_running():
         return {"ok": False, "error": "MCP 服务无法启动"}

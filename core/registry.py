@@ -780,7 +780,15 @@ class ToolRegistry:
             result = fn(**args)
             return {"ok": True, "result": result}
         except TypeError as e:
-            return {"ok": False, "error": f"参数错误: {e}"}
+            # 2026-10-22：把「参数为空」和「漏了某个必填字段」分开说。
+            # 空参数几乎总是"工具调用参数被输出上限截断"（实测 ws_write 24 次），
+            # 而旧文案只有一句 "missing 1 required positional argument"，模型看不出该重发还是该补字段。
+            args = args or {}
+            if not args:
+                return {"ok": False, "error": (
+                    "参数为空：这次调用没有传任何参数。最常见原因是工具调用参数被输出上限截断。"
+                    "请把长内容拆成多次写入（先写骨架，再分段补），然后重发。")}
+            return {"ok": False, "error": f"参数错误: {e}（本次只收到这些参数：{sorted(args)}）"}
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "error": f"执行异常: {type(e).__name__}: {e}"}
 

@@ -100,7 +100,13 @@ def run(command: str, timeout: float = 20, background: bool = False, desc: str =
         _audit(command, {"ok": False, "stderr": "被安全策略拦截"}, background, desc)
         return {
             "ok": False,
-            "error": "安全策略拦截：该命令属于破坏性操作（删除/格式化/关机等）。如需执行，请说明用途由用户确认后使用受控方式。",
+            # 2026-10-22：旧文案只说"请说明用途由用户确认后使用受控方式"——但没说什么算受控方式，
+            # 模型只能反复重试同一条命令（实测 36 次卡在这里）。这里直接给出可执行的替代路径。
+            "error": ("安全策略拦截：该命令属于破坏性操作（删除/格式化/关机等），cmd_run 不放行。"
+                      "替代做法（按场景选一个，不要再重试同一条命令）："
+                      "① 删文件/空目录 → 用 fs_delete(path=\"…\", confirm=\"DELETE\")；"
+                      "② 移动/复制 → 用 fs_move / fs_copy；"
+                      "③ 其它确需命令行的破坏性操作 → 明确告诉用户要执行什么、为什么，由用户手动执行或明确授权后再定。"),
         }
     from core import platform as plat
 
