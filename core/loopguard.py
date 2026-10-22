@@ -62,6 +62,32 @@ class LoopGuard:
         low = str(err).lower()
         return any(m.lower() in low for m in cls.PARAM_ERROR_MARKS)
 
+    # 只读工具（纯查询、无副作用）：重复调用只是浪费 token，
+    # 熔断整轮长任务的代价远大于几次无效查询，因此它们的 duplicate_call 只提示不熔断。
+    # 维护说明：新增只读工具时把名字加进来；任何有写/发布/删除副作用的工具一律不要加。
+    READONLY_TOOLS = {
+        "fs_list", "fs_read", "fs_search", "fs_stat", "fs_smart_read",
+        "sys_check", "sys_probe", "app_probe", "proc_list",
+        "job_list", "job_status", "mcp_job_list", "mcp_job_status",
+        "memory_search", "ctx_search", "kb_search", "kb_list", "kb_history",
+        "tool_find", "tool_scan", "tool_health_audit",
+        "mcp_list", "mcp_key_list", "mcp_deps", "mcp_source_search",
+        "net_quality", "net_search", "net_fetch", "llm_health",
+        "git_multi_status", "disk_report", "word_count", "account_list",
+        "gh_explore", "plan_submit", "workflow_status", "workflow_list",
+    }
+    READONLY_PREFIXES = ("fs_list", "fs_read", "fs_search", "fs_stat", "get_", "list_", "query_")
+
+    @classmethod
+    def is_readonly(cls, name: str) -> bool:
+        """该工具是否为只读查询（无副作用）。"""
+        n = (name or "").strip().lower()
+        if not n:
+            return False
+        if n in cls.READONLY_TOOLS:
+            return True
+        return any(n.startswith(p) for p in cls.READONLY_PREFIXES)
+
     # ---------- 观察 ----------
     def observe_tool(self, name: str, args: dict, ok: bool,
                      error: str = "") -> Optional[Dict]:
@@ -81,8 +107,23 @@ class LoopGuard:
         recent_fp = [f for f, _, _, _ in self.tool_records[-self.window:]]
         dup = recent_fp.count(fp)
         if dup >= self.max_dup:
+            # 命中本条的三类重复，处置不同：
+            #   a. 只读工具重复 → 代价只是 token，只提示不熔断；
+            #   b. 重复的调用全部是参数/确认格式错误 → 换参数就能过，属自我纠错，只提示；
+            #   c. 写操作 + 业务层面的重复 → 保留 hard 熔断能力（重复写有真实危害）。
+            same = [r for r in self.tool_records[-self.window:] if r[0] == fp]
+            all_param_err = bool(same) and all(r[3] for r in same)
+            readonly = self.is_readonly(name)
+            cap = "soft" if (readonly or all_param_err) else ""
+            if readonly:
+                tail = "只读查询重复，只是浪费 token"
+            elif all_param_err:
+                tail = "重复的是参数格式错误，换对参数即可"
+            else:
+                tail = "重复尝试同一动作"
             return self._signal("duplicate_call",
-                                f"工具 {name} 相同参数在最近 {self.window} 次调用中出现 {dup} 次（重复尝试同一动作）")
+                                f"工具 {name} 相同参数在最近 {self.window} 次调用中出现 {dup} 次（{tail}）",
+                                level_cap=cap)
 
         # 信号2：同工具连续业务失败（窗口内，参数可不同）
         # 参数/确认类错误不计入：那是调用格式问题，重试时参数会变，属于自我纠错；
