@@ -1844,7 +1844,14 @@ class Agent:
                     self._set_activity("error", f"{name}: {err_msg}")
                 self._log_op(name, args, result, ok)
                 # 死循环检测：同参数重复 / 同工具连续失败
-                tool_sig = guard.observe_tool(name, args, ok)
+                # 把错误文本交给 loopguard：区分「参数写错（可自纠）」与「业务失败（方案走不通）」
+                if ok:
+                    _lg_err = ""
+                else:
+                    _lg_err = _tool_err or ""
+                    if not _lg_err and isinstance(result, dict):
+                        _lg_err = str(result.get("error", "") or result.get("stderr", ""))
+                tool_sig = guard.observe_tool(name, args, ok, _lg_err[:200])
                 if tool_sig and tool_sig["level"] == "hard":
                     loop_hit = True
                     self._log(f"[loopguard] hard 熔断: {tool_sig['reason']}")

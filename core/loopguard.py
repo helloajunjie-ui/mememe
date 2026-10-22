@@ -37,28 +37,72 @@ class LoopGuard:
         raw = name + "|" + json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
+    # 参数/协议类错误特征：这类失败是「调用格式写错」（参数名不对、漏必填、漏确认口令），
+    # 重试时参数会变，属于自我纠错过程，不该被当成「方案走不通」而熔断整轮任务。
+    PARAM_ERROR_MARKS = (
+        "unexpected keyword argument",
+        "missing required argument",
+        "got an unexpected",
+        "positional argument",
+        "invalid argument",
+        "unconfirmed",
+        "未确认删除",
+        "未指定删除目标",
+        "缺少必填",
+        "缺少参数",
+        "参数错误",
+        "参数名",
+    )
+
+    @classmethod
+    def is_param_error(cls, err: str) -> bool:
+        """判定是否为可自纠的调用格式错误（而非业务失败）。"""
+        if not err:
+            return False
+        low = str(err).lower()
+        return any(m.lower() in low for m in cls.PARAM_ERROR_MARKS)
+
     # ---------- 观察 ----------
-    def observe_tool(self, name: str, args: dict, ok: bool) -> Optional[Dict]:
-        """记录一次工具调用。返回检测信号（None=无信号）。"""
+    def observe_tool(self, name: str, args: dict, ok: bool,
+                     error: str = "") -> Optional[Dict]:
+        """记录一次工具调用。返回检测信号（None=无信号）。
+
+        error：失败时的错误文本。用于区分两类失败——
+        - 参数/确认类错误（unexpected keyword argument、未确认删除…）：可自纠，最多 soft；
+        - 业务失败（工具正常运行但结果不成立）：才计入 fail_loop，可升级 hard 熔断。
+        """
         fp = self._fp(name, args)
-        self.tool_records.append((fp, name, ok))
+        is_pe = (not ok) and self.is_param_error(error)
+        self.tool_records.append((fp, name, ok, is_pe))
         if len(self.tool_records) > self.window * 2:
             self.tool_records = self.tool_records[-self.window * 2:]
 
         # 信号1：同工具同参数重复（窗口内）
-        recent_fp = [f for f, _, _ in self.tool_records[-self.window:]]
+        recent_fp = [f for f, _, _, _ in self.tool_records[-self.window:]]
         dup = recent_fp.count(fp)
         if dup >= self.max_dup:
             return self._signal("duplicate_call",
                                 f"工具 {name} 相同参数在最近 {self.window} 次调用中出现 {dup} 次（重复尝试同一动作）")
 
-        # 信号2：同工具连续失败（窗口内，参数可不同）
+        # 信号2：同工具连续业务失败（窗口内，参数可不同）
+        # 参数/确认类错误不计入：那是调用格式问题，重试时参数会变，属于自我纠错；
+        # 把它算进「方案走不通」会误杀整轮任务（2026-10-14 / 10-22 两次实测）。
         recent_tool = self.tool_records[-self.max_fail:]
         if len(recent_tool) >= self.max_fail and all(
-            (n == name and not o) for _, n, o in recent_tool[-self.max_fail:]
+            (n == name and not o and not pe) for _, n, o, pe in recent_tool[-self.max_fail:]
         ):
             return self._signal("fail_loop",
-                                f"工具 {name} 连续失败 {self.max_fail} 次（同一方案反复走不通）")
+                                f"工具 {name} 连续业务失败 {self.max_fail} 次（同一方案反复走不通）")
+
+        # 信号2b：同工具连续参数错误 → 只提示看 schema，不熔断。
+        # 判据：同一类格式错误重复出现，说明我没读参数表，值得提示；但换参数重试是正常自纠。
+        if len(recent_tool) >= self.max_fail and all(
+            (n == name and pe) for _, n, _, pe in recent_tool[-self.max_fail:]
+        ):
+            return self._signal(
+                "param_error",
+                f"工具 {name} 连续 {self.max_fail} 次参数/确认格式错误（先看 schema 的参数名与必填项，别重复同一写法）",
+                level_cap="soft")
         return None
 
     def observe_plan(self, steps: list) -> Optional[Dict]:
@@ -102,14 +146,18 @@ class LoopGuard:
                             f"连续 {self.max_idle} 轮无工具调用且输出高度相似（疑似纯思考空转/自我重复）")
 
     # ---------- 信号分级 ----------
-    def _signal(self, kind: str, reason: str) -> Dict:
+    def _signal(self, kind: str, reason: str, level_cap: str = "") -> Dict:
         self.signal_counts[kind] = self.signal_counts.get(kind, 0) + 1
         count = self.signal_counts[kind]
+        level = "hard" if count >= 2 else "soft"   # 首次 soft 提醒，再犯 hard 熔断
+        if level_cap == "soft":
+            # 某些信号天生不该升级为熔断（如参数错误：提示即可，杀了整轮反而更贵）
+            level = "soft"
         sig = {
             "kind": kind,
             "reason": reason,
             "count": count,
-            "level": "hard" if count >= 2 else "soft",   # 首次 soft 提醒，再犯 hard 熔断
+            "level": level,
         }
         self.last_signal = sig
         return sig
