@@ -265,6 +265,13 @@ _STREAK_UPGRADE = {
 
 _MAX_STEP = 0.18  # 核心情感单次最大移动（情绪是"升上来"的，不是瞬间跳变）
 
+# 2026-10-22：成功的"了结类"事件要把受挫计数清零。
+# 旧实现只增不减：累计失败 3 次之后，哪怕中间成功 20 次，下一次单独失败仍被判成
+# "连续失败 → 泄气(low)"，等于把一次性挫折永久升级成低落基调（探针实测复现）。
+_STREAK_RESET_EVENTS = {"task_success", "task_success_long", "user_praise", "user_trust"}
+_STREAK_NEGATIVE = ("task_failure", "streak_failure", "user_criticism",
+                    "tool_error_repeat", "blocked_repeatedly")
+
 
 def _band(feeling: str, intensity: float) -> str:
     """Plutchik 强度档位：同一种感受按强度取不同词（恼火→生气→愤怒）。"""
@@ -305,6 +312,10 @@ class EmotionState:
         dominant, v_target, a_target, mix = spec
 
         # 连续计数与升级（量变到质变：烦躁→泄气 / 谨慎→低落）
+        # 成功类事件先把负面计数清零，再记本次事件——否则"连续"会被累计成"永久"。
+        if event in _STREAK_RESET_EVENTS:
+            for k in _STREAK_NEGATIVE:
+                self._streak.pop(k, None)
         self._streak[event] = self._streak.get(event, 0) + (1 if streak == 1 else streak)
         n = self._streak[event]
         up = _STREAK_UPGRADE.get(event)

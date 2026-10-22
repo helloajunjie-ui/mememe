@@ -187,11 +187,25 @@ class LLMGateway:
         # —— 推理预算保护（2026-09-23）——
         # 推理模型（deepseek-flash 等）的 reasoning 与 content 共用 max_tokens 预算：
         # 思考链吃光额度 → content 为空串 → 主循环误判"空回复"直接结束（"话说到一半空白"）。
-        # 机械可修复场景（无 error + content 空 + reasoning 非空 + finish_reason==length 截断）
-        # → 放大 max_tokens 重试一次，不把问题留给用户"重发一次"。
-        if (not (resp_data.get("content") or "").strip()
+        # 2026-10-22 扩展：工具调用的 arguments 也会被同一预算截断——JSON 断在半截，
+        # 解析失败后参数变空，报错是"missing required positional argument"（ws_write 24 次）。
+        # 两类都属"机械可修复"，放大 max_tokens 重试一次。
+        def _truncated_tool_args(rd: Dict) -> bool:
+            if rd.get("finish_reason") != "length":
+                return False
+            for t in (rd.get("tool_calls") or []):
+                a = t.get("arguments")
+                if isinstance(a, str) and a.strip():
+                    try:
+                        json.loads(a)
+                    except ValueError:
+                        return True
+            return False
+
+        if ((not (resp_data.get("content") or "").strip()
                 and resp_data.get("reasoning_content")
-                and resp_data.get("finish_reason") == "length"):
+                and resp_data.get("finish_reason") == "length")
+                or _truncated_tool_args(resp_data)):
             boost = min(16384, max(4096, int(self.max_tokens or 4096) * 2))
             if boost != int(self.max_tokens or 4096):
                 payload["max_tokens"] = boost

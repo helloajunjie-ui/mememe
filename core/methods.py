@@ -139,6 +139,10 @@ def extract_keywords(text: str, maxn: int = 12) -> List[str]:
 
 
 class MethodStore:
+    # 世界书目录的紧凑渲染参数（2026-10-22：目录本身曾占 20k tokens/轮）
+    _INDEX_MAX_PER_CATEGORY = 30
+    _INDEX_NAME_CHARS = 26
+
     def __init__(self, path: str = _PATH):
         self.path = path
         self.data: Dict = self._load()
@@ -319,19 +323,36 @@ class MethodStore:
             })
         return out
 
-    def to_index(self, limit: Optional[int] = None) -> str:
-        """世界书多级目录（Markdown 渲染视图，给 LLM 展示用）：从 JSON 结构渲染。"""
-        return self._render_index(self.to_index_json(limit))
+    def to_index(self, limit: Optional[int] = None, max_per_category: int = 0) -> str:
+        """世界书多级目录（Markdown 渲染视图，给 LLM 展示用）：从 JSON 结构渲染。
+
+        max_per_category=0 时用默认上限（每类 30 条），其余条目靠 method_find 检索。
+        """
+        return self._render_index(self.to_index_json(limit), max_per_category)
 
     @staticmethod
-    def _render_index(data: List[Dict]) -> str:
+    def _render_index(data: List[Dict], max_per_category: int = 0) -> str:
+        """渲染世界书目录。默认紧凑模式：每行只留 [id] 名称，每类最多 N 条。
+
+        2026-10-22：原渲染把 705 条全量（名称 + 3 个关键词）塞进每轮 system prompt，
+        实测 43,835 字符 ≈ 20,057 tokens——单这一个目录就吃掉上下文预算（COMPRESS_TOKEN_BUDGET
+        是 24k），把对话窗口挤到必须压缩。紧凑后 268 行 ≈ 8.8k 字符 ≈ 2.2k tokens（降 9 倍），
+        被截掉的条目用 method_find 工具按关键词检索，能力不丢。
+        """
+        cap = max_per_category or MethodStore._INDEX_MAX_PER_CATEGORY
         lines = []
         for cat in data:
-            lines.append(f"▶ {cat['category']}")
-            for m in cat["items"]:
-                kws = "/".join(m.get("keywords", []))
+            items = cat["items"]
+            lines.append(f"▶ {cat['category']}（{len(items)}）")
+            for m in items[:cap]:
+                nm = (m.get("name") or "?").strip()
+                if len(nm) > MethodStore._INDEX_NAME_CHARS:
+                    nm = nm[:MethodStore._INDEX_NAME_CHARS] + "…"
                 tag = "避" if m.get("type") == "bad" else ""
-                lines.append(f"   [{m.get('id')}]{tag} {m.get('name','?')}（{kws}）")
+                lines.append(f"   [{m.get('id')}]{tag} {nm}")
+            rest = len(items) - cap
+            if rest > 0:
+                lines.append(f"   …另 {rest} 条（用 method_find 按关键词检索）")
         return "\n".join(lines) if lines else "（暂无方法论）"
 
     # 方法论领域分类（多级目录第一级）
@@ -428,6 +449,27 @@ class MethodStore:
     def match(self, text: str, limit: int = 5) -> List[Dict]:
         """世界书触发（兼容旧接口）：只返回条目，丢弃分数。"""
         return [m for _, m in self.match_scored(text, limit)]
+
+    def find(self, keyword: str, limit: int = 8) -> List[Dict]:
+        """按关键词全文检索方法论（名称/场景/方法/关键词/分类），供目录被截断后按需取回。
+
+        2026-10-22：世界书目录改成紧凑渲染后，每类只列前 30 条，其余靠本方法检索。
+        评分：完整词命中权重高（×3），2 字词重叠兜底（与 match_scored 同口径）。
+        """
+        kw = (keyword or "").strip().lower()
+        if not kw:
+            return []
+        scored = []
+        for m in self.list():
+            hay = " ".join([
+                m.get("name") or "", m.get("scene") or "", m.get("method") or "",
+                " ".join(m.get("keywords") or []), m.get("category") or "",
+            ]).lower()
+            score = hay.count(kw) * 3 + self._scene_overlap(kw, m.get("scene", ""))
+            if score:
+                scored.append((score + m.get("importance", 0) * 0.5, m))
+        scored.sort(key=lambda t: -t[0])
+        return [m for _, m in scored[:limit]]
 
     def confidence(self, text: str, limit: int = 5):
         """置信度：返回 (命中数, top1分, 是否低置信)。判据：命中<3 或 top1<5.0。"""
