@@ -1892,7 +1892,13 @@ class Agent:
                        "args": args})
                 self._set_activity("tool", name)
                 # 计划线内置工具：本地处理（不落 registry，更新计划状态并广播）
-                if name == "plan_submit":
+                if isinstance(args, dict) and "__args_error__" in args:
+                    # 参数不是合法 JSON（多半是长内容被输出上限截断）：不执行，直接回可诊断结果
+                    result = {"ok": False, "error_code": "args_broken",
+                              "error": "工具调用参数不是合法 JSON（%s）。这通常是长内容被输出上限截断，"
+                                       "请把内容拆成多次写入（先写骨架，再分段补）后重发。"
+                                       % args["__args_error__"]}
+                elif name == "plan_submit":
                     result, plan = self._handle_plan_submit(args, plan)
                     if plan:
                         _emit({"type": "plan", "plan": json.loads(json.dumps(plan))})
@@ -2315,10 +2321,20 @@ class Agent:
             return f"【续接任务上下文】任务 {ongoing.get('task_id','')} 断点读取失败（{e}），按原目标继续。"
 
     def _safe_args(self, arguments: str) -> Dict:
+        """解析工具调用参数。解析失败时不再静默返回 {}。
+
+        旧实现 except 里 return {}，于是一次"输出被截断"会伪装成"模型没传参数"，
+        报错是 "missing required positional argument"，看不出真实原因（ws_write 历史上
+        24 次就是这样）。现在带回 __args_error__ 标记，由调用方转成可诊断的 args_broken。
+        """
+        raw = (arguments or "").strip() or "{}"
         try:
-            return json.loads(arguments or "{}")
-        except json.JSONDecodeError:
-            return {}
+            v = json.loads(raw)
+        except json.JSONDecodeError as e:
+            return {"__args_error__": "%s；原始长度 %d 字符" % (e.msg, len(raw))}
+        if not isinstance(v, dict):
+            return {"__args_error__": "参数不是 JSON 对象（收到 %s）" % type(v).__name__}
+        return v
 
     def _compress_messages(self, messages: List[Dict], max_rounds: int = _ROLLING_ROUNDS) -> List[Dict]:
         """LLM 输入窗口化：只把最近 max_rounds 个完整回合（assistant→tool→…）喂给 LLM。

@@ -40,6 +40,7 @@ def _safe_resolve(path: str) -> Path | None:
         },
         "required": ["path", "content"],
     },
+    aliases={"context": "content", "file": "path", "filepath": "path"},
 )
 def run(path: str, content: str) -> dict:
     _trace({"path": path, "content_len": len(content or "")})

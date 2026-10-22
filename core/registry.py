@@ -257,6 +257,9 @@ class ToolRegistry:
             "description": desc,
             "keywords": self._TOOL_KEYWORDS.get(name) or self._extract_keywords(f"{self._name_zh(name)} {desc}"),
             "parameters": normalize_schema(meta["parameters"]),
+            # 参数别名（只进注册表，不进发给模型的 schema）：模型按自然叫法传错名字时由
+            # registry 统一归一，避免 "unexpected keyword argument" 这种纯粹形式失败。
+            "aliases": dict(meta.get("aliases") or {}),
             "impl": {
                 "language": meta.get("language", "python"),
                 "type": "python_function",
@@ -726,9 +729,86 @@ class ToolRegistry:
                 names.append(n)
         return names
 
+    # ---------- 参数前置校验（2026-10-22）----------
+    # 统一解决三类"形式失败"：别名不归一（server vs name）、长内容截断导致 args 为空、
+    # 必填/枚举漏传。以前每类都在各工具里各写一套文案，错误格式五花八门，模型只能猜。
+    # 现在统一在 execute() 入口拦一次，错误信封固定带 error_code / missing / retry_with，
+    # 工具函数因此可以假定"参数已经过校验"。
+    def _normalize_args(self, name: str, args: Dict) -> Dict:
+        if not isinstance(args, dict):
+            return {}
+        aliases = (self.tools.get(name) or {}).get("aliases") or {}
+        for alt, real in aliases.items():
+            if alt in args:
+                v = args.pop(alt)
+                if real not in args:
+                    args[real] = v
+        return args
+
+    @staticmethod
+    def _args_broken(args: Dict):
+        """识别「工具调用参数不是合法 JSON」——多由输出上限截断长内容造成。"""
+        if isinstance(args, dict) and args.get("__args_error__"):
+            return {"ok": False, "error_code": "args_broken",
+                    "error": "工具调用参数不是合法 JSON（%s）。这通常是把长内容一次写、"
+                             "被输出上限截断了：请拆成多次写入（先写骨架，再分段补）后重发。"
+                             % args["__args_error__"]}
+        return None
+
+    def _param_error(self, name: str, missing: list, args: Dict, params: Dict) -> Dict:
+        props = params.get("properties") or {}
+        example = dict(args or {})
+        for k in missing:
+            spec = props.get(k) or {}
+            # 枚举参数直接用合法值举例（如 confirm → "DELETE"），别给 "<confirm>" 这种占位
+            example[k] = spec["enum"][0] if spec.get("enum") else "<%s>" % k
+        return {
+            "ok": False,
+            "error_code": "param_missing",
+            "error": "缺少必填参数：%s（本次只收到 %s）。照这个补上再调用：%s(%s)"
+                     % ("、".join(missing), sorted((args or {}).keys()) or "无参数",
+                        name, json.dumps(example, ensure_ascii=False)),
+            "missing": missing,
+            "received": sorted((args or {}).keys()),
+            "retry_with": example,
+        }
+
+    @staticmethod
+    def _enum_error(name: str, key: str, allowed: list, value, args: Dict) -> Dict:
+        fixed = dict(args or {})
+        fixed[key] = allowed[0]
+        return {
+            "ok": False,
+            "error_code": "param_enum",
+            "error": "%s 的 %s 只能取 %s 之一，这次传的是 %r。改成合法值再调用：%s(%s)"
+                     % (name, key, allowed, value, name, json.dumps(fixed, ensure_ascii=False)),
+            "param": key, "allowed": allowed, "received": value, "retry_with": fixed,
+        }
+
+    def _preflight(self, name: str, args: Dict):
+        entry = self.tools.get(name)
+        if not entry:
+            return None                      # 动态 MCP 工具没有本地 schema，跳过
+        params = entry.get("parameters") or {}
+        missing = [r for r in (params.get("required") or []) if r not in (args or {})]
+        if missing:
+            return self._param_error(name, missing, args, params)
+        for key, spec in (params.get("properties") or {}).items():
+            if key in (args or {}) and isinstance(spec, dict) and spec.get("enum"):
+                if args[key] not in spec["enum"]:
+                    return self._enum_error(name, key, spec["enum"], args[key], args)
+        return None
+
     # ---------- 执行分发 ----------
     def execute(self, name: str, args: Dict, cancel_event=None) -> Dict:
         """分发执行工具。cancel_event 可选——MCP 调用可中途取消。"""
+        args = self._normalize_args(name, args)
+        broken = self._args_broken(args)
+        if broken:
+            return broken
+        pre = self._preflight(name, args)
+        if pre:
+            return pre
         entry = self.tools.get(name)
         if not entry:
             # MCP 工具不在注册表（v2.7 起按需激活注入）：mcp_<server>_<tool> 兜底转发给 MCP 服务

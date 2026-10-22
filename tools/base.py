@@ -15,12 +15,16 @@ META_ATTR = "_bailing_tool_meta"
 
 
 def tool(name: str, description: str, parameters: Dict, deps: Optional[list] = None,
-         language: str = "python", group: str = ""):
+         language: str = "python", group: str = "", aliases: Optional[Dict[str, str]] = None):
     """工具注册装饰器：把普通函数标记为素月工具。
 
     group: 功能域（工具目录/检索里的归类）。新工具请显式声明，如 group="网络"；
            不声明则按 core/registry.py 的前缀规则兜底，落进"其他"=未归类，
            tool_health_audit 会告警。功能域词表见 docs/工具归档规范.md。
+    aliases: 参数别名表 {别名: 正式名}，由 registry 在调用前统一归一。
+           只进注册表、不进发给模型的 schema（多写一个名字反而干扰模型）。
+           用途：模型常按自然叫法传参（server / target / desc），而工具签名叫 name / path，
+           以前直接 TypeError 失败——现在别名层先映射，压根不会报错。
     """
 
     def decorator(fn: Callable) -> Callable:
@@ -31,6 +35,7 @@ def tool(name: str, description: str, parameters: Dict, deps: Optional[list] = N
             "deps": deps or [],
             "language": language,
             "group": group or "",
+            "aliases": aliases or {},
         })
         return fn
 

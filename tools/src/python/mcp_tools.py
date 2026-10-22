@@ -59,11 +59,10 @@ def run_list(server: str = "") -> dict:
         "properties": {
             "name": {"type": "string",
                      "description": "要激活的软件接口名（目录里的 name），如 filesystem / blender"},
-            "server": {"type": "string",
-                       "description": "同 name，别名（模型常这么叫，两种都收）"},
         },
-        "required": [],
+        "required": ["name"],
     },
+    aliases={"server": "name"},
 )
 def run_connect(name: str = "", server: str = "") -> dict:
     # 2026-10-22：name / server 两个名字都收——历史上有 7 次因为把 server 当参数名
@@ -115,10 +114,10 @@ def run_connect(name: str = "", server: str = "") -> dict:
         "type": "object",
         "properties": {
             "name": {"type": "string", "description": "要释放的软件接口名，如 filesystem"},
-            "server": {"type": "string", "description": "同 name，别名（两种都收）"},
         },
-        "required": [],
+        "required": ["name"],
     },
+    aliases={"server": "name"},
 )
 def run_disconnect(name: str = "", server: str = "") -> dict:
     name = (name or server or "").strip()
