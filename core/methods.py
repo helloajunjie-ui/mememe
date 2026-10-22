@@ -25,6 +25,8 @@ _BM25_MIN_SCORE = 1.5      # BM25 补召回的绝对下限
 _HYBRID_MIN_KEYWORD_HITS = 3   # 关键词命中达到这个数就不再掺 BM25
 
 _RE_EN = re.compile(r"[A-Za-z0-9_]+")
+# 工具名形状的标识符（fs_read / cmd_run / mcp_connect…）
+_TOOL_TOKEN_RE = re.compile(r"\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b")
 _RE_ZH = re.compile(r"[\u4e00-\u9fff]")
 
 # 中文分词：优先 jieba（词级召回，2-gram 会把"有问/查一/个文"这类跨词边界碎片
@@ -200,6 +202,7 @@ class MethodStore:
         self._hits_dirty = False
         self._last_flush = 0.0
         self._bm25_cache = None
+        self._tool_cache = None
         self._check_dormant_once()
 
     def _migrate(self) -> None:
@@ -572,6 +575,7 @@ class MethodStore:
 
     def invalidate_index(self) -> None:
         self._bm25_cache = None
+        self._tool_cache = None
 
     def _match_bm25(self, text: str, limit: int = 5) -> list:
         q = (text or "").strip()
@@ -756,25 +760,57 @@ class MethodStore:
                 out.append(m)
         return out
 
-    def preload_by_activity(self, recent_tools: List[str], recent_text: str) -> List[Dict]:
-        """场景预加载：根据她正在做什么，主动带相关方法论。
-        recent_tools: 最近 N 步调过的工具名列表；recent_text: 最近几轮她自己的 thinking。"""
-        hits = []
+    def _tool_index(self):
+        """工具名 → 提到它的方法论条目（懒构建，与 BM25 索引一起失效）。
+
+        2026-10-22：旧版场景预加载是硬编码 3 条映射（net_search→343/344、mcp_connect→341），
+        实测 168 轮日志里 预加载 一直是 0 —— 覆盖面太窄，等于没生效。
+        改成从语料里自动发现：方法论正文/关键词里提到某个工具标识符（`fs_read`、`cmd_run`…），
+        那么"她正在调这个工具"就是最强的前置信号，不需要人工维护映射表。
+        实测 115 个真实工具里有 38 个被方法论正文提到（cmd_run 29 条、net_fetch 16 条…）。
+        """
+        if self._tool_cache is not None:
+            return self._tool_cache
+        idx: Dict[str, List[Dict]] = {}
+        for m in self.list():
+            text = " ".join([
+                m.get("name") or "", m.get("scene") or "", m.get("method") or "",
+                " ".join(m.get("keywords") or []),
+            ]).lower()
+            for tok in set(_TOOL_TOKEN_RE.findall(text)):
+                idx.setdefault(tok, []).append(m)
+        self._tool_cache = idx
+        return idx
+
+    def preload_by_activity(self, recent_tools: List[str], recent_text: str = "") -> List[Dict]:
+        """场景预加载：最近调过哪个工具，就带上"讲这个工具怎么用/别踩什么坑"的条目。
+
+        recent_tools: 最近 N 步调过的工具名（按时间顺序，末尾最新）；recent_text 兼容旧调用。
+
+        2026-10-22：按「工具的新旧」分配名额——最近用过的工具给 2 条，更早的给 1 条。
+        之前把所有候选混在一起按 importance 排，结果最近在用的工具被旧工具的高权重条目挤掉
+        （实测用 fs_delete，预加载出来的却是"用 cmd_run 列表核实文件"那几条）。
+        """
+        tools = [t for t in (recent_tools or []) if t][-5:]
+        if not tools:
+            return []
+        idx = self._tool_index()
+        now = datetime.datetime.now()
+        hits: List[Dict] = []
         seen = set()
-        low = (recent_text or "").lower()
-        tools = set(recent_tools or [])
-        # 搜索场景
-        if "net_search" in tools or "bsk_navigate" in tools or "google" in low or "搜索" in (recent_text or ""):
-            for mid in (343, 344):
-                m = self.get(mid)
-                if m and m.get("status") == "active" and mid not in seen:
-                    hits.append(m); seen.add(mid)
-        # 启动服务/连接 MCP 场景
-        if "mcp_connect" in tools or "bsk_session_start" in tools:
-            m = self.get(341)
-            if m and m.get("status") == "active" and 341 not in seen:
-                hits.append(m); seen.add(341)
-        return hits
+        for rank, tool in enumerate(reversed(tools)):        # 最新的工具排第一
+            cand = [m for m in idx.get(tool.strip().lower(), [])
+                    if m.get("id") not in seen and m.get("status", "active") == "active"]
+            if not cand:
+                continue
+            cand.sort(key=lambda m: (self._recency_tier(m, now), -float(m.get("importance") or 0),
+                                     -int(m.get("id") or 0)))
+            for m in cand[:(2 if rank == 0 else 1)]:
+                seen.add(m.get("id"))
+                hits.append(m)
+            if len(hits) >= 3:
+                break
+        return hits[:3]
 
     def get(self, mid: int) -> Optional[Dict]:
         for m in self.data.get("methods", []):

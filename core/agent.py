@@ -1697,6 +1697,9 @@ class Agent:
         llm_error = None    # LLM 调用失败标记（保存已执行阶段后统一收尾，不留裸返回）
         self._fail_count = {}  # 工具失败计数仅限本任务（跨任务清零，防旧任务污染情绪判断）
         self.last_round_artifacts = []  # 本轮产物（对话中展示）
+        # 近期真实调用过的工具（滚动窗口，跨轮次保留；供场景预加载判断"她在做什么"）
+        if not hasattr(self, "_recent_tools"):
+            self._recent_tools = []
 
         while step < round_budget:
             # 用户打断检查点：置位立即封存断点、中断执行（工具边界，秒级响应）
@@ -1927,6 +1930,14 @@ class Agent:
                     result = self._handle_workflow_add(args)
                 else:
                     result = self.registry.execute(name, args, cancel_event=cancel_event)
+                # 2026-10-22：记录真实调用过的工具（滚动窗口）。
+                # 场景预加载原来从 history 里扒 tool_calls，但任务结束后 history 会被
+                # "任务隔离"逻辑裁剪掉（只留一条摘要），预加载因此 168 轮全是 0——
+                # 记在 agent 实例上，不随上下文裁剪丢失。
+                try:
+                    self._recent_tools.append(name)
+                except AttributeError:
+                    self._recent_tools = [name]
                 ok, _tool_err = unwrap_tool_result(result)
                 # 产物收集：工具结果中的文件/图片路径 → 对话中展示（预览/下载）
                 self._collect_artifacts(result)
@@ -2764,7 +2775,12 @@ class Agent:
                 if txt:
                     recent_thinking.append(txt)
         method_always = self.methods.always_on()
-        method_preload = self.methods.preload_by_activity(recent_tools[-10:], " ".join(recent_thinking[-3:]))
+        # 预加载的输入用「实例上记录的最近工具调用」，不用 history——
+        # 任务结束后 history 会被隔离裁剪，从里面扒 tool_calls 永远是空的（168 轮实测预加载=0）。
+        _recent_calls = list(getattr(self, "_recent_tools", []) or [])[-10:]
+        if not _recent_calls:
+            _recent_calls = recent_tools[-10:]
+        method_preload = self.methods.preload_by_activity(_recent_calls, " ".join(recent_thinking[-3:]))
         _scored_user = self.methods.match_scored(match_text, limit=5) if match_text else []
         # 触发面补强（2026-10-14）：用户那句常只是"继续/看个东西"，真正决定该想起什么的是
         # "我正在做的事"。实测：仅凭用户输入，短句时命中塌缩到 0~1 条；补上我的思考后，
