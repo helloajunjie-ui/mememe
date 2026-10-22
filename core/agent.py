@@ -2790,13 +2790,27 @@ class Agent:
         _act_text = " ".join(recent_thinking[-2:] + recent_args[-3:]).strip()[:1500]
         _scored_act = self.methods.match_scored(_act_text, limit=3) if len(_act_text) >= 8 else []
         method_hits = [m for _, m in _scored_user] + [m for _, m in _scored_act]
-        # 低置信可见：让我自己知道"这次抽得准不准"（判据见 MethodStore.confidence）
-        _conf_scores = [s for s, _ in _scored_user] + [s for s, _ in _scored_act]
-        _conf_top = max(_conf_scores) if _conf_scores else 0.0
-        _conf_line = ("" if (len(_conf_scores) >= 3 and _conf_top >= 5.0) else
-                      "\n⚠ 本轮方法论无高置信匹配（关键词命中 %d 条，最高分 %.1f）：目录只列分类，"
-                      "动手前拿不准时，用 method_find(keyword=\"场景关键词\") 检索具体条目。"
-                      % (len(_conf_scores), _conf_top))
+        # 低置信可见：让我自己知道"这次抽得准不准"（判据与阈值见 MethodStore.confidence，
+        # 2026-10-22 按两条通路各自的分位数校准——关键词分与 BM25 分不在同一量纲）
+        _conf_u = self.methods.confidence(match_text, limit=5) if match_text else (0, 0.0, True)
+        _conf_a = (self.methods.confidence(_act_text, limit=3) if len(_act_text) >= 8
+                   else (0, 0.0, True))
+        _low_conf = bool(_conf_u[2] and _conf_a[2])
+        _conf_line = ("" if not _low_conf else
+                      "\n⚠ 本轮方法论无高置信匹配（用户句 %d 条/最高 %.1f，动作 %d 条/最高 %.1f）："
+                      "目录只列分类，动手前拿不准时，用 method_find(keyword=\"场景关键词\") 检索具体条目。"
+                      % (_conf_u[0], _conf_u[1], _conf_a[0], _conf_a[1]))
+        # 检索质量遥测（data/worldbook.log，JSONL）：为以后校准阈值/评估召回积累真实分布
+        try:
+            from core import logutil
+            logutil.append_line(os.path.join(self.data_dir, "worldbook.log"), json.dumps({
+                "ts": datetime.datetime.now().isoformat(timespec="seconds"),
+                "n_user": _conf_u[0], "top_user": round(_conf_u[1], 2), "path_user": self.methods._last_path,
+                "n_act": _conf_a[0], "top_act": round(_conf_a[1], 2),
+                "low": _low_conf,
+            }, ensure_ascii=False))
+        except Exception:  # noqa: BLE001
+            pass
         # 合并去重：常驻 + 场景预加载 + 关键词命中
         seen_ids = set()
         merged = []

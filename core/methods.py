@@ -24,6 +24,11 @@ _USE_BM25 = True
 _BM25_MIN_SCORE = 1.5      # BM25 补召回的绝对下限
 _HYBRID_MIN_KEYWORD_HITS = 3   # 关键词命中达到这个数就不再掺 BM25
 
+# 置信度阈值（2026-10-22 按 120 条真实输入回放的分位数校准，两条通路量纲不同）
+_CONF_MIN_HITS = 3
+_CONF_TOP_KEYWORD = 2.0        # 关键词路径 p25（中位数 3.57）
+_CONF_TOP_BM25 = 5.8           # BM25 路径 p25（中位数 6.79）
+
 _RE_EN = re.compile(r"[A-Za-z0-9_]+")
 # 工具名形状的标识符（fs_read / cmd_run / mcp_connect…）
 _TOOL_TOKEN_RE = re.compile(r"\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b")
@@ -203,6 +208,7 @@ class MethodStore:
         self._last_flush = 0.0
         self._bm25_cache = None
         self._tool_cache = None
+        self._last_path = "keyword"
         self._check_dormant_once()
 
     def _migrate(self) -> None:
@@ -526,12 +532,15 @@ class MethodStore:
             return self._match_scored_legacy(text, limit)
         kw = self._match_keywords(text, limit)
         if len(kw) >= _HYBRID_MIN_KEYWORD_HITS:
+            self._last_path = "keyword"
             return kw[:limit]
         seen = {m.get("id") for _, m in kw}
         extra = [(s, m) for s, m in self._match_bm25(text, limit) if m.get("id") not in seen]
         merged = kw + extra
         if merged:
+            self._last_path = "bm25" if extra else "keyword"
             return merged[:limit]
+        self._last_path = "legacy"
         return self._match_scored_legacy(text, limit)   # 最后兜底：2 字重叠
 
     def _match_keywords(self, text: str, limit: int = 5) -> list:
@@ -741,11 +750,19 @@ class MethodStore:
         return n
 
     def confidence(self, text: str, limit: int = 5):
-        """置信度：返回 (命中数, top1分, 是否低置信)。判据：命中<3 或 top1<5.0。"""
+        """置信度：返回 (命中数, top1分, 是否低置信)。
+
+        2026-10-22 校准：两条通路的分数不在同一量纲上——关键词分是"命中词长度和"，
+        BM25 分是全库 IDF 加权，前者天然偏小。原来统一用 top1<5.0 判低置信，实测：
+          关键词路径 top1 中位数 3.57（p25 1.99）→ 一半以上的正常轮次被误报"低置信"
+          BM25 路径   top1 中位数 6.79（p25 5.85）→ 几乎永远不报
+        改成按通路阈值（都取各自 p25），让两条通路的"低置信率"都落在 1/4 左右。
+        """
         _s = self.match_scored(text, limit=limit)
         _n = len(_s)
         _top = _s[0][0] if _s else 0.0
-        return _n, _top, (_n < 3 or _top < 5.0)
+        thr = (_CONF_TOP_BM25 if self._last_path == "bm25" else _CONF_TOP_KEYWORD)
+        return _n, _top, (_n < _CONF_MIN_HITS or _top < thr)
     # ---- 三层激活：常驻 / 场景预加载 / 关键词命中 ----
 
     # 常驻层：最高频行为准则，每次都在 system prompt（不靠关键词碰运气）
