@@ -64,6 +64,9 @@ data/keys/
 workspace/archive/
 data/memory.db.bak*
 data/user_profile.md
+# 运行时缓存/健康记忆（实例状态，不随仓库走）
+data/search_cache.json
+data/search_engine_health.json
 
 # 个人形象资产与用户上传（本地留存，不入公开仓库）
 persona/

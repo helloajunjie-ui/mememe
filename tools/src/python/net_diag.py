@@ -99,6 +99,16 @@ def run(host: str = "") -> dict:
     target = next((r for r in results if r["key"] == "target"), None)
     proxy = _local_proxy()
 
+    # 代理当前节点（只读）：判定"proxy_down"时能直接说清是哪个节点挂了
+    node_info = None
+    try:
+        from tools.src.python import proxy_ctl as pc
+        cur = pc.current()
+        if cur:
+            node_info = {"group": cur.get("group"), "node": cur.get("node")}
+    except Exception:  # noqa: BLE001  控制口不可用不影响诊断主体
+        node_info = None
+
     if not domestic_ok:
         verdict = ("本机 DNS/网络有问题：连 www.baidu.com 的 TLS 都握不上，先查系统网络/防火墙，"
                    "不要先怀疑代理或目标站。")
@@ -125,8 +135,10 @@ def run(host: str = "") -> dict:
         "verdict_code": code,
         "verdict": verdict,
         "local_proxy": proxy,
+        "proxy_node": node_info,
         "probes": [{k: r.get(k) for k in ("key", "host", "role", "ok", "ms", "error", "peers") if k in r}
                    for r in results],
         "hint": ("国内基线=www.baidu.com；API=api.deepseek.com；海外=github/google。"
-                 "握手只证明出口通，不代表目标站业务可用（反爬仍可能 403）。"),
+                 "握手只证明出口通，不代表目标站业务可用（反爬仍可能 403）。"
+                 "判定 proxy_down 时可用 proxy_node 工具换节点（需 confirm=\"SWITCH\"）。"),
     }
