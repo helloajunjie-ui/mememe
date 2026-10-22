@@ -49,19 +49,33 @@ class McpManager:
         return self.servers
 
     def save(self) -> None:
-        """本地镜像保存：直接写服务端配置文件（服务进程每次请求前会重读吗？
-        不会——服务端 McpManager 常驻内存。本地镜像仅供展示，真正新增走 /mcp/add。"""
+        """把内存镜像写回**服务端**配置（与 load() 同一路径，读写一致）。
+
+        2026-10-22 修：旧版写 config/mcp.json（项目内），而 load() 读
+        mcp-service/config/mcp.json —— 写出去的那份没人读，是死代码。
+        真正的增删仍走 /mcp/add、/mcp/remove（服务端内存为准），这里只保证
+        本地文件读写闭环，避免误导后来者。
+        """
+        cfg_path = os.path.join(self._service_dir, "config", "mcp.json")
         try:
-            os.makedirs(os.path.dirname(os.path.abspath(self.config_path)), exist_ok=True)
-            with open(self.config_path, "w", encoding="utf-8") as f:
+            os.makedirs(os.path.dirname(os.path.abspath(cfg_path)), exist_ok=True)
+            with open(cfg_path, "w", encoding="utf-8") as f:
                 json.dump({"servers": self.servers}, f, ensure_ascii=False, indent=2)
         except OSError:
             pass
 
     # ---------- 服务生命周期 ----------
     def _alive(self) -> bool:
+        # 端口取自 self._url（MCP_SERVICE_URL 可覆盖），不再硬编码 8767
         try:
-            with socket.create_connection(("127.0.0.1", 8767), timeout=1):
+            from urllib.parse import urlparse
+            u = urlparse(self._url)
+            host = u.hostname or "127.0.0.1"
+            port = u.port or 8767
+        except ValueError:
+            host, port = "127.0.0.1", 8767
+        try:
+            with socket.create_connection((host, port), timeout=1):
                 return True
         except OSError:
             return False

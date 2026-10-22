@@ -55,6 +55,9 @@ class TaskStageTracker:
 
         complete=False 表示任务未完成（如工具步数超限），记录断点供后续续接，
         避免记忆断裂——下一轮可从断点继续思考。
+
+        2026-10-22：记录 _finished/_last_archive。调用方在"止损"分支已经收尾过一次时，
+        末尾的通用收尾会再调一次、把"续接次数用尽"的备注覆盖掉——有了标记就能跳过重写。
         """
         if self.dir is None:
             raise RuntimeError("begin_task 未调用")
@@ -109,7 +112,9 @@ class TaskStageTracker:
             (self.dir / "stages.md").write_text("\n".join(lines), encoding="utf-8")
         except OSError as e:
             print(f"[stages] stages.md 写盘失败: {e}")
-        return str(self.dir / "stages.md")
+        self._finished = True
+        self._last_archive = str(self.dir / "stages.md")
+        return self._last_archive
 
     def archive_path(self) -> str:
         return str(self.dir / "stages.md") if self.dir else ""

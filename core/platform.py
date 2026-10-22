@@ -118,8 +118,22 @@ def run_shell(command: str, timeout: int = 30, cwd: Optional[str] = None) -> Dic
             else:
                 try: proc.kill()
                 except Exception: pass
-            return {"ok": False, "stdout": "",
-                    "stderr": f"命令超时（>{timeout}s），已杀进程树", "exit_code": -1}
+            # 2026-10-22：超时也要把已经产生的输出带回去——"卡住但跑了一半"的排查
+            # 全靠这半截；旧版直接丢空串，然后 finally 连文件都删了。
+            try:
+                with open(out_path, "rb") as f:
+                    partial = f.read()
+                with open(err_path, "rb") as f:
+                    partial_err = f.read()
+            except OSError:
+                partial, partial_err = b"", b""
+            tail_out = _decode_output(partial)[-4000:]
+            tail_err = _decode_output(partial_err)[-2000:]
+            return {"ok": False,
+                    "stdout": tail_out,
+                    "stderr": (f"命令超时（>{timeout}s），已杀进程树"
+                               + ("；stderr: " + tail_err if tail_err.strip() else "")),
+                    "exit_code": -1, "timed_out": True}
         try:
             with open(out_path, "rb") as f: out = f.read()
             with open(err_path, "rb") as f: err = f.read()

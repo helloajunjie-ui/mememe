@@ -2086,7 +2086,12 @@ class Agent:
             success = not is_control_failure(content)
             tracker.plan = plan
             # complete 与 success 一致：未成功即未完成（消除"失败但完成"矛盾档案）
-            archive = tracker.finish_task(content, success=success, complete=success)
+            # 止损分支已经收尾过（_finished），这里只复用档案路径，不重写——
+            # 否则第二次 finish_task 会把"续接次数用尽"的备注覆盖掉。
+            if getattr(tracker, "_finished", False):
+                archive = getattr(tracker, "_last_archive", tracker.archive_path())
+            else:
+                archive = tracker.finish_task(content, success=success, complete=success)
             self._log(f"[task] 任务结束，档案：{archive}")
             self._backup(force=True)  # 任务结束先备份（用户止损原则：状态变更立即保护）
             try:
@@ -3174,9 +3179,10 @@ net_fetch 抓取网页会同时提取正文（噪音已过滤）和正文图片�
             pass
 
     def _append_log(self, filename: str, line: str) -> None:
+        # 2026-10-22：写前做大小检查（超 8MB 轮转成 .1），否则 agent.log/decisions.log 会无限涨
         try:
-            with open(os.path.join(self.logs_dir, filename), "a", encoding="utf-8") as f:
-                f.write(line + "\n")
+            from core import logutil
+            logutil.append_line(os.path.join(self.logs_dir, filename), line)
         except OSError:
             pass
 
@@ -3209,8 +3215,8 @@ net_fetch 抓取网页会同时提取正文（噪音已过滤）和正文图片�
                 rec["task"] = task
             line = _json.dumps(rec, ensure_ascii=False)
             op_path = os.path.join(self.data_dir, "operation.log")
-            with open(op_path, "a", encoding="utf-8") as f:
-                f.write(line + "\n")
+            from core import logutil
+            logutil.append_line(op_path, line)
         except OSError:
             pass
 

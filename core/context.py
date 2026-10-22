@@ -33,6 +33,14 @@ class ContextStore:
     def save(self, node: Dict) -> str:
         """写入一个节点，返回 node_id。节点须含 node_type 与 ts。"""
         node_id = node.get("id") or f"node_{node.get('ts', int(time.time()))}"
+        # 2026-10-22：ts 是秒级时间戳，同一秒写两个节点会互相覆盖。显式 id 允许覆盖
+        # （那是调用方明确要改），自动 id 撞了则加序号，保证不丢节点。
+        if not node.get("id"):
+            base = node_id
+            i = 2
+            while os.path.exists(self._path(node_id)):
+                node_id = f"{base}_{i}"
+                i += 1
         node["id"] = node_id
         node["saved_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
         with open(self._path(node_id), "w", encoding="utf-8") as f:

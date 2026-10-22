@@ -238,6 +238,19 @@ class MethodStore:
         type_ = type_ if type_ in ("good", "bad") else "good"
         importance = max(0.0, min(1.0, float(importance)))
         methods = self.data.setdefault("methods", [])
+        # 2026-10-22：查重。同一 (type, scene, method) 已存在就不再追加——
+        # 历史库里已积累 123 对高相似条目，重复入库只会让世界书越滚越大。
+        # 只更新更高的 importance，返回既有 id。
+        _scene_k = (scene or "").strip()
+        _method_k = (method or "").strip()
+        for m in methods:
+            if (m.get("status", "active") != "active") or m.get("type") != type_:
+                continue
+            if (m.get("scene") or "").strip() == _scene_k and (m.get("method") or "").strip() == _method_k:
+                if importance > float(m.get("importance") or 0):
+                    m["importance"] = importance
+                    self._save()
+                return int(m.get("id") or 0)
         mid = (max((m.get("id", 0) for m in methods), default=0)) + 1
         cat = category or classify(scene, method, type_)
         methods.append({

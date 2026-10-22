@@ -128,13 +128,27 @@ _KEEP_ZIPS = 30
 
 
 def _prune_old() -> int:
-    """清理 backups/ 下的 private_*.zip，仅保留最新 _KEEP_ZIPS 份。返回删除数。"""
+    """清理 backups/ 下的 private_*.zip 与伴生清单，仅保留最新 _KEEP_ZIPS 份。
+
+    2026-10-22 补：旧版只 unlink zip，每次备份写一份 56KB 的 private_*.json 清单
+    却从不删除——实测积了 807 份、36.8MB 孤儿文件。现在清单跟着 zip 一起保留/删除，
+    没有对应 zip 的孤儿清单一并清掉。返回删除的文件数。
+    """
     try:
         zips = sorted(_BACKUP_ROOT.glob("private_*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
+        keep_stems = {p.stem for p in zips[:_KEEP_ZIPS]}
         removed = 0
         for old in zips[_KEEP_ZIPS:]:
             try:
                 old.unlink()
+                removed += 1
+            except OSError:
+                pass
+        for meta in _BACKUP_ROOT.glob("private_*.json"):
+            if meta.stem in keep_stems:
+                continue
+            try:
+                meta.unlink()
                 removed += 1
             except OSError:
                 pass

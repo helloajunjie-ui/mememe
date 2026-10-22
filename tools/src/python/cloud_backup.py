@@ -291,6 +291,28 @@ def pack(note: str = "") -> tuple[Path, dict]:
                     zf.write(f, arcname=arc)
                     added.append(arc)
     return zip_path, {"files": added, "missing": missing, "note": note, "ts": ts}
+
+
+def _prune_local() -> int:
+    """清理本地 backups/cloud_*.zip，只保留最近 _KEEP_REMOTE 份。
+
+    2026-10-22 补：原来只有远端有保留策略，本地 cloud_*.zip 越存越多（实测 13 个 56.9MB）。
+    本地留同样份数：断网/远端故障时还能从本机回滚，又不至于无限涨。
+    """
+    try:
+        zips = sorted(_BACKUP_ROOT.glob("cloud_*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
+        removed = 0
+        for old in zips[_KEEP_REMOTE:]:
+            try:
+                old.unlink()
+                removed += 1
+            except OSError:
+                pass
+        return removed
+    except OSError:
+        return 0
+
+
 # ---------- 上传 ----------
 
 def _dav(path: str) -> str:
@@ -317,6 +339,7 @@ def upload_zip(zip_path: Path, key: bytes) -> dict:
             return {"ok": False, "error": f"上传失败: HTTP {r.status_code}"}
         # 列远端，清理旧版（保留最近 _KEEP_REMOTE 份）
         removed = _prune_remote(c)
+    pruned_local = _prune_local()
     return {
         "ok": True,
         "instance_id": iid,
@@ -324,6 +347,7 @@ def upload_zip(zip_path: Path, key: bytes) -> dict:
         "remote_name": remote_name,
         "size_bytes": len(enc_data),
         "pruned_remote": removed,
+        "pruned_local": pruned_local,
     }
 
 

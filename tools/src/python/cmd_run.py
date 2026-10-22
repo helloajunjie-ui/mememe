@@ -63,13 +63,14 @@ def _is_destructive(command: str) -> bool:
 
 def _audit(command: str, result: dict, background: bool = False, desc: str = "") -> None:
     try:
-        Path(_LOG_FILE).parent.mkdir(parents=True, exist_ok=True)
         status = "ok" if result.get("ok") else "err"
         tag = "bg" if background else "sync"
         excerpt = (result.get("stdout") or result.get("stderr") or result.get("error") or "")[:120].replace("\n", " ")
-        with open(_LOG_FILE, "a", encoding="utf-8") as f:
-            note = f" <desc:{desc}>" if desc else ""
-            f.write(f"[{datetime.datetime.now().isoformat()}] [{status}/{tag}] {command} ::{note} {excerpt}\n")
+        note = f" <desc:{desc}>" if desc else ""
+        line = f"[{datetime.datetime.now().isoformat()}] [{status}/{tag}] {command} ::{note} {excerpt}"
+        # 2026-10-22：走 logutil 带轮转（cmd.log 原本无上限，已 3MB+）
+        from core import logutil
+        logutil.append_line(_LOG_FILE, line)
     except OSError:
         pass
 

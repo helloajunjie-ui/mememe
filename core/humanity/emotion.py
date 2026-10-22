@@ -38,6 +38,11 @@ _DECISION_DEFAULTS = {
 
 _CAP = 0.30  # 决策权重调节上限（不翻转决策）
 _CAP_STRONG = 0.50  # 强情绪时放宽到 ±50%（人不可能一直理智：兴奋更敢试、烦躁更较真更收着），仍不翻转决策、不越安全线
+# 强情绪阈值（2026-10-22 校准）：原为 0.60，但实测**单次**负面事件（tool_error_repeat /
+# existential_risk / blocked_repeatedly / task_failure）强度就到 0.60-0.63 —— 第一次失败
+# 直接进"强情绪 ±50%"档，两档设计形同虚设。0.65 的分界是：单次事件最高 0.63（日常档），
+# 同一事件再犯 0.67+（强情绪档），正好对上"量变到质变"的强度梯度。
+_STRONG_THRESHOLD = 0.65
 
 # ---------- 建构层：感受词典 ----------
 # 每类感受：talk=第一人称自我觉察（内部叙事，不要求对外说出）
@@ -388,7 +393,7 @@ class EmotionState:
         comp = self.compound()
         mix_txt = "、".join(f"{_band(m['label'], m['intensity'])}（{m['label']}）" for m in self.mix) if self.mix else ""
         talk = spec["talk"]
-        if self.intensity >= 0.60 and self.current in ("angry", "afraid", "low", "frustrated"):
+        if self.intensity >= _STRONG_THRESHOLD and self.current in ("angry", "afraid", "low", "frustrated"):
             talk = "（这股情绪比我平时更强，我清楚它，但不能让它替我做决定。）" + talk
         return {
             "current": self.current,
@@ -420,7 +425,7 @@ class EmotionState:
         ——人不可能一直理智：强情绪下节奏/态度偏移更大（兴奋更敢尝试、
         烦躁/愤怒更较真更收着），但只调过程参数，不歪曲事实判断与安全边界。"""
         w = _DECISION_DEFAULTS.copy()
-        if self.intensity >= 0.60:
+        if self.intensity >= _STRONG_THRESHOLD:
             cap, boost = _CAP_STRONG, 1.5
         else:
             cap, boost = _CAP, 1.0

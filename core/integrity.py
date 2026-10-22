@@ -33,9 +33,13 @@ _BASELINE_FILE = _PROJECT_ROOT / "data" / "integrity_baseline.json"
 _STATUS_FILE = _PROJECT_ROOT / "data" / "integrity_status.json"
 
 # 静态本体扫描范围（篡改检测重点）：入口 + 核心 + 工具源码 + 模板
-_SCAN_FILES = ["main.py", "config.yaml", ".gitignore", "data/persona.yaml"]  # 含防泄露守门文件 + 人格基座（灵魂文件）
+# 2026-10-22 补：launcher.py / 素月启动器.pyw 是拉起所有进程的入口，config/mcp.json
+# 决定每个 MCP 服务器跑什么命令（改它等于能执行任意程序），mcp-service/ 是网络暴露面
+# —— 这些之前都不在基线里，改了一律不告警，是最大的覆盖缺口。
+_SCAN_FILES = ["main.py", "launcher.py", "素月启动器.pyw", "config.yaml", "config/mcp.json",
+               ".gitignore", "data/persona.yaml"]  # 含防泄露守门文件 + 人格基座（灵魂文件）
 # 注：data/self.yaml 未纳入——boot_count 每次启动自增属正常变动，纳入会制造常态告警噪音。
-_SCAN_DIRS = ["core", "tools", "webui"]  # 含最暴露的 HTTP 接口面
+_SCAN_DIRS = ["core", "tools", "webui", "mcp-service"]  # 含最暴露的 HTTP 接口面
 _EXTENSIONS = {".py", ".go", ".yaml", ".yml", ".html"}
 # 注：tools/vendor、node_modules、library、samples = 第三方依赖/随仓库样例（可重新拉取，非本体代码），
 #     排除以免基线误报"新增篡改"——实测 tools/gutenberg/ 曾占基线 66%（212/323）。
