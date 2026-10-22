@@ -262,6 +262,75 @@ def unwrap_tool_result(result: dict):
     return ok, err
 
 
+def _tool_preview(result, ok: bool, err: str = "", limit: int = 180) -> str:
+    """单行结果摘要（只给前端时间线展开时看，不当报告用）。
+
+    2026-10-22：前端此前只有"工具名 + 参数"，点开一步也看不到结果。
+    取值优先级：最能读懂的字符串字段 → 内层字典里的字符串 → 内层标量字段压成 k=v
+    → 最后才回退整段 JSON（避免时间线里出现一坨转义 JSON）。
+    """
+    def _flat(x) -> str:
+        return " ".join(str(x if x is not None else "").split())
+
+    def _first_str(d, keys=None):
+        if not isinstance(d, dict):
+            return ""
+        items = [(k, d.get(k)) for k in (keys or d.keys())]
+        best = ""
+        for _, v in items:
+            if isinstance(v, str) and len(v.strip()) > 1:
+                if len(v) > len(best):
+                    best = v
+        return best
+
+    def _pairs(d, maxn=4) -> str:
+        out = []
+        for k, v in d.items():
+            if k in ("ok", "error", "stderr", "code"):
+                continue
+            if isinstance(v, bool) or isinstance(v, (int, float)):
+                if isinstance(v, float) and v > 1e9:      # 纪元时间戳，对人没意义
+                    continue
+                if k == "size" and isinstance(v, (int, float)) and v > 1024:
+                    v = "%.1fKB" % (v / 1024.0)
+                out.append("%s=%s" % (k, v))
+            elif isinstance(v, str) and v and len(v) <= 100:
+                if k in ("created", "modified", "created_at", "mtime", "ctime", "ts"):
+                    continue
+                out.append("%s=%s" % (k, v))
+            if len(out) >= maxn:
+                break
+        return ", ".join(out)
+
+    if not ok:
+        msg = err or ""
+        if not msg and isinstance(result, dict):
+            msg = str(result.get("error") or result.get("stderr") or "")
+        return _flat(msg)[:limit]
+    if isinstance(result, dict):
+        s = _first_str(result, ("result", "output", "stdout", "content", "message", "text", "note"))
+        if s:
+            return _flat(s)[:limit]
+        inner = result.get("result")
+        if isinstance(inner, str) and inner.strip():
+            return _flat(inner)[:limit]
+        if isinstance(inner, dict):
+            s = _first_str(inner, ("result", "output", "stdout", "content", "message", "text", "note"))
+            if s:
+                return _flat(s)[:limit]
+            pairs = _pairs(inner)
+            if pairs:
+                return _flat(pairs)[:limit]
+        pairs = _pairs(result)
+        if pairs:
+            return _flat(pairs)[:limit]
+        try:
+            return _flat(json.dumps(result, ensure_ascii=False))[:limit]
+        except (TypeError, ValueError):
+            return ""
+    return _flat(result)[:limit]
+
+
 class TaskCancelled(Exception):
     """用户主动打断当前任务（webui 停止按钮）。在 turn 的工具循环检查点抛出，
     已封存任务断点，可续接恢复。"""
@@ -1810,6 +1879,7 @@ class Agent:
             for tc in calls:
                 step += 1
                 name, args = tc["name"], self._safe_args(tc["arguments"])
+                _t_tool = time.time()   # 单步耗时（前端时间线显示"1.2s"用）
                 used_tools.append(name)
                 self._log_decision(name, args)
                 _emit({"type": "tool", "name": name, "ok": True, "step": step,
@@ -1849,8 +1919,12 @@ class Agent:
                 # 产物收集：工具结果中的文件/图片路径 → 对话中展示（预览/下载）
                 self._collect_artifacts(result)
                 # 阶段反馈：工具执行完（含成功/失败）
+                # 2026-10-22：补 ms（单步耗时）与 preview（单行结果摘要），供前端时间线展开时显示——
+                # 此前前端只有工具名+参数，用户点开也看不到"这一步到底得到了什么"。
                 _emit({"type": "stage", "name": name, "ok": ok, "step": step,
-                       "args": args})
+                       "args": args,
+                       "ms": int((time.time() - _t_tool) * 1000),
+                       "preview": _tool_preview(result, ok, _tool_err)})
                 self._log(f"[tool] {name} → {'ok' if ok else 'error'}")
                 if not ok:
                     err_msg = _tool_err or str(result.get("error", "") or result.get("stderr", ""))[:80]

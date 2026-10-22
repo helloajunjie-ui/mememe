@@ -264,22 +264,109 @@
   .task-plan .ps.done { color: #5B8A6E; text-decoration: line-through; }
   .task-plan .ps.fail { color: #DC2626; }
   .task-plan .ps.todo { color: #A29B8C; }
-  .task-flow-head {
-    display: flex; align-items: center; gap: 6px; font-size: 11px; color: #6B7180;
-    margin: 6px 0 2px; cursor: pointer; user-select: none; display: none;
+  /* ===== 步骤时间线（2026-10-22 重做：逐步显示 / 自动收起 / 点击展开） ===== */
+  .task-steps { margin: 2px 0 2px; display: flex; flex-direction: column; }
+  /* 更早步骤的折叠行 */
+  .task-steps .older-row {
+    display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: #8F8A7C;
+    padding: 3px 0 3px 24px; cursor: pointer; user-select: none; position: relative;
   }
-  .task-flow-head:hover { color: #3A3F4B; }
-  .task-flow-head .count { background: #F0EBDE; border-radius: 10px; padding: 0 7px; font-size: 10.5px; }
-  .task-flow-head .toggle { margin-left: auto; }
-  .task-flow { display: flex; flex-direction: column; }
-  .task-flow .tl { display: flex; gap: 7px; font-size: 11.5px; color: #6B7180; padding: 1px 0; align-items: baseline; }
-  .task-flow .tl .st { flex-shrink: 0; width: 12px; text-align: center; }
-  .task-flow .tl .ts { color: #A29B8C; flex-shrink: 0; font-family: Consolas, "Courier New", monospace; }
-  .task-flow .tl .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .task-flow .tl .actv { font-weight: 600; color: #4B5570; font-family: Consolas, 'Courier New', monospace; }
-  .task-flow .tl .flow-obj { color: #A29B8C; font-family: Consolas, 'Courier New', monospace; }
-  .task-flow .tl.run .nm { color: #4B5E7A; font-weight: 600; }
-  .task-flow .tl.err .nm { color: #DC2626; }
+  .task-steps .older-row::before {
+    content: ""; position: absolute; left: 6px; top: 0; bottom: 0; width: 1.5px;
+    background: repeating-linear-gradient(to bottom, #E3DFD3 0 3px, transparent 3px 6px);
+  }
+  .task-steps .older-row:hover { color: #4B5570; }
+  .task-steps .older-row .dotmini {
+    position: absolute; left: 2px; top: 50%; transform: translateY(-50%);
+    width: 9px; height: 9px; border-radius: 50%; background: #FBFAF5;
+    border: 1.5px solid #D8D2C2; box-sizing: border-box;
+  }
+  /* 单步 */
+  .step { position: relative; padding-left: 24px; }
+  .step::before {
+    content: ""; position: absolute; left: 6px; top: 0; bottom: 0; width: 1.5px; background: #E1DCCB;
+  }
+  .step:first-child::before { top: 11px; }
+  .step:last-child::before { bottom: calc(100% - 12px); }
+  .step.enter { animation: stepIn .26s ease both; }
+  @keyframes stepIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .step .dot {
+    position: absolute; left: 0; top: 5px; width: 13px; height: 13px; border-radius: 50%;
+    background: #FBFAF5; border: 1.5px solid #D8D2C2; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 8px; line-height: 1; color: #fff; transition: background .2s, border-color .2s;
+  }
+  .step.run .dot {
+    border-color: #DDE3EE; border-top-color: #4B5570; animation: spin .8s linear infinite;
+  }
+  .step.ok .dot { background: #5B8A6E; border-color: #5B8A6E; }
+  .step.ok .dot::after { content: "✓"; }
+  .step.err .dot { background: #DC2626; border-color: #DC2626; }
+  .step.err .dot::after { content: "✕"; }
+  /* 单步标题行 */
+  .step-row {
+    display: flex; align-items: baseline; gap: 6px; padding: 3px 6px; border-radius: 6px;
+    font-size: 12.5px; color: #4A4F5C; cursor: pointer; user-select: none;
+    transition: background .15s;
+  }
+  .step-row:hover { background: #F4F1E7; }
+  .step.run .step-row {
+    background: linear-gradient(90deg, rgba(75,85,112,.07), rgba(75,85,112,.02) 45%, rgba(75,85,112,.07));
+    background-size: 220% 100%; animation: stepShimmer 1.8s linear infinite;
+  }
+  @keyframes stepShimmer { to { background-position: -220% 0; } }
+  .step-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .step-title .actv { font-weight: 650; color: #4B5570; font-family: Consolas, 'Courier New', monospace; font-size: 11.5px; }
+  .step-title .obj { color: #7C7668; font-family: Consolas, 'Courier New', monospace; font-size: 11.5px; }
+  .step.run .step-title { color: #3E4A66; font-weight: 550; }
+  .step.err .step-title { color: #B03A2E; }
+  .step-meta {
+    flex-shrink: 0; font-size: 10.5px; color: #A29B8C;
+    font-variant-numeric: tabular-nums; font-family: Consolas, 'Courier New', monospace;
+  }
+  .step-caret {
+    flex-shrink: 0; font-size: 9px; color: #C2BCAD; width: 10px; text-align: center;
+    transition: transform .2s ease, color .2s;
+  }
+  .step-row:hover .step-caret { color: #6B7180; }
+  .step.open .step-caret { transform: rotate(90deg); color: #6B7180; }
+  /* 展开详情（高度过渡） */
+  .step-detail {
+    max-height: 0; opacity: 0; overflow: hidden;
+    transition: max-height .28s ease, opacity .18s ease, margin .2s ease;
+    margin: 0 0 0 6px;
+  }
+  .step.open .step-detail { max-height: 320px; opacity: 1; margin-bottom: 4px; }
+  .step-detail .blk {
+    font-size: 11px; color: #6B7180; background: #FBFAF4; border: 1px solid #EDE9DC;
+    border-radius: 6px; padding: 4px 8px; margin-top: 3px;
+    font-family: Consolas, 'Courier New', monospace; white-space: pre-wrap; word-break: break-word;
+    max-height: 96px; overflow: auto;
+  }
+  .step-detail .blk .lbl {
+    font-family: system-ui, -apple-system, sans-serif; color: #8F8A7C;
+    font-size: 10.5px; margin-right: 6px; font-weight: 600;
+  }
+  .step-detail .blk.res { color: #55605A; }
+  .step-detail .blk.err { color: #B03A2E; background: #FDF6F5; border-color: #F0DAD6; }
+  /* 完成后的汇总条 */
+  .task-summary {
+    display: none; align-items: center; gap: 8px; margin-top: 4px;
+    font-size: 11.5px; color: #5B8A6E; cursor: pointer; user-select: none;
+    padding: 4px 6px; border-radius: 6px; transition: background .15s;
+  }
+  .task-summary.show { display: flex; animation: fadeIn .25s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+  .task-summary:hover { background: #F4F1E7; }
+  .task-summary.err { color: #B03A2E; }
+  .task-summary.cancelled { color: #B98A2E; }
+  .task-summary .chev { margin-left: auto; font-size: 9px; color: #A29B8C; transition: transform .22s; }
+  .task-summary.open .chev { transform: rotate(180deg); }
+  .task-card.trace-hidden .task-steps,
+  .task-card.trace-hidden .task-plan { display: none; }
   .task-review { margin-left: 8px; font-size: 10.5px; color: #4B5570; cursor: pointer; white-space: nowrap; }
   .task-review:hover { text-decoration: underline; }
   /* 输入区 */
@@ -1070,24 +1157,39 @@ function addTaskPanel(goal) {
     '<div class="task-think"></div>' +
     '<div class="task-progress"><div class="bar indeterminate"><i></i></div><span class="txt">准备中</span></div>' +
     '<div class="task-plan"></div>' +
-    '<div class="task-flow-head">执行流水 <span class="count">0</span><span class="toggle"></span></div>' +
-    '<div class="task-flow"></div>';
+    '<div class="task-steps"></div>' +
+    '<div class="task-summary"><span class="ssum-text"></span><span class="chev">▾</span></div>';
   wrap.appendChild(av); wrap.appendChild(b);
   chat.appendChild(wrap);
-  b._tools = {};      // step -> {name, ts, status}
-  b._toolSeq = [];    // 有序 step 列表
-  b._planSteps = 0;   // 计划步骤总数
-  b._planDone = 0;    // 已完成（含失败）步骤数
+  b._tools = {};        // step -> {name, args, ts, status, ms, preview, open, manual, arg}
+  b._toolSeq = [];      // 有序 step 列表
+  b._planSteps = 0;     // 计划步骤总数
+  b._planDone = 0;      // 已完成（含失败）步骤数
   b._t0 = Date.now();
-  b._flowExpanded = false;
-  b._reviewing = false;
-  b.querySelector(".task-flow-head").addEventListener("click", function(e){
+  b._olderOpen = false; // 是否展开「更早的 N 步」
+  b._finished = false;
+  b._traceOpen = true;  // 完成后轨迹是否展开
+  // 汇总条：点击展开/收起整条轨迹（完成后默认收起，保持列表清爽）
+  b.querySelector(".task-summary").addEventListener("click", function(e){
     e.stopPropagation();
-    b._flowExpanded = !b._flowExpanded;
-    refreshFlowVisibility(b);
+    if (!b._finished) return;
+    b._traceOpen = !b._traceOpen;
+    b.classList.toggle("trace-hidden", !b._traceOpen);
+    b.querySelector(".task-summary").classList.toggle("open", b._traceOpen);
+    maybeScroll();
   });
   maybeScroll();
   return b;
+}
+
+/* 单步耗时格式化：812 → 0.8s；12500 → 12.5s；83000 → 1m23s */
+function fmtDur(ms) {
+  if (ms == null) return "";
+  if (ms < 1000) return Math.max(1, Math.round(ms)) + "ms";
+  if (ms < 60000) return (ms / 1000).toFixed(ms < 10000 ? 1 : 0) + "s";
+  var s = Math.round(ms / 1000);
+  var m = Math.floor(s / 60); s = s % 60;
+  return m + "m" + (s < 10 ? "0" : "") + s + "s";
 }
 
 /* 状态条：显示当前正在执行的工具（或思考中） */
@@ -1128,50 +1230,117 @@ function updateProgress(panel) {
   }
 }
 
-/* 执行流水：默认只显示最近 3 条 + 进行中，可展开全部 */
-function refreshFlowVisibility(panel) {
-  var flow = panel.querySelector(".task-flow");
-  var head = panel.querySelector(".task-flow-head");
-  var count = panel.querySelector(".task-flow-head .count");
-  var toggle = panel.querySelector(".task-flow-head .toggle");
-  if (!flow || !head) return;
-  var rows = flow.querySelectorAll(".tl");
-  var total = rows.length;
-  count.textContent = total;
-  if (!total) { head.style.display = "none"; return; }
-  head.style.display = "flex";
-  var showAll = panel._flowExpanded || total <= 4;
-  var visible = 0;
-  for (var i = 0; i < rows.length; i++) {
-    var isRun = rows[i].classList.contains("run");
-    if (showAll || isRun || i >= rows.length - 3) { rows[i].style.display = "flex"; visible++; }
-    else rows[i].style.display = "none";
-  }
-  toggle.textContent = showAll ? (total > 4 ? "收起" : "") : ("展开 " + (total - visible) + " 条");
+/* ===== 步骤时间线（逐步出现 / 完成即收 / 点击展开 / 只留最近几步） =====
+   交互约定（对齐现代 agent 的浏览方式）：
+   - 新步骤出现时自动展开并高亮（run），上一步自动收起
+   - 完成后只留一行：图标 + 动作 + 参数 + 耗时；点这一行展开参数/结果
+   - 超过 5 步时更早的折成一行「更早的 N 步」，点击展开，不刷屏
+   - 全程只在用户停留在底部附近时自动跟随滚动                                  */
+var STEP_WINDOW = 5;
+
+function ensureStep(panel, step) {
+  var box = panel.querySelector(".task-steps");
+  var el = box.querySelector('.step[data-step="' + step + '"]');
+  if (el) return el;
+  el = document.createElement("div");
+  el.className = "step enter";
+  el.dataset.step = step;
+  el.innerHTML =
+    '<span class="dot"></span>' +
+    '<div class="step-row">' +
+      '<span class="step-title"></span>' +
+      '<span class="step-meta"></span>' +
+      '<span class="step-caret">▸</span>' +
+    '</div>' +
+    '<div class="step-detail"></div>';
+  el.querySelector(".step-row").addEventListener("click", function(){
+    var t = panel._tools[step];
+    if (!t) return;
+    t.manual = true;                       // 用户手动开合过 → 之后不再自动收起
+    setStepOpen(panel, step, !t.open);
+  });
+  box.appendChild(el);
+  setTimeout(function(){ el.classList.remove("enter"); }, 320);
+  return el;
 }
 
-function addFlowLine(panel, step) {
+function setStepOpen(panel, step, open) {
   var t = panel._tools[step];
   if (!t) return;
-  var flow = panel.querySelector(".task-flow");
-  var row = flow.querySelector('[data-step="' + step + '"]');
-  if (!row) {
-    row = document.createElement("div");
-    row.className = "tl";
-    row.dataset.step = step;
-    row.innerHTML = '<span class="st"></span><span class="ts"></span><span class="nm"></span>';
-    flow.appendChild(row);
-  }
-  var icon = t.status === "ok" ? "✓" : (t.status === "err" ? "✗" : "▶");
-  row.querySelector(".st").textContent = icon;
-  row.querySelector(".ts").textContent = fmtClock(t.ts);
-  if (t.arg === undefined) t.arg = argsSummary(t.args);
+  t.open = open;
+  var el = panel.querySelector('.step[data-step="' + step + '"]');
+  if (el) el.classList.toggle("open", open);
+}
+
+function renderStep(panel, step) {
+  var t = panel._tools[step];
+  if (!t) return;
+  var el = ensureStep(panel, step);
   var act = toolAction(t.name);
-  row.querySelector(".nm").innerHTML = '<span class="actv">' + escapeHtml(act.v) + '</span> ' +
-    escapeHtml(act.zh) +
-    (t.arg ? ' <span class="flow-obj">（' + escapeHtml(t.arg) + '）</span>' : '');
-  row.className = "tl " + t.status;
-  refreshFlowVisibility(panel);
+  var obj = t.arg || "";
+  el.querySelector(".step-title").innerHTML =
+    '<span class="actv">' + escapeHtml(act.v) + '</span> ' + escapeHtml(act.zh) +
+    (obj ? ' <span class="obj">' + escapeHtml(obj) + '</span>' : '');
+  el.querySelector(".step-meta").textContent =
+    (t.status === "run") ? "执行中" : fmtDur(t.ms);
+
+  var html = "";
+  if (t.status === "err" && t.preview) {
+    html += '<div class="blk err"><span class="lbl">失败</span>' + escapeHtml(t.preview) + '</div>';
+  } else if (t.preview) {
+    html += '<div class="blk res"><span class="lbl">结果</span>' + escapeHtml(t.preview) + '</div>';
+  }
+  if (obj) {
+    html += '<div class="blk"><span class="lbl">参数</span>' + escapeHtml(obj) + '</div>';
+  }
+  if (t.ts) {
+    html += '<div class="blk"><span class="lbl">时刻</span>' + fmtClock(t.ts) + '</div>';
+  }
+  el.querySelector(".step-detail").innerHTML = html;
+
+  var rowEl = el.querySelector(".step-row");
+  rowEl.title = act.zh + (obj ? "：" + obj : "") +
+    (t.preview ? "（" + t.preview.slice(0, 80) + "）" : "");
+  rowEl.setAttribute("aria-expanded", t.open ? "true" : "false");
+
+  el.className = "step " + t.status + (t.open ? " open" : "");
+  el.dataset.step = step;
+}
+
+/* 只保留最近 STEP_WINDOW 步；更早的折叠成一行（运行中的步骤永远可见） */
+function syncSteps(panel) {
+  var box = panel.querySelector(".task-steps");
+  if (!box) return;
+  var rows = [].slice.call(box.querySelectorAll(".step"));
+  var total = rows.length;
+  var keep = panel._olderOpen ? total : Math.min(total, STEP_WINDOW);
+  var hidden = 0;
+  rows.forEach(function(el, i){
+    var visible = (i >= total - keep) || el.classList.contains("run");
+    el.style.display = visible ? "" : "none";
+    if (!visible) hidden++;
+  });
+  var older = box.querySelector(".older-row");
+  if (total <= STEP_WINDOW) {                 // 步数不多，不需要折叠行
+    if (older) older.remove();
+    return;
+  }
+  if (!older) {
+    older = document.createElement("div");
+    older.className = "older-row";
+    older.innerHTML = '<span class="dotmini"></span><span class="txt"></span>';
+    older.addEventListener("click", function(e){
+      e.stopPropagation();
+      panel._olderOpen = !panel._olderOpen;
+      syncSteps(panel);
+      maybeScroll();
+    });
+    box.insertBefore(older, box.firstChild);
+  }
+  // 展开后折叠行本身留着（否则没有「收起」的入口）
+  older.querySelector(".txt").textContent = panel._olderOpen
+    ? "收起更早的 " + (total - STEP_WINDOW) + " 步"
+    : "更早的 " + hidden + " 步 · 点击展开";
 }
 
 function renderPlan(panel, plan) {
@@ -1229,9 +1398,21 @@ function renderEvent(panel, ev) {
       }
     }
   } else if (ev.type === "tool") {
-    panel._tools[ev.step] = {name: ev.name, args: ev.args, ts: Date.now(), status: "run"};
+    // 新步骤：把上一步（没被用户手动展开过的）自动收起，本步展开并高亮
+    panel._toolSeq.forEach(function(k){
+      var o = panel._tools[k];
+      if (!o || !o.open || o.manual) return;
+      o.open = false;
+      var el = panel.querySelector('.step[data-step="' + k + '"]');
+      if (el) el.classList.remove("open");
+    });
+    panel._tools[ev.step] = {
+      name: ev.name, args: ev.args, ts: Date.now(), status: "run",
+      open: true, manual: false, arg: argsSummary(ev.args)
+    };
     if (panel._toolSeq.indexOf(ev.step) < 0) panel._toolSeq.push(ev.step);
-    addFlowLine(panel, ev.step);
+    renderStep(panel, ev.step);
+    syncSteps(panel);
     updateNow(panel);
     updateProgress(panel);
     maybeScroll();
@@ -1240,7 +1421,14 @@ function renderEvent(panel, ev) {
     if (th3) { th3.textContent = ev.note; th3.style.display = "block"; }
   } else if (ev.type === "stage") {
     var t2 = panel._tools[ev.step];
-    if (t2) { t2.status = ev.ok ? "ok" : "err"; addFlowLine(panel, ev.step); }
+    if (t2) {
+      t2.status = ev.ok ? "ok" : "err";
+      if (typeof ev.ms === "number") t2.ms = ev.ms;
+      if (ev.preview) t2.preview = ev.preview;
+      if (!t2.manual) t2.open = false;     // 完成即收：只留一行摘要，点击再展开
+      renderStep(panel, ev.step);
+      syncSteps(panel);
+    }
     updateNow(panel);
     updateProgress(panel);
   }
@@ -1255,6 +1443,15 @@ function fmtElapsed(ms) {
 
 /* 任务完成/失败：卡片转摘要态（保留执行轨迹，可点"回顾"展开），下方追加最终回复 */
 function finishTaskPanel(panel, ok) {
+  // 纯对话（没有工具步骤、也没有计划）：这张卡片没有信息量，收尾时直接隐藏，
+  // 只留下面那条真正的回复——否则每问一句「你好」都会留一张空任务卡。
+  if (!panel._toolSeq.length && !panel._planSteps) {
+    var w0 = panel.closest ? panel.closest(".msg-wrap") : null;
+    if (w0) w0.style.display = "none";
+    panel._finished = true;
+    return;
+  }
+  panel._finished = true;
   var statusEl = panel.querySelector(".task-status");
   statusEl.textContent = ok ? "✓ 已完成" : "✗ 失败";
   statusEl.className = "task-status" + (ok ? " done" : " err");
@@ -1264,8 +1461,20 @@ function finishTaskPanel(panel, ok) {
   var elapsed = fmtElapsed(Date.now() - panel._t0);
   var th = panel.querySelector(".task-think");
   if (th) th.style.display = "none";
-  now.innerHTML = (ok ? "✓ 任务完成" : "✗ 任务失败") + " · 用时 " + elapsed +
-    " · " + panel._toolSeq.length + " 步工具调用";
+  var nstep = panel._toolSeq.length;
+  // 运行中的行统一收口（流水可能停在 run 状态，例如任务被中断/工具没回 stage）
+  panel._toolSeq.forEach(function(k){
+    var t = panel._tools[k];
+    if (t && t.status === "run") { t.status = ok ? "ok" : "err"; renderStep(panel, k); }
+  });
+  // 收尾：所有步骤收起成单行，整条轨迹折叠，只留一张汇总条
+  Object.keys(panel._tools).forEach(function(k){
+    var t = panel._tools[k];
+    t.open = false;
+    var el = panel.querySelector('.step[data-step="' + k + '"]');
+    if (el) el.classList.remove("open");
+  });
+  now.style.display = "none";
   var bar = panel.querySelector(".task-progress .bar");
   if (bar) {
     bar.classList.remove("indeterminate");
@@ -1274,32 +1483,22 @@ function finishTaskPanel(panel, ok) {
   }
   var txt = panel.querySelector(".task-progress .txt");
   if (txt) txt.textContent = ok ? "完成" : "失败";
-  // 默认收起计划与流水（保持清爽），提供"回顾"展开
-  panel.querySelector(".task-plan").style.display = "none";
-  var head = panel.querySelector(".task-flow-head");
-  head.style.display = "none";
-  panel._flowExpanded = false;
-  refreshFlowVisibility(panel);
-  var review = document.createElement("span");
-  review.className = "task-review";
-  review.textContent = "回顾";
-  review.addEventListener("click", function(e){
-    e.stopPropagation();
-    var planBox = panel.querySelector(".task-plan");
-    panel._reviewing = !panel._reviewing;
-    if (panel._reviewing) {
-      planBox.style.display = "block";
-      head.style.display = "flex";
-      refreshFlowVisibility(panel);
-      review.textContent = "收起";
-      maybeScroll();
-    } else {
-      planBox.style.display = "none";
-      head.style.display = "none";
-      review.textContent = "回顾";
-    }
-  });
-  head.appendChild(review);
+  var prog = panel.querySelector(".task-progress");
+  if (prog) prog.style.display = "none";     // 汇总条已含步数/用时，进度条不再占位
+
+  var sum = panel.querySelector(".task-summary");
+  if (sum) {
+    sum.classList.add("show");
+    if (!ok) sum.classList.add("err");
+    sum.querySelector(".ssum-text").textContent = ok
+      ? ("共 " + nstep + " 步 · 用时 " + elapsed)
+      : ("共 " + nstep + " 步 · 用时 " + elapsed + " · 有失败");
+    sum.classList.remove("open");
+  }
+  var cb = panel.querySelector(".task-cancel");
+  if (cb) cb.remove();                         // 已结束，不再提供"停止"
+  panel._traceOpen = false;
+  panel.classList.add("trace-hidden");       // 轨迹默认收起，点汇总条展开
   panel._done = ok;
   maybeScroll();
 }
@@ -1541,19 +1740,47 @@ function pollTask(panel, tid) {
 }
 
 function renderTaskCancelled(panel, reply) {
+  if (!panel._toolSeq.length && !panel._planSteps) {
+    var w0 = panel.closest ? panel.closest(".msg-wrap") : null;
+    if (w0) w0.style.display = "none";
+    panel._finished = true;
+    sendBtn.disabled = false;
+    if (reply) addMsg("bailing", renderMd(reply));
+    input.focus();
+    return;
+  }
+  panel._finished = true;
   var st = panel.querySelector(".task-status");
   if (st) { st.textContent = "已停止"; st.className = "task-status cancelled"; }
   var now = panel.querySelector(".task-now");
-  if (now) {
-    now.classList.remove("err");
-    now.innerHTML = '<span class="now-text">⏹ 已停止 · 断点已保存</span>';
-  }
+  if (now) now.style.display = "none";
   var bar = panel.querySelector(".task-progress .bar");
-  if (bar) { bar.className = "bar"; bar.style.width = "100%"; }
+  if (bar) { bar.className = "bar"; bar.querySelector("i").style.width = "100%"; }
   var txt = panel.querySelector(".task-progress .txt");
   if (txt) txt.textContent = "已停止";
+  var prog = panel.querySelector(".task-progress");
+  if (prog) prog.style.display = "none";
   var th = panel.querySelector(".task-think");
   if (th) th.style.display = "none";
+  // 运行中的步骤收口成「已停止」，整条轨迹折叠，留汇总条
+  panel._toolSeq.forEach(function(k){
+    var t = panel._tools[k];
+    if (t && t.status === "run") {
+      t.status = "err";
+      t.preview = t.preview || "已停止（断点已保存，可用「继续」续接）";
+      t.open = false;
+      renderStep(panel, k);
+    }
+  });
+  var sum = panel.querySelector(".task-summary");
+  if (sum) {
+    sum.classList.add("show", "cancelled");
+    sum.classList.remove("open");
+    sum.querySelector(".ssum-text").textContent =
+      "共 " + panel._toolSeq.length + " 步 · 用时 " + fmtElapsed(Date.now() - panel._t0) + " · 已停止";
+  }
+  panel._traceOpen = false;
+  panel.classList.add("trace-hidden");
   var cb = panel.querySelector(".task-cancel");
   if (cb) cb.remove();
   sendBtn.disabled = false;
