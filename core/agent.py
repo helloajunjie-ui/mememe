@@ -1935,7 +1935,9 @@ class Agent:
                 if not ok:
                     err_msg = _tool_err or str(result.get("error", "") or result.get("stderr", ""))[:80]
                     self._set_activity("error", f"{name}: {err_msg}")
-                self._log_op(name, args, result, ok)
+                self._log_op(name, args, result, ok,
+                             ms=int((time.time() - _t_tool) * 1000),
+                             task=self.ctx_task_id or "")
                 # 死循环检测：同参数重复 / 同工具连续失败
                 # 把错误文本交给 loopguard：区分「参数写错（可自纠）」与「业务失败（方案走不通）」
                 if ok:
@@ -3158,9 +3160,14 @@ net_fetch 抓取网页会同时提取正文（噪音已过滤）和正文图片�
         except OSError:
             pass
 
-    def _log_op(self, name: str, args: dict, result: dict, ok: bool) -> None:
+    def _log_op(self, name: str, args: dict, result: dict, ok: bool,
+                ms: Optional[int] = None, task: str = "") -> None:
         """逻辑层统一操作日志：记录每次工具调用的参数、结果与错误（带时间戳）。
-        由主循环自动调用，AI 无需自觉写日志。落在 data/operation.log。"""
+        由主循环自动调用，AI 无需自觉写日志。落在 data/operation.log。
+
+        2026-10-22：补 ms（单步耗时）与 task（任务 id）——这两列让
+        tools/scripts/tool_timing_report.py 能算出「哪个工具最慢 / 失败率最高」。
+        """
         import json as _json
         try:
             ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -3176,6 +3183,10 @@ net_fetch 抓取网页会同时提取正文（噪音已过滤）和正文图片�
                 elif result.get("result") is not None:
                     err = str(result.get("result"))[:200]
             rec = {"ts": ts, "tool": name, "ok": bool(ok), "args": a, "note": err}
+            if ms is not None:
+                rec["ms"] = int(ms)
+            if task:
+                rec["task"] = task
             line = _json.dumps(rec, ensure_ascii=False)
             op_path = os.path.join(self.data_dir, "operation.log")
             with open(op_path, "a", encoding="utf-8") as f:

@@ -410,8 +410,15 @@
   .task-summary:hover { background: #F4F1E7; }
   .task-summary.err { color: #B03A2E; }
   .task-summary.cancelled { color: #B98A2E; }
-  .task-summary .chev { margin-left: auto; font-size: 9px; color: #A29B8C; transition: transform .22s; }
+  .task-summary .chev { margin-left: 8px; font-size: 9px; color: #A29B8C; transition: transform .22s; }
   .task-summary.open .chev { transform: rotate(180deg); }
+  .task-summary .sum-actions { margin-left: auto; display: flex; gap: 6px; }
+  .task-summary .sum-btn {
+    font-size: 10.5px; color: #6B7180; cursor: pointer; white-space: nowrap;
+    border: 1px solid #E7E3D6; background: #FFFDF7; border-radius: 10px; padding: 0 8px;
+    transition: background .15s, color .15s;
+  }
+  .task-summary .sum-btn:hover { background: #F4F1E7; color: #4B5570; }
   .task-card.trace-hidden .task-steps,
   .task-card.trace-hidden .task-plan,
   .task-card.trace-hidden .task-think { display: none; }
@@ -1218,7 +1225,12 @@ function addTaskPanel(goal) {
     '<div class="task-progress"><div class="bar indeterminate"><i></i></div><span class="txt">准备中</span></div>' +
     '<div class="task-plan"></div>' +
     '<div class="task-steps"></div>' +
-    '<div class="task-summary"><span class="ssum-text"></span><span class="chev">▾</span></div>';
+    '<div class="task-summary"><span class="ssum-text"></span>' +
+      '<span class="sum-actions">' +
+        '<a class="sum-btn sum-copy" title="复制为 Markdown，便于贴进任务档案">复制</a>' +
+        '<a class="sum-btn sum-export" title="下载 Markdown">导出</a>' +
+      '</span>' +
+      '<span class="chev">▾</span></div>';
   wrap.appendChild(av); wrap.appendChild(b);
   chat.appendChild(wrap);
   b._tools = {};        // step -> {name, args, ts, status, ms, preview, open, manual, arg}
@@ -1248,6 +1260,28 @@ function addTaskPanel(goal) {
     b.querySelector(".task-summary").classList.toggle("open", b._traceOpen);
     maybeScroll();
   });
+  // 导出 / 复制 Markdown（回报任务档案用）
+  b.querySelector(".task-summary .sum-export").addEventListener("click", function(e){
+    e.stopPropagation();
+    if (!b._finished) return;
+    var md = buildTraceMd(b);
+    var d = new Date();
+    function p2(n){ return (n < 10 ? "0" : "") + n; }
+    downloadText("task_" + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + "_" +
+                 p2(d.getHours()) + p2(d.getMinutes()) + p2(d.getSeconds()) + ".md", md);
+    toast("已导出 Markdown");
+  });
+  b.querySelector(".task-summary .sum-copy").addEventListener("click", function(e){
+    e.stopPropagation();
+    if (!b._finished) return;
+    var md = buildTraceMd(b);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(md).then(function(){ toast("已复制 Markdown 到剪贴板"); },
+                                             function(){ fallbackCopy(md, function(){ toast("已复制 Markdown"); }); });
+    } else {
+      fallbackCopy(md, function(){ toast("已复制 Markdown"); });
+    }
+  });
   maybeScroll();
   return b;
 }
@@ -1260,6 +1294,58 @@ function fmtDur(ms) {
   var s = Math.round(ms / 1000);
   var m = Math.floor(s / 60); s = s % 60;
   return m + "m" + (s < 10 ? "0" : "") + s + "s";
+}
+
+/* 把一条任务轨迹导出成 Markdown：贴进任务档案 / 发给别人看都用得上 */
+function buildTraceMd(panel) {
+  var goalEl = panel.querySelector(".task-goal");
+  var goal = goalEl ? (goalEl.textContent || "").trim() : "";
+  var stEl = panel.querySelector(".task-status");
+  var st = stEl ? (stEl.textContent || "").trim() : "";
+  var n = panel._toolSeq.length;
+  var elapsed = fmtElapsed(Date.now() - panel._t0);
+  var md = [];
+  md.push("# 任务记录：" + goal);
+  md.push("");
+  md.push("- 状态：" + st);
+  md.push("- 步骤：" + n + " 步 · 用时 " + elapsed);
+  md.push("- 导出：" + new Date().toLocaleString("zh-CN"));
+  md.push("");
+  md.push("## 步骤");
+  md.push("");
+  panel._toolSeq.forEach(function(k, i){
+    var t = panel._tools[k];
+    if (!t) return;
+    var act = toolAction(t.name);
+    var mark = t.status === "ok" ? "✅" : (t.status === "err" ? "❌" : "⏳");
+    var line = (i + 1) + ". " + mark + " `" + t.name + "` " + act.zh;
+    if (t.arg) line += "（" + t.arg + "）";
+    if (t.ms != null) line += " · " + fmtDur(t.ms);
+    md.push(line);
+    if (t.preview) md.push("   - " + (t.status === "err" ? "失败：" : "结果：") + t.preview);
+    if (t.artifacts && t.artifacts.length) {
+      md.push("   - 产物：" + t.artifacts.map(function(a){ return a.name; }).join("、"));
+    }
+    if (t.detail) {
+      var raw = String(t.detail);
+      if (raw.length > 600) raw = raw.slice(0, 600) + "…（完整内容见任务档案）";
+      md.push("   ```");
+      md.push("   " + raw.replace(/\r?\n/g, "\n   "));
+      md.push("   ```");
+    }
+  });
+  return md.join("\n");
+}
+
+/* 浏览器端下载文本（不经过服务端） */
+function downloadText(name, text) {
+  var blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
 
 /* 状态条：显示当前正在执行的工具（或思考中） */
