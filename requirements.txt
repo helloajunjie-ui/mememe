@@ -1,6 +1,8 @@
 # 素月（Bailing）运行依赖
 openai>=1.0
 httpx>=0.27
+# 浏览器 TLS 指纹（过 Cloudflare 指纹类拦截；net_fetch 的第二层）
+curl_cffi>=0.16
 PyYAML>=6.0
 pydantic>=2.0
 mcp>=1.29
