@@ -41,6 +41,9 @@ def run(keyword: str = "", limit: int = 8, full: bool = False) -> dict:
             "name": m.get("name"),
             "category": m.get("category"),
             "type": m.get("type"),
+            "status": m.get("status", "active"),   # dormant = 长期零命中，不在目录里但没删
+            "hit_count": m.get("hit_count"),
+            "last_hit": m.get("last_hit"),
             "scene": (m.get("scene") or "")[:160],
             "importance": m.get("importance"),
         }

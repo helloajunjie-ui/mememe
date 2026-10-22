@@ -11,10 +11,12 @@ import datetime
 import json
 import os
 import re
+import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
 _PATH = "data/methodology.json"
+_DORMANT_CHECKED = False   # 每进程只做一次 dormant 巡检
 
 # 停用词（关键词提取用）
 _STOP = {
@@ -140,13 +142,20 @@ def extract_keywords(text: str, maxn: int = 12) -> List[str]:
 
 class MethodStore:
     # 世界书目录的紧凑渲染参数（2026-10-22：目录本身曾占 20k tokens/轮）
-    _INDEX_MAX_PER_CATEGORY = 30
+    _INDEX_MAX_PER_CATEGORY = 5
     _INDEX_NAME_CHARS = 26
+    # 命中记账的落盘节流（methodology.json 约 1MB，不能每轮都写）
+    _HIT_FLUSH_SECONDS = 300
+    # 零命中多久转 dormant（不进目录，但 method_find 仍能搜到）
+    _DORMANT_DAYS = 180
 
     def __init__(self, path: str = _PATH):
         self.path = path
         self.data: Dict = self._load()
         self._migrate()
+        self._hits_dirty = False
+        self._last_flush = 0.0
+        self._check_dormant_once()
 
     def _migrate(self) -> None:
         """世界书迁移：为旧条目补全 name；用手动关键词覆盖自动提取的劣质词（幂等，每次启动生效）。"""
@@ -313,11 +322,19 @@ class MethodStore:
         return sum(1 for m in self.data.get("methods", []) if m.get("status", "active") == "active")
 
     def to_index_json(self, limit: Optional[int] = None) -> List[Dict]:
-        """世界书多级目录（JSON 结构，适配底层逻辑）：[{"category", "items":[{id,name,type,keywords}]}]"""
+        """世界书多级目录（JSON 结构，适配底层逻辑）：[{"category", "items":[{id,name,type,keywords}]}]
+
+        2026-10-22：类目内改按「最近是否被激活」排序（近 3 天 > 近 30 天 > 更早 > 从未），
+        同级再按 importance——目录前几条天然是"当下用得上的"，不被高权重老条目霸占。
+        """
         methods = self.list()[:limit] if limit else self.list()
+        now = datetime.datetime.now()
         cats: Dict[str, List[Dict]] = {}
         for m in methods:
             cats.setdefault(self._category(m), []).append(m)
+        for items in cats.values():
+            items.sort(key=lambda m: (self._recency_tier(m, now), -float(m.get("importance") or 0),
+                                      int(m.get("id") or 0)))
         order = ["生存安全", "决策与效率", "记忆与检索", "工具与工程", "网络与采集",
                  "内容与发布", "验证与排查", "视觉与素材", "协作与交付", "其他"]
         out = []
@@ -466,14 +483,17 @@ class MethodStore:
     def find(self, keyword: str, limit: int = 8) -> List[Dict]:
         """按关键词全文检索方法论（名称/场景/方法/关键词/分类），供目录被截断后按需取回。
 
-        2026-10-22：世界书目录改成紧凑渲染后，每类只列前 30 条，其余靠本方法检索。
+        2026-10-22：世界书目录改成紧凑渲染后，每类只列前 5 条，其余靠本方法检索。
+        检索范围包含 dormant（长期零命中但仍有价值的条目）——目录里不占位，不等于删掉。
         评分：完整词命中权重高（×3），2 字词重叠兜底（与 match_scored 同口径）。
         """
         kw = (keyword or "").strip().lower()
         if not kw:
             return []
+        pool = [m for m in self.data.get("methods", [])
+                if m.get("status", "active") in ("active", "dormant")]
         scored = []
-        for m in self.list():
+        for m in pool:
             hay = " ".join([
                 m.get("name") or "", m.get("scene") or "", m.get("method") or "",
                 " ".join(m.get("keywords") or []), m.get("category") or "",
@@ -483,6 +503,89 @@ class MethodStore:
                 scored.append((score + m.get("importance", 0) * 0.5, m))
         scored.sort(key=lambda t: -t[0])
         return [m for _, m in scored[:limit]]
+
+    # ---------- 命中记账与生命周期（2026-10-22） ----------
+    def touch_hits(self, ids: List[int]) -> None:
+        """记录本轮实际注入（=被激活）的条目，用于目录排序与 dormant 判定。"""
+        now = datetime.datetime.now().isoformat(timespec="seconds")
+        by = {m.get("id"): m for m in self.data.get("methods", [])}
+        changed = False
+        for i in ids or []:
+            m = by.get(i)
+            if not m:
+                continue
+            m["hit_count"] = int(m.get("hit_count") or 0) + 1
+            m["last_hit"] = now
+            changed = True
+        if changed:
+            self._hits_dirty = True
+
+    def flush_hits(self, force: bool = False) -> bool:
+        """落盘命中记账（节流：默认 5 分钟最多写一次，methodology.json 约 1MB）。"""
+        if not self._hits_dirty:
+            return False
+        now = time.time()
+        if not force and now - self._last_flush < self._HIT_FLUSH_SECONDS:
+            return False
+        self._last_flush = now
+        self._hits_dirty = False
+        self._save()
+        return True
+
+    @staticmethod
+    def _recency_tier(m: Dict, now: datetime.datetime) -> int:
+        """0=近 3 天命中过 / 1=近 30 天 / 2=更早 / 3=从未命中。越小越靠前。"""
+        lh = m.get("last_hit")
+        if not lh:
+            return 3
+        try:
+            t = datetime.datetime.fromisoformat(str(lh))
+        except ValueError:
+            return 3
+        days = (now - t).total_seconds() / 86400.0
+        if days <= 3:
+            return 0
+        if days <= 30:
+            return 1
+        return 2
+
+    def _check_dormant_once(self) -> None:
+        """每个进程最多检查一次：长期零命中的条目转 dormant。"""
+        global _DORMANT_CHECKED
+        if _DORMANT_CHECKED:
+            return
+        _DORMANT_CHECKED = True
+        try:
+            self.maybe_dormant()
+        except Exception:  # noqa: BLE001
+            pass
+
+    def maybe_dormant(self, days: int = 0) -> int:
+        """把「从未命中 且 创建超过 N 天」的活跃条目转为 dormant。
+
+        dormant 不进目录、不参与关键词自动触发，但 method_find 仍能搜到——
+        治的是"目录里躺着六成从没用过的条目"，不是删知识。
+        没有 last_hit/hit_count 的历史条目同样适用（它们确实从未被激活）。
+        """
+        limit_days = days or self._DORMANT_DAYS
+        now = datetime.datetime.now()
+        n = 0
+        for m in self.data.get("methods", []):
+            if m.get("status", "active") != "active":
+                continue
+            if int(m.get("hit_count") or 0) > 0:
+                continue
+            try:
+                t = datetime.datetime.fromisoformat(str(m.get("created_at") or ""))
+            except ValueError:
+                continue          # 没有创建时间的不动（保守）
+            if (now - t).days >= limit_days:
+                m["status"] = "dormant"
+                m["dormant_at"] = now.isoformat(timespec="seconds")
+                n += 1
+        if n:
+            self._save()
+        return n
 
     def confidence(self, text: str, limit: int = 5):
         """置信度：返回 (命中数, top1分, 是否低置信)。判据：命中<3 或 top1<5.0。"""
