@@ -50,3 +50,29 @@ def append_line(path: str, line: str, max_bytes: int = DEFAULT_MAX_BYTES,
         return True
     except OSError:
         return False
+
+
+def iter_lines(path: str, encoding: str = "utf-8", max_segments: int = 10):
+    """按时间顺序遍历日志的全部片段（.N … .1 → 当前文件）。
+
+    2026-10-22：日志加了轮转之后，只读 `operation.log` 的统计脚本会突然"丢了历史"
+    （实测 7 天统计从 1109 条掉到 10 条）。读日志一律走这个函数，片段全带上。
+    """
+    segs = []
+    d = os.path.dirname(os.path.abspath(path)) or "."
+    base = os.path.basename(path)
+    have_base = os.path.exists(path)
+    for i in range(max_segments, 0, -1):
+        p = os.path.join(d, f"{base}.{i}")
+        if os.path.exists(p):
+            segs.append(p)
+    if have_base:
+        segs.append(path)
+    for p in segs:
+        try:
+            with open(p, "r", encoding=encoding, errors="replace") as f:
+                for line in f:
+                    yield line
+        except OSError:
+            continue
+

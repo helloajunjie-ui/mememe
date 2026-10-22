@@ -74,6 +74,9 @@ class AgentNotReady(Exception):
     pass
 
 
+_MAX_TASK_EVENTS = 2000   # 单个任务的阶段事件上限（防长任务内存膨胀）
+
+
 class TaskManager:
     """异步任务管理：提交即返回 task_id，后台线程执行，前端轮询进度（不干等）。"""
 
@@ -113,8 +116,15 @@ class TaskManager:
 
     def append_event(self, tid: str, ev: dict) -> None:
         with self.lock:
-            if tid in self.tasks:
-                self.tasks[tid]["events"].append(ev)
+            t = self.tasks.get(tid)
+            if not t:
+                return
+            if len(t["events"]) >= _MAX_TASK_EVENTS:
+                # 事件无上限增长会把长任务的内存撑大（每个事件带 preview/detail/artifacts）。
+                # 到顶后停止追加并打标记，游标语义不变（不裁剪已发出去的事件）。
+                t["events_truncated"] = True
+                return
+            t["events"].append(ev)
 
     def finish(self, tid: str, reply: str, artifacts: list = None) -> None:
         with self.lock:
@@ -648,6 +658,17 @@ class Handler(BaseHTTPRequestHandler):
     }
 
     def do_GET(self):
+        # 2026-10-22：统一兜底。处理函数里漏网的异常原来只会让连接断掉（前端表现为
+        # "网络错误"、服务端只留一行 traceback）；现在转成 JSON 500，前端能显示原因。
+        try:
+            self._route_get()
+        except Exception as e:  # noqa: BLE001
+            try:
+                self._send_json(500, {"ok": False, "error": f"服务端异常: {type(e).__name__}: {e}"})
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _route_get(self):
         path = urlparse(self.path).path
         m = re.match(r"^/api/task/(\w+)$", path)
         mf = re.match(r"^/files/(\w+)/(.+)$", path)
@@ -679,6 +700,15 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"ok": False, "error": "not found"})
 
     def do_POST(self):
+        try:
+            self._route_post()
+        except Exception as e:  # noqa: BLE001
+            try:
+                self._send_json(500, {"ok": False, "error": f"服务端异常: {type(e).__name__}: {e}"})
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _route_post(self):
         path = urlparse(self.path).path
         if path == "/api/chat":
             self._handle_chat()
@@ -770,7 +800,11 @@ class Handler(BaseHTTPRequestHandler):
     def _serve_static(self, path: str) -> None:
         webui = os.path.dirname(os.path.abspath(__file__))
         full = os.path.normpath(os.path.join(webui, path.lstrip("/")))
-        if not full.startswith(webui):
+        # 2026-10-22：原来只判 startswith(webui)，`/assets/../server.py` 能穿过前缀检查
+        # 把 webui 下的任意文件（含 server.py 源码）当静态资源读走（实测 200）。
+        # 必须带上分隔符比较，且只允许 webui/assets 目录内的文件。
+        assets = os.path.join(webui, "assets")
+        if not (full == assets or full.startswith(assets + os.sep)):
             self._send_json(403, {"ok": False, "error": "forbidden"})
             return
         ext = os.path.splitext(full)[1].lower()
@@ -925,9 +959,13 @@ class Handler(BaseHTTPRequestHandler):
             "error": t.get("error"),
             "events": events[since:],
             "next": len(events),
-            "done": t.get("status") in ("done", "error"),
+            # 2026-10-22：cancelled 也是终态，之前 done=false 会让按 done 判断的客户端一直轮询
+            "done": t.get("status") in ("done", "error", "cancelled"),
+            "cancelled": t.get("status") == "cancelled",
+            "truncated": bool(t.get("events_truncated")),
             "cancel_requested": bool(t.get("cancel_requested")),
         })
+        _tasks.cleanup_old()  # 轮询时顺手清过期任务（不再只依赖"用户再发一条消息"）
 
     # ---------- AI 接入配置 API ----------
     def _handle_config_get(self) -> None:

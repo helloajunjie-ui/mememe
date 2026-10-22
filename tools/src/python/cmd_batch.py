@@ -43,7 +43,8 @@ from tools.src.python.cmd_run import _is_destructive, _audit  # 复用安全拦�
         "required": ["commands"],
     },
 )
-def run(commands: list, timeout: float = 20, continue_on_error: bool = True) -> dict:
+def run(commands: list, timeout: float = 20, continue_on_error: bool = True,
+        cancel_event=None) -> dict:
     if not commands or not isinstance(commands, list):
         return {"ok": False, "error": "commands 不能为空"}
     commands = commands[:8]
@@ -71,7 +72,10 @@ def run(commands: list, timeout: float = 20, continue_on_error: bool = True) -> 
             if not continue_on_error:
                 break
             continue
-        r = plat.run_shell(cmd, timeout=int(timeout))
+        if cancel_event is not None and cancel_event.is_set():
+            results.append({"idx": i, "desc": desc, "ok": False, "error": "已取消（用户停止）"})
+            break
+        r = plat.run_shell(cmd, timeout=int(timeout), cancel_event=cancel_event)
         _audit(cmd, r)
         entry: dict = {"idx": i, "desc": desc, "ok": r["ok"], "exit_code": r["exit_code"]}
         if r["ok"]:

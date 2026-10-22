@@ -92,7 +92,8 @@ def _audit(command: str, result: dict, background: bool = False, desc: str = "")
     },
     group="系统与执行",
 )
-def run(command: str, timeout: float = 20, background: bool = False, desc: str = "") -> dict:
+def run(command: str, timeout: float = 20, background: bool = False, desc: str = "",
+        cancel_event=None) -> dict:
     if not isinstance(command, str):
         return {"ok": False, "error": "参数非法：command 必须是非空字符串"}
     if not command.strip():
@@ -117,12 +118,14 @@ def run(command: str, timeout: float = 20, background: bool = False, desc: str =
         _audit(command, res, background=True, desc=desc)
         return res
 
-    result = plat.run_shell(command, timeout=int(timeout))
+    result = plat.run_shell(command, timeout=int(timeout), cancel_event=cancel_event)
     out = {
         "ok": result["ok"],
         "stdout": (result["stdout"] or "")[:20000],
         "stderr": (result["stderr"] or "")[:5000],
         "exit_code": result["exit_code"],
     }
+    if result.get("_cancelled"):
+        out["_cancelled"] = True
     _audit(command, out, background=False, desc=desc)
     return out

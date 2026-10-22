@@ -827,7 +827,7 @@ class ToolRegistry:
             return {"ok": False, "error": f"工具不存在: {name}"}
         impl = entry["impl"]
         if impl["type"] == "python_function":
-            result = self._execute_python(name, args)
+            result = self._execute_python(name, args, cancel_event=cancel_event)
             # 工具创建/导入成功后：先 load 磁盘（含 Go 工具等非 Python 条目），
             # 再扫描注册 Python 工具，保存时保留全部（含刚创建的 Go 二进制工具）。
             if name in ("tool_create", "tool_import") and result.get("ok"):
@@ -851,12 +851,23 @@ class ToolRegistry:
             return self.mcp.call(impl.get("server", ""), impl.get("tool", ""), args, cancel_event=cancel_event)
         return {"ok": False, "error": f"未知工具类型: {impl['type']}"}
 
-    def _execute_python(self, name: str, args: Dict) -> Dict:
+    def _execute_python(self, name: str, args: Dict, cancel_event=None) -> Dict:
         self.reload_if_changed(name)  # 热更新：源码变化即重载，无需重启
         fn = self._fns.get(name)
         if fn is None:
             return {"ok": False, "error": f"工具未加载: {name}"}
         try:
+            # 2026-10-22：参数声明了 cancel_event 的工具（如 cmd_run）把取消事件透传进去，
+            # 用户点"停止"时能立刻杀掉在跑的子进程，不必等它自己超时。
+            if cancel_event is not None:
+                try:
+                    import inspect
+                    sig = inspect.signature(fn)
+                    if "cancel_event" in sig.parameters:
+                        args = dict(args or {})
+                        args["cancel_event"] = cancel_event
+                except (TypeError, ValueError):
+                    pass
             result = fn(**args)
             return {"ok": True, "result": result}
         except TypeError as e:

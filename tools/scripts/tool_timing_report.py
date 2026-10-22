@@ -36,28 +36,35 @@ except Exception:  # noqa: BLE001
 
 
 def load_records(days: int) -> list:
-    if not os.path.exists(OP_LOG):
+    if not os.path.exists(OP_LOG) and not os.path.exists(OP_LOG + ".1"):
         return []
     cutoff = datetime.datetime.now() - datetime.timedelta(days=days)
     out = []
-    with open(OP_LOG, "r", encoding="utf-8", errors="replace") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            ts = rec.get("ts") or ""
-            try:
-                t = datetime.datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
-            except ValueError:
-                continue
-            if t < cutoff:
-                continue
-            rec["_t"] = t
-            out.append(rec)
+    # 2026-10-22：日志已加轮转，只读当前文件会丢掉被轮转出去的历史（7 天统计曾从 1109 条掉到 10 条）
+    try:
+        sys.path.insert(0, ROOT)
+        from core.logutil import iter_lines
+        lines = iter_lines(OP_LOG)
+    except Exception:  # noqa: BLE001  独立运行/路径异常时退回单文件
+        lines = open(OP_LOG, "r", encoding="utf-8", errors="replace") if os.path.exists(OP_LOG) else []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        ts = rec.get("ts") or ""
+        try:
+            t = datetime.datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+        if t < cutoff:
+            continue
+        rec["_t"] = t
+        out.append(rec)
+    out.sort(key=lambda r: r["_t"])
     return out
 
 

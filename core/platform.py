@@ -77,7 +77,8 @@ def _decode_output(b: bytes) -> str:
     return b.decode("utf-8", errors="replace")
 
 
-def run_shell(command: str, timeout: int = 30, cwd: Optional[str] = None) -> Dict:
+def run_shell(command: str, timeout: int = 30, cwd: Optional[str] = None,
+              cancel_event=None) -> Dict:
     """在当前平台执行 shell 命令。
 
     返回 {"ok": bool, "stdout": str, "stderr": str, "exit_code": int}
@@ -104,36 +105,56 @@ def run_shell(command: str, timeout: int = 30, cwd: Optional[str] = None) -> Dic
                                     cwd=cwd, creationflags=flags)
         except OSError as e:
             return {"ok": False, "stdout": "", "stderr": f"命令执行异常: {e}", "exit_code": -1}
-        try:
-            rc = proc.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            # 杀整个进程树（包括 daemon 子进程）
+        def _kill_tree() -> None:
             if info["family"] == "windows":
                 try:
                     subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
                                    capture_output=True, timeout=5)
-                except Exception:
-                    try: proc.kill()
-                    except Exception: pass
-            else:
-                try: proc.kill()
-                except Exception: pass
-            # 2026-10-22：超时也要把已经产生的输出带回去——"卡住但跑了一半"的排查
-            # 全靠这半截；旧版直接丢空串，然后 finally 连文件都删了。
+                    return
+                except Exception:  # noqa: BLE001
+                    pass
+            try:
+                proc.kill()
+            except Exception:  # noqa: BLE001
+                pass
+
+        def _partial() -> bytes:
             try:
                 with open(out_path, "rb") as f:
-                    partial = f.read()
-                with open(err_path, "rb") as f:
-                    partial_err = f.read()
+                    return f.read()
             except OSError:
-                partial, partial_err = b"", b""
-            tail_out = _decode_output(partial)[-4000:]
-            tail_err = _decode_output(partial_err)[-2000:]
-            return {"ok": False,
-                    "stdout": tail_out,
-                    "stderr": (f"命令超时（>{timeout}s），已杀进程树"
-                               + ("；stderr: " + tail_err if tail_err.strip() else "")),
-                    "exit_code": -1, "timed_out": True}
+                return b""
+
+        # 2026-10-22：改成 0.3s 轮询——既保留超时杀树，又能在用户点"停止"时立刻结束，
+        # 不用干等到 timeout（实测取消一条 20s 的命令会白等 20s）。
+        import time as _time
+        t0 = _time.time()
+        while True:
+            try:
+                rc = proc.wait(timeout=0.3)
+                break
+            except subprocess.TimeoutExpired:
+                if cancel_event is not None and cancel_event.is_set():
+                    _kill_tree()
+                    return {"ok": False, "stdout": _decode_output(_partial())[-4000:],
+                            "stderr": "命令被用户终止（cancel）", "exit_code": -1,
+                            "_cancelled": True}
+                if _time.time() - t0 > timeout:
+                    _kill_tree()
+                    # 超时也把已经产生的输出带回去——"卡住但跑了一半"的排查全靠这半截；
+                    # 旧版直接丢空串，然后 finally 连文件都删了。
+                    try:
+                        with open(err_path, "rb") as f:
+                            partial_err = f.read()
+                    except OSError:
+                        partial_err = b""
+                    tail_out = _decode_output(_partial())[-4000:]
+                    tail_err = _decode_output(partial_err)[-2000:]
+                    return {"ok": False,
+                            "stdout": tail_out,
+                            "stderr": (f"命令超时（>{timeout}s），已杀进程树"
+                                       + ("；stderr: " + tail_err if tail_err.strip() else "")),
+                            "exit_code": -1, "timed_out": True}
         try:
             with open(out_path, "rb") as f: out = f.read()
             with open(err_path, "rb") as f: err = f.read()
