@@ -305,15 +305,37 @@ class ToolRegistry:
                 return False
             self._fns[name] = fn
             self._mod_mtime[src] = mtime
-            # 同步刷新 desc/parameters（工具元信息也变了时）
-            meta = get_meta(fn)
-            if meta:
-                self.tools[name]["description"] = meta.get("description") or impl.get("description", "")
-                params = normalize_schema(meta.get("parameters"))
-                if params != self.tools[name].get("parameters"):
-                    self.tools[name]["parameters"] = params
-                    self.tools[name]["version"] = int(self.tools[name].get("version", 1)) + 1
-            print(f"[registry] 热更新工具 {name}（{Path(src).name}）")
+            # 关键修正：同一源码文件可能注册多个工具（如 fs_explore.py 含 fs_list/fs_read/fs_search/fs_delete）。
+            # 原来只刷新当前调用那一个的 fn，其余同文件工具仍绑旧函数对象，而 mtime 已按文件更新
+            # → 其余工具永远不会再 reload，改了等于没改（2026-10-22 实测踩坑）。
+            # 改为：reload 后刷新该源码文件下【全部】工具的 fn/schema。
+            src_stem = Path(src).stem
+            refreshed = []
+            stale = []
+            for tname, tentry in list(self.tools.items()):
+                timpl = (tentry or {}).get("impl") or {}
+                if timpl.get("source") != src:
+                    continue
+                tentry_name = timpl.get("entry") or tname
+                tfn = getattr(mod, tentry_name, None)
+                if not tfn or not callable(tfn):
+                    stale.append(tname)
+                    continue
+                self._fns[tname] = tfn
+                meta = get_meta(tfn)
+                if meta:
+                    tentry["description"] = meta.get("description") or timpl.get("description", "")
+                    params = normalize_schema(meta.get("parameters"))
+                    if params != tentry.get("parameters"):
+                        tentry["parameters"] = params
+                        tentry["version"] = int(tentry.get("version", 1)) + 1
+                refreshed.append(tname)
+            if stale:
+                print(f"[registry] 热更新 {src_stem}: 以下工具在模块中找不到入口，保持旧引用 {stale}")
+            if name not in refreshed and name not in self._fns:
+                print(f"[registry] 热更新 {name} 失败: 模块中找不到入口函数 {impl.get('entry')}")
+                return False
+            print(f"[registry] 热更新 {src_stem}.py -> {refreshed}")
             return True
         except Exception as e:  # noqa: BLE001
             print(f"[registry] 热更新 {name} 失败: {type(e).__name__}: {e}")
