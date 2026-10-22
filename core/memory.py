@@ -29,6 +29,15 @@ class Memory:
         # 安全前提：调用方对 turn 串行化（webui _turn_lock），memory 单连接操作短、互斥。
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        # 2026-10-22（深度检验）：WAL + NORMAL 同步。
+        # 旧配置是默认 journal_mode=delete：每次 commit 一次 fsync，而 query() 对每条结果
+        # 各提交一次（10 条结果实测 ≈ 110ms），且 webui / mcp-service 多进程并发写时容易撞锁。
+        try:
+            self.conn.execute("PRAGMA journal_mode=WAL")
+            self.conn.execute("PRAGMA synchronous=NORMAL")
+            self.conn.execute("PRAGMA busy_timeout=5000")
+        except sqlite3.DatabaseError:
+            pass  # 只读挂载等场景下不阻断启动
         self._init_schema()
         try:
             self._reindex_grams()
@@ -346,7 +355,8 @@ class Memory:
         self.conn.commit()
 
     # ---------- 检索 ----------
-    def query(self, keyword: str, limit: int = 10, types: Optional[List[str]] = None) -> List[Dict]:
+    def query(self, keyword: str, limit: int = 10, types: Optional[List[str]] = None,
+              scope: Optional[str] = "self") -> List[Dict]:
         """关键词 + 标签匹配，RRF 融合排序（相关度榜 × 长度归一榜）。
 
         2026-09-19 升级：2-gram 倒排优先（中文任意 2 字词/多词 OR 可命中），
@@ -388,6 +398,11 @@ class Memory:
             placeholders = ",".join("?" * len(types))
             sql += f" AND type IN ({placeholders})"
             params.extend(types)
+        # 2026-10-22（深度检验）：作用域隔离。旧查询没有任何 scope 条件，
+        # 写入端却支持 scope——一旦出现 self 以外的作用域（工作区/多用户）就会跨域串记忆。
+        if scope:
+            sql += " AND scope=?"
+            params.append(scope)
         _order = "_score DESC, " if grams else ""
         sql += " ORDER BY " + _order + "importance DESC, last_access DESC LIMIT ?"
         params.append(pool)
@@ -426,36 +441,51 @@ class Memory:
             d = dict(r)
             d.pop("_score", None)
             results.append(d)
-        # 更新访问计数
-        for r in results:
-            self._touch(r["id"])
+        # 更新访问计数（踩过一次坑：旧实现每条各 commit 一次，10 条结果 = 10 次 fsync）
+        self._touch_many([r["id"] for r in results])
         return results
 
-    def load_important(self, limit: int = 20) -> List[Dict]:
-        """会话开始时按 importance 预加载。"""
-        rows = self.conn.execute(
-            "SELECT * FROM memories WHERE archived=0 AND superseded_by IS NULL "
-            "ORDER BY importance DESC, last_access DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
+    def load_important(self, limit: int = 20, scope: Optional[str] = "self") -> List[Dict]:
+        """会话开始时按 importance 预加载（默认只看本作用域）。"""
+        sql = ("SELECT * FROM memories WHERE archived=0 AND superseded_by IS NULL")
+        params: List[Any] = []
+        if scope:
+            sql += " AND scope=?"
+            params.append(scope)
+        sql += " ORDER BY importance DESC, last_access DESC LIMIT ?"
+        params.append(limit)
+        rows = self.conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
-    def load_recent(self, limit: int = 3) -> List[Dict]:
+    def load_recent(self, limit: int = 3, scope: Optional[str] = "self") -> List[Dict]:
         """按写入时间取最近若干条。
 
         2026-09-15：保证新写的经历能进上下文视野。仅按 importance 排序时，
         低重要度的新记忆永远排在老记忆之后，写了也看不见，沉淀没有回报。
         """
-        rows = self.conn.execute(
-            "SELECT * FROM memories WHERE archived=0 ORDER BY id DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
+        sql = "SELECT * FROM memories WHERE archived=0"
+        params: List[Any] = []
+        if scope:
+            sql += " AND scope=?"
+            params.append(scope)
+        sql += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
+        rows = self.conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
     def _touch(self, mem_id: int) -> None:
+        self._touch_many([mem_id])
+
+    def _touch_many(self, mem_ids: List[int]) -> None:
+        """批量刷新访问计数：一条 UPDATE、一次提交（10 条结果从 ~110ms 降到 ~10ms）。"""
+        ids = [int(i) for i in (mem_ids or []) if i is not None]
+        if not ids:
+            return
+        ph = ",".join("?" * len(ids))
         self.conn.execute(
-            "UPDATE memories SET access_count = access_count + 1, last_access = ? WHERE id = ?",
-            (datetime.datetime.now().isoformat(), mem_id),
+            "UPDATE memories SET access_count = access_count + 1, last_access = ? "
+            "WHERE id IN (" + ph + ")",
+            [datetime.datetime.now().isoformat()] + ids,
         )
         self.conn.commit()
 
@@ -516,8 +546,7 @@ class Memory:
             (scope, category, limit),
         ).fetchall()
         results = [dict(r) for r in rows]
-        for r in results:
-            self._touch(r["id"])
+        self._touch_many([r["id"] for r in results])
         return results
 
     def close(self) -> None:

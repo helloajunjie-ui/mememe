@@ -57,6 +57,12 @@ def _is_extractable_turn(m: Dict) -> bool:
 
 _META_LAST_EXTRACT = "last_extract_at"
 _META_LAST_CONSOLIDATE = "last_consolidate_at"
+_META_LAST_ARCHIVE = "last_archive_at"
+
+# 衰减归档节奏与阈值（2026-10-22 补调度：archive_stale 写好了但全仓零调用）
+ARCHIVE_INTERVAL = 24 * 3600      # 每天最多一次
+ARCHIVE_STALE_DAYS = 90           # 90 天未被任何检索碰到
+ARCHIVE_IMPORTANCE_BELOW = 0.3    # 且重要度低于 0.3
 
 
 def _now() -> float:
@@ -236,19 +242,33 @@ def consolidate(llm, memory, scope: str = "self", force: bool = False) -> Dict:
         if row is None or not isinstance(mid, int):
             continue
         if act == "drop":
+            # 2026-10-22：删除也必须留痕——旧写法直接 archived=1，没有任何审计记录，
+            # 与「自我修正可追溯」的承诺不符。revisions 里记一条（new_content 为空）。
             memory.conn.execute(
                 "UPDATE memories SET archived=1, importance=0 WHERE id=?", (mid,)
+            )
+            memory.conn.execute(
+                "INSERT INTO memory_revisions (mem_id, old_content, new_content, reason, revised_at) "
+                "VALUES (?,?,?,?,?)",
+                (mid, row["content"], "", "consolidate:drop:%s" % str(a.get("note") or "")[:80],
+                 datetime.datetime.now().isoformat()),
             )
             memory.conn.commit()
             dropped += 1
         elif act == "merge" and a.get("merge_to"):
-            # 合并：目标内容写入原记录（importance 保持），其他指向它的不动（简化版）
-            memory.conn.execute(
-                "UPDATE memories SET content=?, category='fact', last_access=? WHERE id=?",
-                (str(a["merge_to"]).strip()[:500], datetime.datetime.now().isoformat(), mid),
-            )
-            memory.conn.commit()
-            merged += 1
+            # 2026-10-22 修复（索引漂移）：合并必须走 revise()——
+            # 旧写法裸 `UPDATE memories SET content=?`，memory_grams 不重建，
+            # 结果是旧词仍能命中已删内容（假阳性）、新词只能靠 LIKE 兜底（排序偏低）。
+            # revise() 会：新建条目（_add 负责重建倒排）+ 旧条失效 + 写 revisions。
+            try:
+                memory.revise(
+                    mid, str(a["merge_to"]).strip()[:500],
+                    reason="consolidate:merge:%s" % str(a.get("note") or "")[:80],
+                    category="fact", source="consolidate", origin="self",
+                )
+                merged += 1
+            except ValueError:
+                continue
         elif act == "conflict":
             # 2026-09-20：矛盾只「记账」，绝不自动改写。
             # 自动融合是投毒入口——外部内容只要声称"你记错了"就能改写我的记忆。
@@ -264,6 +284,26 @@ def consolidate(llm, memory, scope: str = "self", force: bool = False) -> Dict:
     memory.set_meta(_META_LAST_CONSOLIDATE, str(_now()))
     return {"ran": True, "reason": "ok", "merged": merged, "dropped": dropped,
             "flagged": flagged}
+
+
+def maybe_archive_stale(memory, scope: str = "self", force: bool = False) -> Dict:
+    """低频衰减归档（每天最多一次）：把「低重要度 + 长期未被访问」的记忆归档。
+
+    背景（2026-10-22 深度检验）：`Memory.archive_stale()` 早就写好，但全仓零调用，
+    于是「只增不减」——1729 条 active 里 985 条从未被访问过。这里补上调度，
+    阈值沿用 archive_stale 的默认语义（90 天未访问 / 重要度 < 0.3）。
+    注意：last_access 会被每次检索刷新，所以本机制只对「真的很久没被任何检索碰到」的条目生效，
+    不会误伤常用记忆。
+    """
+    if not _should_run(memory, _META_LAST_ARCHIVE, ARCHIVE_INTERVAL, force=force):
+        return {"ran": False, "reason": "rate_limit"}
+    try:
+        n = memory.archive_stale(threshold_days=ARCHIVE_STALE_DAYS,
+                                 importance_below=ARCHIVE_IMPORTANCE_BELOW)
+    except Exception as e:  # noqa: BLE001
+        return {"ran": False, "reason": f"error:{e}"}
+    memory.set_meta(_META_LAST_ARCHIVE, str(_now()))
+    return {"ran": True, "archived": n}
 
 
 def _parse_consolidate_response(content: str) -> List[Dict]:

@@ -3,6 +3,10 @@
 .env
 # ===== 私有实例数据（个人状态，绝不放公开仓库；走私有备份）=====
 data/memory.db
+# 2026-10-22：SQLite 改 WAL 后的sidecar（-wal/-shm）不入库，否则 git status 永远挂着两个未跟踪文件
+*.db-wal
+*.db-shm
+*.db-journal
 data/self.yaml
 data/methodology.json
 data/registry.json

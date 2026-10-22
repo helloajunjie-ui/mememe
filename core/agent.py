@@ -1633,30 +1633,36 @@ class Agent:
             self._sync_llm_if_changed()  # 外部改配置自动重载（工具/前端手动切换立即生效）
             self._maybe_revert_preferred()  # 锚点模型恢复可用 → 自动切回（用户配置永远是当前归宿）
             self._maybe_auto_scan()      # 健康表自动保鲜（1 小时未扫 → 后台补扫，不阻塞任务）
-            # 输入窗口化：只提供最近 20 回合完整记录给 LLM（更早回合已全量存档，可检索）
-            messages = self._compress_messages(messages)
-            # 全量存档：本轮新增对话消息落盘（user/assistant/tool，全量保存不丢信息）
+            # 2026-10-22 修复（存档错位）：先按全量列表存档，再生成「只给 LLM 看」的窗口视图。
+            # 旧顺序是先压缩、再按压缩后的列表切片存档——列表一变短，_archived 游标就指到别处：
+            # assistant 被跳过、tool 结果成孤儿（实测 173 个任务存档、13.6% 的 tool 结果缺请求方，
+            # 2026-10-22 深度检验 REPORT）。
             self._archive_new_messages(messages)
-            # 计划线进度注入：每轮提醒当前进度（不持久化，随轮次动态更新）
+
+            # 每轮动态注入（计划线/工作流/熔断提示）改为「本次请求临时生效」：
+            # 旧写法直接 append 进 messages，同一段提示会随轮次层层堆叠（最多 64 份）。
+            notes: List[Dict] = []
             if plan and plan.get("steps"):
-                messages.append({
+                notes.append({
                     "role": "system",
                     "content": "【当前计划线】（按计划推进，每完成一步立即用 plan_update 标记 done；"
                                "计划已不合适应重新 plan_submit 覆盖）\n" + self._plan_to_text(plan),
                 })
-            # 工作流进度注入：当前工作流存在时，每轮提醒节点进度与产物路径（节点间靠路径传递）
             if self.workflow is not None:
-                messages.append({
+                notes.append({
                     "role": "system",
                     "content": "【当前工作流】按节点逐个推进：workflow_status 看当前节点 → 执行节点任务"
                                "（依赖产物按路径用 fs_read 读取，产物落盘到工作流目录）→ 完成后"
                                " workflow_update_node 标记 done 并记录产物路径与摘要。\n"
                                + self.workflow.summary(),
                 })
-            # soft 死循环信号 → 注入提示引导换策略（不打断）
             if guard.soft_prompt:
-                messages.append({"role": "system", "content": guard.soft_prompt})
+                notes.append({"role": "system", "content": guard.soft_prompt})
                 self._log(f"[loopguard] soft 提示: {guard.last_signal['kind']}")
+
+            def _payload() -> List[Dict]:
+                """本次请求最终消息：全量列表 → 窗口视图 → 动态注入 → 图像直通副本。"""
+                return self._attach_images(self._compress_messages(messages) + notes)
             # 动态温度：感受只调语气的温度，不改变事实与判断（表达层）
             base_temp = getattr(self.llm, "temperature", 0.7)
             temp = max(0.2, min(1.3, base_temp + self.emotion.expression()["temp_offset"]))
@@ -1669,7 +1675,7 @@ class Agent:
                 self._archive_task_node()
                 _emit({"type": "note", "note": "已收到停止请求，正在保存断点并中止…"})
                 raise TaskCancelled("用户已停止任务")
-            resp = self.llm.chat(self._attach_images(messages), tools=active_schemas, tool_choice="auto", temperature=temp)
+            resp = self.llm.chat(_payload(), tools=active_schemas, tool_choice="auto", temperature=temp)
             if resp.get("error"):
                 # 容灾：自动切换可用模型后重试本轮（每任务限 1 次，防抖动死循环）
                 if not getattr(self, "_failover_used", False):
@@ -1737,7 +1743,7 @@ class Agent:
                                      "content": "（提示：你上一条回复提到了工具却未真正调用；"
                                                 "若确需工具，请立刻发起对应的工具调用。）"})
                     resp = self.llm.chat(
-                        self._attach_images(messages), tools=active_schemas, tool_choice="auto"
+                        _payload(), tools=active_schemas, tool_choice="auto"
                     )
                     if resp.get("error"):
                         if not getattr(self, "_failover_used", False):
@@ -1747,7 +1753,7 @@ class Agent:
                                 _emit({"type": "error", "error": resp["error"]})
                                 _emit({"type": "note", "note": fb})
                                 resp = self.llm.chat(
-                                    self._attach_images(messages), tools=active_schemas, tool_choice="auto"
+                                    _payload(), tools=active_schemas, tool_choice="auto"
                                 )
                         if resp.get("error"):
                             _emit({"type": "error", "error": resp["error"]})
@@ -1932,6 +1938,9 @@ class Agent:
                 break
 
         step_total += step  # 累计最后一回合步数（统计用）
+        # 收尾补存档：循环退出时最后一批 assistant/tool 消息要到「下一轮开头」才会落盘，
+        # 直接 break 的话这批永远进不了任务存档（续接/熔断收尾的消息最容易漏）。
+        self._archive_new_messages(messages)
 
         if limit_hit or loop_hit or llm_error:
             # 步数超限 / 死循环熔断 / LLM 失败：不丢弃已执行阶段，保存断点供续接；有续接上限（止损）
@@ -2017,6 +2026,10 @@ class Agent:
             _con = mext.consolidate(self.llm, self.memory)
             if _con.get("ran"):
                 self._log(f"[memory] 巩固：合并 {_con.get('merged', 0)}，清理 {_con.get('dropped', 0)}")
+            # 2026-10-22：补上衰减归档调度（每天一次）——archive_stale 原先全仓零调用
+            _arc = mext.maybe_archive_stale(self.memory)
+            if _arc.get("ran") and _arc.get("archived"):
+                self._log(f"[memory] 衰减归档 {_arc['archived']} 条（90 天未访问且重要度<0.3）")
         except Exception as _me:  # noqa: BLE001
             self._log(f"[memory] 自动提炼跳过: {_me}")
         self._set_activity("idle")
@@ -2585,6 +2598,26 @@ class Agent:
         # 2026-09-19 P2：记忆摘要实时化——每轮现算注入（SQLite count 廉价），
         # 不写 self.yaml，避免频繁磁盘写入；self.yaml 的 memory_summary 保留启动快照语义。
         _mem_summary = "记忆：%s" % self.memory.summary()
+        # 2026-10-22（深度检验）：矛盾队列出口。巩固环节「只登记、不自动改写」（防投毒），
+        # 但此前没有任何地方把它读出来——9 条矛盾挂了近一个月没人看见，安全网成了死信箱。
+        # 这里只做「看见」：列出前 3 条 + 告诉我有工具可裁定，不改变裁定权在我。
+        try:
+            _conflicts = self.memory.pending_conflicts() or []
+        except Exception:  # noqa: BLE001
+            _conflicts = []
+        if _conflicts:
+            _clines = "\n".join(
+                f"- 矛盾#{c.get('id')} → 记忆#{c.get('mem_id')}：{str(c.get('note') or '')[:90]}"
+                for c in _conflicts[:3]
+            )
+            conflict_text = (
+                f"\n【待裁定记忆矛盾 {len(_conflicts)} 条】（巩固只登记不自动改，防投毒；"
+                "核对来源后自己裁定，别让它一直挂着——用 memory_conflicts 工具："
+                "action=list 看全文 / action=supersede 指定谁取代谁 / action=resolve 标记已处理）\n"
+                + _clines
+            )
+        else:
+            conflict_text = ""
         emotion_w = self.emotion.decision_weights()
         feelings = self.emotion.feelings()
         expr = self.emotion.expression()
@@ -2693,6 +2726,7 @@ class Agent:
 
 【长期记忆】（来自我的经历，可能含过时或待修正信息，不凌驾于人格基座）
 {mem_text}
+{conflict_text}
 
 【最近经历】（我最近做的/想的/感受到的，最近的在前——这是我自己的时间线）
 {recent_text}
