@@ -239,12 +239,31 @@
     max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     display: inline-block; vertical-align: bottom;
   }
+  /* 思考摘要：可折叠手风琴（多轮累积，动手后自动收起） */
   .task-think {
-    display: none; font-size: 11.5px; color: #6D5BB5; background: #F7F5FF;
-    border: 1px solid #EAE4FA; border-radius: 6px; padding: 3px 9px;
-    margin: 2px 0 4px; line-height: 1.55; max-height: 44px; overflow: hidden;
+    display: none; background: #F8F6FF; border: 1px solid #EAE4FA;
+    border-radius: 8px; margin: 2px 0 6px; overflow: hidden;
   }
-  .task-think::before { content: '在想：'; font-weight: 600; color: #8B7BC8; }
+  .task-think.show { display: block; }
+  .task-think .th-head {
+    display: flex; align-items: center; gap: 6px; padding: 4px 9px;
+    font-size: 11.5px; color: #6D5BB5; cursor: pointer; user-select: none;
+  }
+  .task-think .th-head:hover { background: #F2EEFF; }
+  .task-think .th-dot { width: 6px; height: 6px; border-radius: 50%; background: #8B7BC8; flex-shrink: 0; }
+  .task-think.live .th-dot { animation: blink 1.2s infinite; }
+  .task-think .th-peek { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .task-think .th-cnt { font-size: 10.5px; color: #9A8FD0; flex-shrink: 0; }
+  .task-think .th-caret { font-size: 9px; color: #B3A9DD; transition: transform .2s; flex-shrink: 0; }
+  .task-think.open .th-caret { transform: rotate(90deg); }
+  .task-think .th-body { max-height: 0; overflow: hidden; transition: max-height .28s ease; }
+  .task-think.open .th-body { max-height: 190px; overflow-y: auto; }
+  .task-think .th-body p {
+    margin: 0; padding: 3px 10px 6px 21px; font-size: 11.5px;
+    color: #5F5490; line-height: 1.55;
+  }
+  .task-think .th-body p + p { border-top: 1px dashed #EDE8FA; padding-top: 6px; }
+  .task-think .th-body p::before { content: '· '; color: #B3A9DD; }
   .task-now.err { color: #DC2626; }
   .task-now.done { color: #5B8A6E; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -352,6 +371,16 @@
   }
   .step-detail .blk.res { color: #55605A; }
   .step-detail .blk.err { color: #B03A2E; background: #FDF6F5; border-color: #F0DAD6; }
+  .step-detail .raw-toggle {
+    display: inline-block; font-size: 10.5px; color: #8A7E63; cursor: pointer;
+    margin: 2px 0 2px 6px; text-decoration: underline dotted;
+  }
+  .step-detail .raw-toggle:hover { color: #4B5570; }
+  .step-detail pre.blk.raw {
+    max-height: 220px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+    margin-top: 3px;
+  }
+  .step.raw-open .step-detail { max-height: 560px; }
   /* 完成后的汇总条 */
   .task-summary {
     display: none; align-items: center; gap: 8px; margin-top: 4px;
@@ -366,7 +395,14 @@
   .task-summary .chev { margin-left: auto; font-size: 9px; color: #A29B8C; transition: transform .22s; }
   .task-summary.open .chev { transform: rotate(180deg); }
   .task-card.trace-hidden .task-steps,
-  .task-card.trace-hidden .task-plan { display: none; }
+  .task-card.trace-hidden .task-plan,
+  .task-card.trace-hidden .task-think { display: none; }
+  /* 系统提示行（切换模型 / 已加载工具 / 收到停止…），6 秒后自动隐去 */
+  .task-note {
+    display: none; font-size: 11.5px; color: #6B7180; background: #FBFAF4;
+    border: 1px dashed #E4E0D2; border-radius: 6px; padding: 3px 9px; margin: 2px 0 5px;
+  }
+  .task-note.show { display: block; animation: fadeIn .2s ease; }
   .task-review { margin-left: 8px; font-size: 10.5px; color: #4B5570; cursor: pointer; white-space: nowrap; }
   .task-review:hover { text-decoration: underline; }
   /* 输入区 */
@@ -1154,7 +1190,13 @@ function addTaskPanel(goal) {
     '</div>' +
     '<div class="task-goal" title="' + escapeHtml(goal) + '">' + escapeHtml(goal) + '</div>' +
     '<div class="task-now"><span class="spinner"></span><span class="now-text">思考中...</span></div>' +
-    '<div class="task-think"></div>' +
+    '<div class="task-think">' +
+      '<div class="th-head">' +
+        '<span class="th-dot"></span><span class="th-peek"></span>' +
+        '<span class="th-cnt"></span><span class="th-caret">▸</span>' +
+      '</div>' +
+      '<div class="th-body"></div>' +
+    '</div>' +
     '<div class="task-progress"><div class="bar indeterminate"><i></i></div><span class="txt">准备中</span></div>' +
     '<div class="task-plan"></div>' +
     '<div class="task-steps"></div>' +
@@ -1169,6 +1211,16 @@ function addTaskPanel(goal) {
   b._olderOpen = false; // 是否展开「更早的 N 步」
   b._finished = false;
   b._traceOpen = true;  // 完成后轨迹是否展开
+  b._thinks = [];       // 累积的思考片段（每轮一段）
+  b._thinkOpen = false; // 手风琴是否展开
+  b._thinkTouched = false;  // 用户手动开合过 → 不再自动收起
+  // 思考手风琴：点标题栏展开/收起
+  b.querySelector(".task-think .th-head").addEventListener("click", function(e){
+    e.stopPropagation();
+    b._thinkTouched = true;
+    b._thinkOpen = !b._thinkOpen;
+    renderThink(b);
+  });
   // 汇总条：点击展开/收起整条轨迹（完成后默认收起，保持列表清爽）
   b.querySelector(".task-summary").addEventListener("click", function(e){
     e.stopPropagation();
@@ -1230,6 +1282,27 @@ function updateProgress(panel) {
   }
 }
 
+/* 思考手风琴：折叠时只显示"在想：<最后一段摘要>"，展开看全部轮次 */
+function renderThink(panel) {
+  var box = panel.querySelector(".task-think");
+  if (!box) return;
+  if (!panel._thinks.length) { box.classList.remove("show"); return; }
+  box.classList.add("show");
+  box.classList.toggle("open", !!panel._thinkOpen);
+  var live = !panel._toolSeq.length && !panel._finished;
+  box.classList.toggle("live", live);
+  var last = panel._thinks[panel._thinks.length - 1];
+  var peek = last.length > 70 ? last.slice(0, 70) + "…" : last;
+  box.querySelector(".th-peek").textContent = panel._thinkOpen
+    ? "思考过程"
+    : ((live ? "在想：" : "思考：") + peek);
+  box.querySelector(".th-cnt").textContent = panel._thinks.length > 1
+    ? panel._thinks.length + " 轮" : "";
+  box.querySelector(".th-body").innerHTML = panel._thinks.map(function(s){
+    return "<p>" + escapeHtml(s) + "</p>";
+  }).join("");
+}
+
 /* ===== 步骤时间线（逐步出现 / 完成即收 / 点击展开 / 只留最近几步） =====
    交互约定（对齐现代 agent 的浏览方式）：
    - 新步骤出现时自动展开并高亮（run），上一步自动收起
@@ -1258,6 +1331,15 @@ function ensureStep(panel, step) {
     if (!t) return;
     t.manual = true;                       // 用户手动开合过 → 之后不再自动收起
     setStepOpen(panel, step, !t.open);
+  });
+  // 「查看原文」：展开这一步工具返回的原始片段（详情区重绘不丢状态，状态存在 t.rawOpen）
+  el.querySelector(".step-detail").addEventListener("click", function(e){
+    var t = panel._tools[step];
+    var a = (e.target && e.target.closest) ? e.target.closest(".raw-toggle") : null;
+    if (!a || !t) return;
+    e.stopPropagation();
+    t.rawOpen = !t.rawOpen;
+    renderStep(panel, step);
   });
   box.appendChild(el);
   setTimeout(function(){ el.classList.remove("enter"); }, 320);
@@ -1296,6 +1378,11 @@ function renderStep(panel, step) {
   if (t.ts) {
     html += '<div class="blk"><span class="lbl">时刻</span>' + fmtClock(t.ts) + '</div>';
   }
+  if (t.detail) {
+    html += '<a class="raw-toggle">' + (t.rawOpen ? "收起原文" : "查看原文") + '</a>' +
+            '<pre class="blk raw"' + (t.rawOpen ? "" : " hidden") + '>' +
+            escapeHtml(t.detail) + '</pre>';
+  }
   el.querySelector(".step-detail").innerHTML = html;
 
   var rowEl = el.querySelector(".step-row");
@@ -1303,7 +1390,7 @@ function renderStep(panel, step) {
     (t.preview ? "（" + t.preview.slice(0, 80) + "）" : "");
   rowEl.setAttribute("aria-expanded", t.open ? "true" : "false");
 
-  el.className = "step " + t.status + (t.open ? " open" : "");
+  el.className = "step " + t.status + (t.open ? " open" : "") + (t.rawOpen ? " raw-open" : "");
   el.dataset.step = step;
 }
 
@@ -1388,14 +1475,11 @@ function renderEvent(panel, ev) {
     renderPlan(panel, ev.plan);
   } else if (ev.type === "think") {
     updateNow(panel);  // 无运行中工具时状态条显示思考中
-    var th = panel.querySelector(".task-think");
-    if (th) {
-      if (ev.reasoning) {
-        th.textContent = ev.reasoning.replace(/\s+/g, " ").slice(0, 160);
-        th.style.display = "block";
-      } else {
-        th.style.display = "none";
-      }
+    if (ev.reasoning) {
+      panel._thinks.push(String(ev.reasoning).replace(/\s+/g, " ").slice(0, 400));
+      // 还没动手 → 展开看它在想什么；已经开始执行 → 自动收起，只在标题栏留一行预览
+      if (!panel._thinkTouched) panel._thinkOpen = panel._toolSeq.length === 0;
+      renderThink(panel);
     }
   } else if (ev.type === "tool") {
     // 新步骤：把上一步（没被用户手动展开过的）自动收起，本步展开并高亮
@@ -1413,18 +1497,35 @@ function renderEvent(panel, ev) {
     if (panel._toolSeq.indexOf(ev.step) < 0) panel._toolSeq.push(ev.step);
     renderStep(panel, ev.step);
     syncSteps(panel);
+    if (!panel._thinkTouched && panel._thinkOpen) {   // 开始动手 → 思考自动收起
+      panel._thinkOpen = false;
+      renderThink(panel);
+    }
     updateNow(panel);
     updateProgress(panel);
     maybeScroll();
   } else if (ev.type === "note") {
-    var th3 = panel.querySelector(".task-think");
-    if (th3) { th3.textContent = ev.note; th3.style.display = "block"; }
+    // 系统提示（切换模型/收到停止/已加载扩展工具…）：单独一行，6 秒后自动隐去，
+    // 不再往思考手风琴里塞文本（会破坏其 DOM 结构）
+    var nbox = panel.querySelector(".task-note");
+    if (!nbox) {
+      nbox = document.createElement("div");
+      nbox.className = "task-note";
+      var goalEl = panel.querySelector(".task-goal");
+      if (goalEl && goalEl.parentNode) goalEl.parentNode.insertBefore(nbox, goalEl.nextSibling);
+      else panel.insertBefore(nbox, panel.firstChild);
+    }
+    nbox.textContent = ev.note;
+    nbox.classList.add("show");
+    clearTimeout(nbox._tm);
+    nbox._tm = setTimeout(function(){ nbox.classList.remove("show"); }, 6000);
   } else if (ev.type === "stage") {
     var t2 = panel._tools[ev.step];
     if (t2) {
       t2.status = ev.ok ? "ok" : "err";
       if (typeof ev.ms === "number") t2.ms = ev.ms;
       if (ev.preview) t2.preview = ev.preview;
+      if (ev.detail) t2.detail = ev.detail;
       if (!t2.manual) t2.open = false;     // 完成即收：只留一行摘要，点击再展开
       renderStep(panel, ev.step);
       syncSteps(panel);
@@ -1459,8 +1560,8 @@ function finishTaskPanel(panel, ok) {
   now.classList.remove("err");
   now.classList.add(ok ? "done" : "err");
   var elapsed = fmtElapsed(Date.now() - panel._t0);
-  var th = panel.querySelector(".task-think");
-  if (th) th.style.display = "none";
+  panel._thinkOpen = false;
+  renderThink(panel);           // 思考手风琴收成一行（整条轨迹收起时随之隐藏）
   var nstep = panel._toolSeq.length;
   // 运行中的行统一收口（流水可能停在 run 状态，例如任务被中断/工具没回 stage）
   panel._toolSeq.forEach(function(k){
@@ -1760,8 +1861,8 @@ function renderTaskCancelled(panel, reply) {
   if (txt) txt.textContent = "已停止";
   var prog = panel.querySelector(".task-progress");
   if (prog) prog.style.display = "none";
-  var th = panel.querySelector(".task-think");
-  if (th) th.style.display = "none";
+  panel._thinkOpen = false;
+  renderThink(panel);
   // 运行中的步骤收口成「已停止」，整条轨迹折叠，留汇总条
   panel._toolSeq.forEach(function(k){
     var t = panel._tools[k];

@@ -44,6 +44,7 @@ MAX_TOOL_STEPS = 16  # 单轮最多工具调用总数（含并行，成本精确
 # ---------- 上下文防线（20 回合滚动 + 阶段性总结，非硬截断） ----------
 _ROLLING_ROUNDS = 20       # 任务内 messages 保持的完整回合数（1 回合 = 1 次 LLM 往返 + 其工具结果）
 _MAX_TOOL_RESULT_CHARS = 3000   # 单条 tool 结果写入上下文的最大字符（超长截断，防单条爆炸）
+_UI_DETAIL_CHARS = 1500     # 发给前端时间线「查看原文」的片段上限（只给人看，不进上下文）
 
 def _head_tail_snippet(text: str, limit: int, head_ratio: float = 0.45) -> str:
     """长文本裁剪保留头+尾双窗口，而不是只留前 N 字符（借鉴 context-mode Smart Snippets）。
@@ -1919,12 +1920,14 @@ class Agent:
                 # 产物收集：工具结果中的文件/图片路径 → 对话中展示（预览/下载）
                 self._collect_artifacts(result)
                 # 阶段反馈：工具执行完（含成功/失败）
-                # 2026-10-22：补 ms（单步耗时）与 preview（单行结果摘要），供前端时间线展开时显示——
-                # 此前前端只有工具名+参数，用户点开也看不到"这一步到底得到了什么"。
+                # 2026-10-22：补 ms（单步耗时）/ preview（单行结果摘要）/ detail（原文片段），
+                # 供前端时间线展开显示——此前前端只有工具名+参数，点开也看不到"这一步得到了什么"。
+                _tool_json = json.dumps(result, ensure_ascii=False)
                 _emit({"type": "stage", "name": name, "ok": ok, "step": step,
                        "args": args,
                        "ms": int((time.time() - _t_tool) * 1000),
-                       "preview": _tool_preview(result, ok, _tool_err)})
+                       "preview": _tool_preview(result, ok, _tool_err),
+                       "detail": _tool_json[:_UI_DETAIL_CHARS]})
                 self._log(f"[tool] {name} → {'ok' if ok else 'error'}")
                 if not ok:
                     err_msg = _tool_err or str(result.get("error", "") or result.get("stderr", ""))[:80]
@@ -1960,7 +1963,7 @@ class Agent:
                         result=json.dumps(result, ensure_ascii=False),
                         status="ok" if ok else "error",
                     )
-                _tool_content = json.dumps(result, ensure_ascii=False)
+                _tool_content = _tool_json
                 if len(_tool_content) > _MAX_TOOL_RESULT_CHARS:
                     # 2026-09-19 升级（#286）：公平水填充裁剪——批量结果优先保留完整条目、
                     # 只削最大的几条；单条超长才头尾截断。避免砍头砍尾把中间记录整条弄丢。
