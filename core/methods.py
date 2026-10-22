@@ -141,8 +141,11 @@ def extract_keywords(text: str, maxn: int = 12) -> List[str]:
 
 
 class MethodStore:
-    # 世界书目录的紧凑渲染参数（2026-10-22：目录本身曾占 20k tokens/轮）
-    _INDEX_MAX_PER_CATEGORY = 5
+    # 世界书目录的渲染参数（2026-10-22：目录曾占 20k tokens/轮）
+    # 第二轮再降：目录里即便列出条目名也**不能直接展开**（看内容必须 method_find），
+    # 所以它的唯一价值是"知道有哪些条目存在"。分类 + 条数就够，969 → 68 tokens。
+    # 想恢复"每类列前 N 条"：把下面改成 N（>0）。
+    _INDEX_MAX_PER_CATEGORY = 0
     _INDEX_NAME_CHARS = 26
     # 命中记账的落盘节流（methodology.json 约 1MB，不能每轮都写）
     _HIT_FLUSH_SECONDS = 300
@@ -362,17 +365,24 @@ class MethodStore:
 
     @staticmethod
     def _render_index(data: List[Dict], max_per_category: int = 0) -> str:
-        """渲染世界书目录。默认紧凑模式：每行只留 [id] 名称，每类最多 N 条。
+        """渲染世界书目录：默认只给「分类 + 条数」，条目靠 method_find 按关键词检索。
 
-        2026-10-22：原渲染把 705 条全量（名称 + 3 个关键词）塞进每轮 system prompt，
-        实测 43,835 字符 ≈ 20,057 tokens——单这一个目录就吃掉上下文预算（COMPRESS_TOKEN_BUDGET
-        是 24k），把对话窗口挤到必须压缩。紧凑后 268 行 ≈ 8.8k 字符 ≈ 2.2k tokens（降 9 倍），
-        被截掉的条目用 method_find 工具按关键词检索，能力不丢。
+        演进（2026-10-22）：
+          705 条全量 + 关键词 → 43,835 字符 ≈ 20,057 tokens（吃掉 83% 的上下文预算）
+          每类 30 条名称      →  9,468 字符 ≈  4,874 tokens
+          每类 5 条名称       →  1,910 字符 ≈    969 tokens
+          只剩分类计数        →    143 字符 ≈     68 tokens
+        关键事实：目录里的名字她也**不能直接展开**，要看内容还得 method_find——
+        所以列名字只是"提示存在"，而分类计数同样能达到这个目的，还便宜 14 倍。
         """
-        cap = max_per_category or MethodStore._INDEX_MAX_PER_CATEGORY
+        cap = max_per_category if max_per_category >= 0 else MethodStore._INDEX_MAX_PER_CATEGORY
+        if max_per_category == 0 and MethodStore._INDEX_MAX_PER_CATEGORY == 0:
+            cap = 0
         lines = []
+        total = 0
         for cat in data:
             items = cat["items"]
+            total += len(items)
             lines.append(f"▶ {cat['category']}（{len(items)}）")
             for m in items[:cap]:
                 nm = (m.get("name") or "?").strip()
@@ -380,9 +390,12 @@ class MethodStore:
                     nm = nm[:MethodStore._INDEX_NAME_CHARS] + "…"
                 tag = "避" if m.get("type") == "bad" else ""
                 lines.append(f"   [{m.get('id')}]{tag} {nm}")
-            rest = len(items) - cap
-            if rest > 0:
-                lines.append(f"   …另 {rest} 条（用 method_find 按关键词检索）")
+            if cap > 0:
+                rest = len(items) - cap
+                if rest > 0:
+                    lines.append(f"   …另 {rest} 条")
+        if lines:
+            lines.append(f"（共 {total} 条。目录只给分类；要具体条目用 method_find(keyword=…) 检索）")
         return "\n".join(lines) if lines else "（暂无方法论）"
 
     # 方法论领域分类（多级目录第一级）

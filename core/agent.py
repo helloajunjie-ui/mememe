@@ -2778,8 +2778,9 @@ class Agent:
         _conf_scores = [s for s, _ in _scored_user] + [s for s, _ in _scored_act]
         _conf_top = max(_conf_scores) if _conf_scores else 0.0
         _conf_line = ("" if (len(_conf_scores) >= 3 and _conf_top >= 5.0) else
-                      "\n⚠ 本轮方法论无高置信匹配（关键词命中 %d 条，最高分 %.1f）：上面目录仅作索引，"
-                      "动手前拿不准时，主动按场景去目录里找对口的条目。" % (len(_conf_scores), _conf_top))
+                      "\n⚠ 本轮方法论无高置信匹配（关键词命中 %d 条，最高分 %.1f）：目录只列分类，"
+                      "动手前拿不准时，用 method_find(keyword=\"场景关键词\") 检索具体条目。"
+                      % (len(_conf_scores), _conf_top))
         # 合并去重：常驻 + 场景预加载 + 关键词命中
         seen_ids = set()
         merged = []
@@ -2844,8 +2845,8 @@ class Agent:
 【最近经历】（我最近做的/想的/感受到的，最近的在前——这是我自己的时间线）
 {recent_text}
 
-【我的经验法则·世界书】（方法论 = 独立词条，按需触发。目录见下；当前任务命中关键词的条目已展开，其余需要时用 method_learn 同款心智"记住对应条目"即可）
-方法论目录：
+【我的经验法则·世界书】（方法论 = 独立词条，按需触发：目录只给分类与条数，当前任务命中关键词的条目已自动展开；要具体条目用 method_find(keyword=…) 检索）
+方法论目录（分类 · 条数）：
 {method_index}
 —— 当前命中展开 ——
 {method_rules}{_conf_line}
