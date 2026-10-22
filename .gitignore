@@ -65,6 +65,7 @@ workspace/archive/
 data/memory.db.bak*
 data/user_profile.md
 # 运行时缓存/健康记忆（实例状态，不随仓库走）
+data/worldbook.log
 data/search_cache.json
 data/search_engine_health.json
 
