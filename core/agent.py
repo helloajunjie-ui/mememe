@@ -1602,17 +1602,24 @@ class Agent:
         if loaded_ext:
             messages.append({"role": "system", "content": f"（已按当前任务预加载扩展工具：{', '.join(sorted(loaded_ext))}）"})
 
-        # 回合参数（升级式判定 v2.7：先按对话/即时任务短预算跑——简单任务绝不进计划线；
-        # 预算用尽说明任务确实复杂 → 续接处自动升级长任务预算，复杂任务不丢续接能力）
-        round_budget = 16   # C1 即时任务：单回合 16 步
-        rounds_left = 1     # 预算耗尽后自动续接 1 次（此即升级判定时机）
-        upgraded = False    # 是否已升级长任务模式（预算 64 步/续接 8 次）
+        # 回合参数（v2.8 任务完成优先）：预算上限不是配额——任务真做完时 LLM 不再返回
+        # tool_calls，循环自然退出，给大预算不会多花钱，只有真实执行才消耗。
+        # 旧两段式（首轮 16 步必撞墙 → 再升级 64 步）实测在 logs/agent.log 里制造 276 次
+        # 续接，其中 270 次纯属机制浪费（每次都要重传全上下文 + 打断思路），故首轮直接给足；
+        # 续接与否由"本回合有没有实质进展"决定，不再由固定步数决定。
+        round_budget = 64   # 单回合步数上限（上限非配额，任务完成即退出）
+        rounds_left = 4     # 续接次数上限（本回合有实质进展时自动续期）
+        TASK_TOTAL_STEP_LIMIT = 800   # 绝对安全阀：跨回合总步数，正常任务碰不到
         if self.free_mode:
             # 自由探索：无目的行为没有"完成"终点，预算不设上限（逛街式无限续接）。
             # 安全网仍在：死循环熔断（loopguard hard）、LLM 错误、用户停止请求都正常生效。
             round_budget = 10 ** 6
             rounds_left = 10 ** 6
-        step_total = 0      # 跨回合累计步数（成本统计/止损依据）
+            TASK_TOTAL_STEP_LIMIT = 10 ** 6
+        step_total = 0          # 跨回合累计步数（成本统计/止损依据）
+        round_ok = 0            # 本回合成功工具数（续接进展判据）
+        no_progress_rounds = 0  # 连续无进展续接次数（真卡住才停）
+        artifacts_mark = 0      # 本回合产物数基线（续接时更新，判增量）
         llm_error = None    # LLM 调用失败标记（保存已执行阶段后统一收尾，不留裸返回）
         self._fail_count = {}  # 工具失败计数仅限本任务（跨任务清零，防旧任务污染情绪判断）
         self.last_round_artifacts = []  # 本轮产物（对话中展示）
@@ -1864,6 +1871,7 @@ class Agent:
                         self.emotion.on_event("tool_error_repeat")
                 else:
                     self._fail_count[name] = 0
+                    round_ok += 1   # 本回合有成功工具
                 # 阶段记录（自由探索模式不建 tracker，此处需空值保护——2026-09-23）
                 if tracker is not None:
                     tracker.add_stage(
@@ -1885,20 +1893,30 @@ class Agent:
                     "tool_call_id": tc["id"],
                     "content": _tool_content,
                 })
-            # 预算耗尽且未熔断 → 自动续接（不用用户手动"继续"；复杂任务续接次数更多）
+            # 预算耗尽且未熔断 → 按「有没有实质进展」决定续不续（v2.8：以任务完成为目标）
             if step >= round_budget and not loop_hit:
-                if rounds_left > 0:
-                    # 升级式判定：预算用尽说明任务确实复杂（非简单任务）→ 升级长任务预算，
-                    # 避免简单任务被放大（首轮短预算直接跑完），复杂任务不丢续接能力
-                    if not upgraded:
-                        upgraded = True
-                        round_budget = 64
-                        rounds_left = 8
-                        self._log("[task] 预算用尽→任务实际较复杂，已升级长任务模式：预算 64 步/回合，自动续接 8 次")
-                    rounds_left -= 1
+                progressed = (round_ok > 0) or (len(self.last_round_artifacts) > artifacts_mark)
+                if progressed:
+                    # 有实质推进：续期，不因"步数用完"打断正在推进的工作
+                    no_progress_rounds = 0
+                    rounds_left = max(rounds_left, 2)
+                else:
+                    no_progress_rounds += 1
+                    self._log(f"[task] 本回合无进展（成功工具 0 个，连续 {no_progress_rounds} 次）")
+                rounds_left -= 1
+                if step_total + step >= TASK_TOTAL_STEP_LIMIT:
+                    self._log(f"[task] 跨回合总步数将达安全阀 {TASK_TOTAL_STEP_LIMIT}，停止续接")
+                    limit_hit = True
+                elif rounds_left <= 0 or no_progress_rounds >= 2:
+                    self._log(f"[task] 停止续接（剩余 {rounds_left} 次，连续无进展 {no_progress_rounds} 次）")
+                    limit_hit = True
+                else:
                     step_total += step
-                    self._log(f"[task] 本回合 {step} 步未完成，自动续接（剩余 {rounds_left} 次）")
+                    self._log(f"[task] 本回合 {step} 步未完成，自动续接"
+                              f"（剩余 {rounds_left} 次，本回合成功工具 {round_ok} 个）")
                     step = 0
+                    round_ok = 0
+                    artifacts_mark = len(self.last_round_artifacts)  # 本回合产物基线
                     limit_hit = False
                     # 自动续接必须携带任务目标：同 turn 内 messages 超 20 回合时窗口化
                     # 可能剔除早期回合，若不重申目标，LLM 会丢失任务目标盲目重做
@@ -1908,7 +1926,6 @@ class Agent:
                                                  f"任务目标：{_goal}。"
                                                  "已完成的工作不要重做，只推进剩余部分，完成后总结收尾。）")})
                     continue
-                limit_hit = True  # 回合预算用尽 → 止损
             if limit_hit:
                 break
             if loop_hit:
