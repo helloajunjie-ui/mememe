@@ -1697,6 +1697,7 @@ class Agent:
         llm_error = None    # LLM 调用失败标记（保存已执行阶段后统一收尾，不留裸返回）
         self._fail_count = {}  # 工具失败计数仅限本任务（跨任务清零，防旧任务污染情绪判断）
         self.last_round_artifacts = []  # 本轮产物（对话中展示）
+        self._turn_tools = []           # 本轮用到的工具（遥测/闭环记账）
         # 近期真实调用过的工具（滚动窗口，跨轮次保留；供场景预加载判断"她在做什么"）
         if not hasattr(self, "_recent_tools"):
             self._recent_tools = []
@@ -1936,8 +1937,10 @@ class Agent:
                 # 记在 agent 实例上，不随上下文裁剪丢失。
                 try:
                     self._recent_tools.append(name)
+                    self._turn_tools.append(name)
                 except AttributeError:
                     self._recent_tools = [name]
+                    self._turn_tools = [name]
                 ok, _tool_err = unwrap_tool_result(result)
                 # 产物收集：工具结果中的文件/图片路径 → 对话中展示（预览/下载）
                 self._collect_artifacts(result)
@@ -2092,6 +2095,22 @@ class Agent:
         # 情绪衰减 + 分轻重反思（不一次性堆叠）
         self.emotion.decay()
         self._reflect_light(user_input, content, used_tools)
+        # 效果闭环记账：本轮注入的方法论 + 本轮结局（只统计，不参与打分）
+        try:
+            _inj = list(getattr(self, "_last_injected", []) or [])
+            _ok = not is_control_failure(content)
+            if _inj:
+                self.methods.record_outcome(_inj, ok=_ok)
+                self.methods.flush_hits()
+            from core import logutil
+            logutil.append_line(os.path.join(self.data_dir, "worldbook.log"), json.dumps({
+                "ts": datetime.datetime.now().isoformat(timespec="seconds"),
+                "phase": "end", "injected": _inj, "outcome": "ok" if _ok else "fail",
+                "tools": list(getattr(self, "_turn_tools", []) or [])[:12],
+                "steps": len(used_tools or []),
+            }, ensure_ascii=False))
+        except Exception:  # noqa: BLE001
+            pass
         # 任务结束：生成阶段总结并存档 + 节点化（存档 task 节点，摘除任务轮次，回闲聊模式）
         if tracker is not None and self.ongoing_task is None:
             success = not is_control_failure(content)
@@ -2819,8 +2838,9 @@ class Agent:
             if mid not in seen_ids:
                 merged.append(m); seen_ids.add(mid)
         # 本轮实际注入的条目记账：目录排序与 dormant 判定都靠它（写盘节流 5 分钟）
+        self._last_injected = [m.get("id") for m in merged]
         try:
-            self.methods.touch_hits([m.get("id") for m in merged])
+            self.methods.touch_hits(self._last_injected)
             self.methods.flush_hits()
         except Exception:  # noqa: BLE001
             pass

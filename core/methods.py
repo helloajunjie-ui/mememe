@@ -198,7 +198,7 @@ class MethodStore:
     # 命中记账的落盘节流（methodology.json 约 1MB，不能每轮都写）
     _HIT_FLUSH_SECONDS = 300
     # 零命中多久转 dormant（不进目录，但 method_find 仍能搜到）
-    _DORMANT_DAYS = 180
+    _DORMANT_DAYS = 90
 
     def __init__(self, path: str = _PATH):
         self.path = path
@@ -543,13 +543,23 @@ class MethodStore:
         self._last_path = "legacy"
         return self._match_scored_legacy(text, limit)   # 最后兜底：2 字重叠
 
+    def _match_pool(self) -> List[Dict]:
+        """匹配池 = active + dormant。
+
+        2026-10-22：dormant 只是"最近一直没用上"，不是"这条作废"——
+        真正需要它的场景出现时（关键词/BM25 命中）应当还能被捞起来，并自动复活。
+        所以匹配池包含 dormant，复活在 touch_hits 里做。superseded/archived 不进池。
+        """
+        return [m for m in self.data.get("methods", [])
+                if m.get("status", "active") in ("active", "dormant")]
+
     def _match_keywords(self, text: str, limit: int = 5) -> list:
         """关键词通道：只认人工策展的 keywords（不做 2 字兜底，噪音太大）。"""
         low = (text or "").lower()
         if not low.strip():
             return []
         scored = []
-        for m in self.list():
+        for m in self._match_pool():
             kws = [k for k in m.get("keywords", []) if k]
             hit = [k for k in kws if k.lower() in low]
             if not hit:
@@ -567,7 +577,7 @@ class MethodStore:
             return self._bm25_cache
         docs = []
         df: Dict[str, int] = {}
-        for m in self.list():
+        for m in self._match_pool():
             toks = _tokenize(" ".join([
                 m.get("name") or "", m.get("scene") or "",
                 m.get("method") or "", " ".join(m.get("keywords") or []),
@@ -678,6 +688,32 @@ class MethodStore:
                 continue
             m["hit_count"] = int(m.get("hit_count") or 0) + 1
             m["last_hit"] = now
+            # dormant 被命中 → 自动复活（它只是"最近没用上"，不是作废）
+            if m.get("status") == "dormant":
+                m["status"] = "active"
+                m.pop("dormant_at", None)
+                m["revived_at"] = now
+            changed = True
+        if changed:
+            self._hits_dirty = True
+
+    def record_outcome(self, ids: List[int], ok: bool) -> None:
+        """效果闭环（只记账，暂不影响打分）：记录"注入了这些条目之后这一轮成不成"。
+
+        2026-10-22 说明：这只是相关性统计的原料，不是因果结论——
+        一轮失败可能是环境问题，一轮成功也可能跟注入的方法论无关。
+        等数据攒够（每条约 30 轮样本）再谈要不要用它调权重。
+        """
+        now = datetime.datetime.now().isoformat(timespec="seconds")
+        by = {m.get("id"): m for m in self.data.get("methods", [])}
+        changed = False
+        for i in ids or []:
+            m = by.get(i)
+            if not m:
+                continue
+            key = "ok_turns" if ok else "bad_turns"
+            m[key] = int(m.get(key) or 0) + 1
+            m["last_outcome"] = now
             changed = True
         if changed:
             self._hits_dirty = True

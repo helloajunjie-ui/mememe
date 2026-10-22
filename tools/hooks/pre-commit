@@ -1,0 +1,44 @@
+#!/bin/sh
+# 提交前守卫：staged 的 .py 必须能编译；动到世界书激活相关文件时跑一次回归测试。
+#
+# 为什么：多人/多进程同时改仓库时，谁都不该把"改到一半的代码"提交进去。
+# 素月会自主"改完就跑一遍、clean 就 commit"，我这边也在改同一批文件——
+# 有了这个钩子，半成品在提交这一步就被拦下，而不是等到她跑起来崩掉。
+#
+# 启用：git config core.hooksPath tools/hooks
+
+PY=".venv/Scripts/python.exe"
+[ -x "$PY" ] || PY="python"
+
+files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.py$' || true)
+if [ -n "$files" ]; then
+    echo "[pre-commit] 编译检查："
+    bad=0
+    for f in $files; do
+        if ! "$PY" -m py_compile "$f" 2>/tmp/precommit_err.txt; then
+            echo "  ✗ $f"
+            sed -n '1,6p' /tmp/precommit_err.txt | sed 's/^/      /'
+            bad=1
+        else
+            echo "  ✓ $f"
+        fi
+    done
+    if [ "$bad" -ne 0 ]; then
+        echo "[pre-commit] 有文件编译失败，已阻止提交。"
+        exit 1
+    fi
+fi
+
+# 动到激活逻辑 → 跑一遍回归测试（约 1 秒，防止静默退化）
+if git diff --cached --name-only | grep -qE '^core/(methods|agent)\.py$'; then
+    if [ -f "workspace/tasks/20261022_core_audit/test_worldbook.py" ]; then
+        if ! "$PY" -X utf8 workspace/tasks/20261022_core_audit/test_worldbook.py >/tmp/precommit_wb.txt 2>&1; then
+            echo "[pre-commit] 世界书回归测试未通过："
+            tail -n 12 /tmp/precommit_wb.txt | sed 's/^/      /'
+            exit 1
+        fi
+        echo "[pre-commit] 世界书回归测试通过"
+    fi
+fi
+
+exit 0
