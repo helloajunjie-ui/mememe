@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import math
 import os
 import re
 import time
@@ -17,6 +18,46 @@ from typing import Dict, List, Optional
 
 _PATH = "data/methodology.json"
 _DORMANT_CHECKED = False   # 每进程只做一次 dormant 巡检
+
+# 世界书召回：2026-10-22 起默认 BM25 全文（旧关键词子串版保留，_USE_BM25=False 可回滚）
+_USE_BM25 = True
+_BM25_MIN_SCORE = 1.5      # BM25 补召回的绝对下限
+_HYBRID_MIN_KEYWORD_HITS = 3   # 关键词命中达到这个数就不再掺 BM25
+
+_RE_EN = re.compile(r"[A-Za-z0-9_]+")
+_RE_ZH = re.compile(r"[\u4e00-\u9fff]")
+
+# 中文分词：优先 jieba（词级召回，2-gram 会把"有问/查一/个文"这类跨词边界碎片
+# 当成稀有词，反而把不相关条目顶上去）；jieba 不可用时退化为 2-gram，功能不丢。
+try:
+    import jieba as _jieba
+    _jieba.setLogLevel(60)          # 关掉词典加载日志
+    _JIEBA_READY = True
+except Exception:  # noqa: BLE001
+    _jieba = None
+    _JIEBA_READY = False
+
+
+def _tokenize(text: str) -> list:
+    """英文/数字按词，中文按 jieba 分词（无 jieba 时退 2-gram）。"""
+    t = (text or "").lower()
+    toks = _RE_EN.findall(t)
+    if not t:
+        return toks
+    if _JIEBA_READY:
+        for w in _jieba.cut(t):
+            w = w.strip()
+            if not w or not _RE_ZH.search(w):
+                continue
+            if len(w) == 1:          # 单字多是虚词（的/了/很/水），不进索引
+                continue
+            if w in _STOP:
+                continue
+            toks.append(w)
+    else:
+        zh = "".join(_RE_ZH.findall(t))
+        toks.extend(zh[i:i + 2] for i in range(len(zh) - 1) if zh[i:i + 2] not in _STOP)
+    return toks
 
 # 停用词（关键词提取用）
 _STOP = {
@@ -158,6 +199,7 @@ class MethodStore:
         self._migrate()
         self._hits_dirty = False
         self._last_flush = 0.0
+        self._bm25_cache = None
         self._check_dormant_once()
 
     def _migrate(self) -> None:
@@ -467,11 +509,105 @@ class MethodStore:
         return len(bigrams(text) & bigrams(scene))
 
     def match_scored(self, text: str, limit: int = 5) -> list:
-        """世界书触发：输入含条目关键词（大小写不敏感）→ 命中；或与 scene 有 ≥2 个 2 字词重叠 → 兜底命中。
+        """世界书触发（2026-10-22 起：关键词优先 + BM25 补召回）。
 
-        排序（2026-10-14 修订）：相关性（命中关键词总长）为主 + importance 微调（权重 2.0）。
-        旧版纯按 importance 取 top5，实测高权重通用条目（#29/#43/#27）霸占几乎每个查询的
-        头部，真正相关的条目（如 #659 工具注册生效判定）反而挤不进去。
+        为什么不是纯 BM25：`keywords` 是每条**人工策展的触发词**，精度高；
+        全文 BM25 会把正文里的通用词（"东西""不用""写"）也当证据，
+        实测在对话型输入上会顶掉原本正确的条目（把"方法论断了"匹配到 LibreOffice）。
+        但纯关键词召回不够：回放 120 条真实输入，42% 的输入命中 <3 条，17% 零命中。
+
+        所以：关键词够 3 条就只信关键词；不够才用 BM25 补，且补进来的一定要过相关性闸门
+        （分数 ≥ max(1.5, top1*0.25)）。旧的"2 字重叠≥2 兜底"只在两边都空时兜一下。
+        """
+        if not _USE_BM25:
+            return self._match_scored_legacy(text, limit)
+        kw = self._match_keywords(text, limit)
+        if len(kw) >= _HYBRID_MIN_KEYWORD_HITS:
+            return kw[:limit]
+        seen = {m.get("id") for _, m in kw}
+        extra = [(s, m) for s, m in self._match_bm25(text, limit) if m.get("id") not in seen]
+        merged = kw + extra
+        if merged:
+            return merged[:limit]
+        return self._match_scored_legacy(text, limit)   # 最后兜底：2 字重叠
+
+    def _match_keywords(self, text: str, limit: int = 5) -> list:
+        """关键词通道：只认人工策展的 keywords（不做 2 字兜底，噪音太大）。"""
+        low = (text or "").lower()
+        if not low.strip():
+            return []
+        scored = []
+        for m in self.list():
+            kws = [k for k in m.get("keywords", []) if k]
+            hit = [k for k in kws if k.lower() in low]
+            if not hit:
+                continue
+            # 命中词长度和 + 覆盖度：命中 1 个长词 > 命中 3 个短词
+            rel = float(sum(len(k) for k in hit)) * (0.75 + 0.25 * (len(hit) / max(1, len(kws))))
+            scored.append((rel + float(m.get("importance") or 0) * 0.5, m))
+        scored.sort(key=lambda t: -t[0])
+        return scored[:limit]
+
+    # ---------- BM25 全文召回 ----------
+    def _bm25_index(self):
+        """懒构建 BM25 索引（707 条 × 平均 60 字，构建几十毫秒）；数据变了用 invalidate_index 失效。"""
+        if self._bm25_cache is not None:
+            return self._bm25_cache
+        docs = []
+        df: Dict[str, int] = {}
+        for m in self.list():
+            toks = _tokenize(" ".join([
+                m.get("name") or "", m.get("scene") or "",
+                m.get("method") or "", " ".join(m.get("keywords") or []),
+            ]))
+            tf: Dict[str, int] = {}
+            for t in toks:
+                tf[t] = tf.get(t, 0) + 1
+            for t in tf:
+                df[t] = df.get(t, 0) + 1
+            docs.append((m, tf, len(toks)))
+        avgdl = sum(d[2] for d in docs) / max(1, len(docs))
+        self._bm25_cache = (docs, df, len(docs), avgdl)
+        return self._bm25_cache
+
+    def invalidate_index(self) -> None:
+        self._bm25_cache = None
+
+    def _match_bm25(self, text: str, limit: int = 5) -> list:
+        q = (text or "").strip()
+        if not q:
+            return []
+        docs, df, n, avgdl = self._bm25_index()
+        q_toks = set(_tokenize(q))
+        if not q_toks:
+            return []
+        k1, b = 1.2, 0.6
+        scored = []
+        for m, tf, dl in docs:
+            s = 0.0
+            for tok in q_toks:
+                f = tf.get(tok, 0)
+                if not f:
+                    continue
+                idf = math.log(1 + (n - df.get(tok, 0) + 0.5) / (df.get(tok, 0) + 0.5))
+                s += idf * (f * (k1 + 1)) / (f + k1 * (1 - b + b * dl / max(avgdl, 1e-9)))
+            if s <= 0:
+                continue
+            # importance 只当 tiebreaker（旧版 ×2.0 会压过相关性；实测只占 4% 但也该降权）
+            s += float(m.get("importance") or 0) * 0.2
+            scored.append((s, m))
+        if not scored:
+            return []
+        scored.sort(key=lambda t: -t[0])
+        top1 = scored[0][0]
+        # 相关性闸门：低于最高分 25% 的条目不是"讲这件事"，宁缺勿滥（兜底消失）
+        floor = max(_BM25_MIN_SCORE, top1 * 0.25)
+        return [(s, m) for s, m in scored[:limit] if s >= floor]
+
+    def _match_scored_legacy(self, text: str, limit: int = 5) -> list:
+        """旧版：输入含条目关键词 → 命中；或与 scene 有 ≥2 个 2 字词重叠 → 兜底命中。
+
+        保留用于回滚与对照（_USE_BM25=False 时启用）。
         """
         low = text.lower()
         scored = []
