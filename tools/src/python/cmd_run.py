@@ -61,14 +61,15 @@ def _is_destructive(command: str) -> bool:
     return False
 
 
-def _audit(command: str, result: dict, background: bool = False) -> None:
+def _audit(command: str, result: dict, background: bool = False, desc: str = "") -> None:
     try:
         Path(_LOG_FILE).parent.mkdir(parents=True, exist_ok=True)
         status = "ok" if result.get("ok") else "err"
         tag = "bg" if background else "sync"
         excerpt = (result.get("stdout") or result.get("stderr") or result.get("error") or "")[:120].replace("\n", " ")
         with open(_LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(f"[{datetime.datetime.now().isoformat()}] [{status}/{tag}] {command} :: {excerpt}\n")
+            note = f" <desc:{desc}>" if desc else ""
+            f.write(f"[{datetime.datetime.now().isoformat()}] [{status}/{tag}] {command} ::{note} {excerpt}\n")
     except OSError:
         pass
 
@@ -84,18 +85,19 @@ def _audit(command: str, result: dict, background: bool = False) -> None:
             "command": {"type": "string", "description": "要执行的命令"},
             "timeout": {"type": "number", "description": "同步模式超时秒数，默认 20（后台模式忽略）"},
             "background": {"type": "boolean", "description": "true=后台立即返回 job_id；false=同步等结果（默认）"},
+            "desc": {"type": "string", "description": "命令用途说明（可选，仅写入审计日志 logs/cmd.log，不影响执行）"},
         },
         "required": ["command"],
     },
     group="系统与执行",
 )
-def run(command: str, timeout: float = 20, background: bool = False) -> dict:
+def run(command: str, timeout: float = 20, background: bool = False, desc: str = "") -> dict:
     if not isinstance(command, str):
         return {"ok": False, "error": "参数非法：command 必须是非空字符串"}
     if not command.strip():
         return {"ok": False, "error": "命令不能为空"}
     if _is_destructive(command):
-        _audit(command, {"ok": False, "stderr": "被安全策略拦截"}, background)
+        _audit(command, {"ok": False, "stderr": "被安全策略拦截"}, background, desc)
         return {
             "ok": False,
             "error": "安全策略拦截：该命令属于破坏性操作（删除/格式化/关机等）。如需执行，请说明用途由用户确认后使用受控方式。",
@@ -105,7 +107,7 @@ def run(command: str, timeout: float = 20, background: bool = False) -> dict:
     if background:
         from tools.src.python import job_mgr
         res = job_mgr.start_job(command)
-        _audit(command, res, background=True)
+        _audit(command, res, background=True, desc=desc)
         return res
 
     result = plat.run_shell(command, timeout=int(timeout))
@@ -115,5 +117,5 @@ def run(command: str, timeout: float = 20, background: bool = False) -> dict:
         "stderr": (result["stderr"] or "")[:5000],
         "exit_code": result["exit_code"],
     }
-    _audit(command, out, background=False)
+    _audit(command, out, background=False, desc=desc)
     return out
