@@ -234,7 +234,7 @@ def consolidate(llm, memory, scope: str = "self", force: bool = False) -> Dict:
     except Exception as e:  # noqa: BLE001
         return {"ran": False, "reason": f"llm_error:{e}"}
 
-    merged = dropped = flagged = 0
+    merged = dropped = flagged = dup_skipped = 0
     for a in actions:
         mid = a.get("id")
         act = a.get("action")
@@ -273,6 +273,14 @@ def consolidate(llm, memory, scope: str = "self", force: bool = False) -> Dict:
             # 2026-09-20：矛盾只「记账」，绝不自动改写。
             # 自动融合是投毒入口——外部内容只要声称"你记错了"就能改写我的记忆。
             # 登记后由我自己核对来源/口径，再调 memory.supersede() / revise() 落地。
+            # 2026-10-22：同一记忆只保留一条未裁定矛盾。巩固每天重扫同样 30 条，
+            # 旧写法会把同一件事反复登记（实测 9 条 = 4 件事），裁定完还会再长出来。
+            dup_open = memory.conn.execute(
+                "SELECT 1 FROM memory_conflicts WHERE resolved=0 AND mem_id=? LIMIT 1", (mid,)
+            ).fetchone()
+            if dup_open:
+                dup_skipped += 1
+                continue
             memory.conn.execute(
                 "INSERT INTO memory_conflicts (mem_id, note, detected_at, resolved) "
                 "VALUES (?,?,?,0)",
@@ -283,7 +291,7 @@ def consolidate(llm, memory, scope: str = "self", force: bool = False) -> Dict:
 
     memory.set_meta(_META_LAST_CONSOLIDATE, str(_now()))
     return {"ran": True, "reason": "ok", "merged": merged, "dropped": dropped,
-            "flagged": flagged}
+            "flagged": flagged, "dup_skipped": dup_skipped}
 
 
 def maybe_archive_stale(memory, scope: str = "self", force: bool = False) -> Dict:
