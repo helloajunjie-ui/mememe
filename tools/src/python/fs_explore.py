@@ -174,8 +174,23 @@ def fs_search(keyword: str, path: str = ".", in_content: bool = False, max_resul
     hits = []
     try:
         base = _check_read_path(path)
+        # path 指向文件时：直接在该文件内搜索（我传文件路径的真实意图就是搜它本身）
+        if os.path.isfile(base):
+            name = os.path.basename(base)
+            if keyword.lower() in name.lower():
+                hits.append({"path": base, "match": "filename"})
+            elif in_content or True:
+                try:
+                    if os.path.getsize(base) <= 5_000_000:
+                        with open(base, "r", encoding="utf-8", errors="ignore") as f:
+                            if keyword in f.read():
+                                hits.append({"path": base, "match": "content"})
+                except Exception:  # noqa: BLE001
+                    pass
+            return {"ok": True, "keyword": keyword, "path": base, "count": len(hits),
+                    "results": hits[:max_results], "searched_file": True}
         if not os.path.isdir(base):
-            return {"ok": False, "error": f"搜索起点不是目录: {path}"}
+            return {"ok": False, "error": f"路径不存在: {path}"}
         for root, dirs, files in os.walk(base):
             # 跳过隐藏目录和 venv
             dirs[:] = [d for d in dirs if not d.startswith(".") and d not in (".venv",)]
@@ -202,34 +217,76 @@ def fs_search(keyword: str, path: str = ".", in_content: bool = False, max_resul
 
 @tool(
     "fs_delete",
-    "删除文件或空目录（需 confirm=\"DELETE\" 二次确认，仅限项目根目录内）",
+    "删除文件或空目录（需 confirm=\"DELETE\" 二次确认，仅限项目根目录内）。支持批量：用 paths 传路径列表，一次 confirm 覆盖整批。",
     {
         "type": "object",
         "properties": {
-            "path": {"type": "string", "description": "要删除的文件或空目录路径"},
+            "path": {"type": "string", "description": "要删除的单个文件或空目录路径（与 paths 二选一）"},
+            "paths": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "批量删除的路径列表（与 path 二选一；一次 confirm 覆盖整批）",
+            },
             "confirm": {"type": "string", "description": "二次确认口令，必须为 DELETE 才会执行"},
         },
-        "required": ["path", "confirm"],
+        "required": ["confirm"],
     },
 )
-def fs_delete(path: str, confirm: str = "") -> dict:
-    """删除文件或空目录。为防误删，仅允许删除文件或空目录；非空目录需先清空内容。"""
+def fs_delete(path: str = "", paths=None, confirm: str = "") -> dict:
+    """删除文件或空目录（支持批量）。为防误删，仅允许删除文件或空目录；非空目录需先清空内容。"""
     try:
         if confirm != "DELETE":
             return {"ok": False, "error": "未确认删除：请传入 confirm=\"DELETE\" 以二次确认"}
-        p = _check_path(path)
-        if p == str(PROJECT_ROOT):
-            return {"ok": False, "error": "禁止删除项目根目录"}
-        if os.path.isdir(p):
-            # 仅允许删除空目录，防止递归删除失控
-            if os.listdir(p):
-                return {"ok": False, "error": f"目录非空，禁止递归删除: {path}（请先删除其内容）"}
-            os.rmdir(p)
-            return {"ok": True, "action": "delete", "type": "dir", "path": p}
-        if os.path.isfile(p):
-            os.remove(p)
-            return {"ok": True, "action": "delete", "type": "file", "path": p}
-        return {"ok": False, "error": f"路径不存在: {path}"}
+
+        # 归一化目标列表：path 与 paths 可任传其一或并存
+        targets = []
+        if path:
+            targets.append(path)
+        if isinstance(paths, str):
+            targets.append(paths)
+        elif isinstance(paths, (list, tuple)):
+            for x in paths:
+                if x and str(x).strip():
+                    targets.append(str(x))
+        if not targets:
+            return {"ok": False, "error": "未指定删除目标：请传 path 或 paths"}
+
+        done, failed = [], []
+        for t in targets:
+            try:
+                p = _check_path(t)
+                if p == str(PROJECT_ROOT):
+                    failed.append({"path": t, "reason": "禁止删除项目根目录"})
+                    continue
+                if os.path.isdir(p):
+                    if os.listdir(p):
+                        failed.append({"path": t, "reason": "目录非空，禁止递归删除（请先删除其内容）"})
+                        continue
+                    os.rmdir(p)
+                    done.append({"path": p, "type": "dir"})
+                elif os.path.isfile(p):
+                    os.remove(p)
+                    done.append({"path": p, "type": "file"})
+                else:
+                    failed.append({"path": t, "reason": "路径不存在"})
+            except Exception as e:  # noqa: BLE001
+                failed.append({"path": t, "reason": str(e)})
+
+        # 单目标调用保持原有返回结构（向后兼容）
+        if len(targets) == 1:
+            if done:
+                return {"ok": True, "action": "delete", "type": done[0]["type"], "path": done[0]["path"]}
+            return {"ok": False, "error": f"删除失败: {failed[0]['reason']}"}
+
+        return {
+            "ok": len(failed) == 0,
+            "action": "delete",
+            "total": len(targets),
+            "deleted": len(done),
+            "failed_count": len(failed),
+            "deleted_items": done,
+            "failed": failed,
+        }
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "error": f"删除失败: {e}"}
 
