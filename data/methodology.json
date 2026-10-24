@@ -20872,6 +20872,33 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-25T04:54:48"
+    },
+    {
+      "id": 791,
+      "type": "good",
+      "name": "拿到任何分析/逆向/统计工具的汇总指标（summary、count、total）准备当结论使用时",
+      "keywords": [
+        "summary",
+        "count",
+        "total",
+        "拿到任何",
+        "统计工具",
+        "准备当结",
+        "汇总数字",
+        "任何",
+        "何分",
+        "分析",
+        "逆向",
+        "统计"
+      ],
+      "scene": "拿到任何分析/逆向/统计工具的汇总指标（summary、count、total）准备当结论使用时",
+      "method": "汇总数字必须先和同一份输出的明细节点计数对一遍，两者打架就以明细为准并当场记录——工具自己的汇总字段可能就是错的。判据：summary 说 0 但明细里有一类节点存在（实测 REA 6.7.0 分析 Loomy：graph 有 103 个 ipc-handler 节点，summary 却报 main_handlers: 0），这是工具口径 bug 而非数据缺失。打假核查延伸到工具层：核查工具本身也要被核查。",
+      "evidence": "2026-10-25 REA 实测 Loomy electron/（426 文件）输出内部自相矛盾",
+      "importance": 0.7,
+      "category": "工具与工程",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-25T05:00:40"
     }
   ]
 }
