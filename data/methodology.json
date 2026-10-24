@@ -20899,6 +20899,33 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-25T05:00:40"
+    },
+    {
+      "id": 792,
+      "type": "bad",
+      "name": "审计 Electron/桌面应用的 IPC 通道是否安全，发现「没有 sender 鉴权」之后",
+      "keywords": [
+        "electron",
+        "ipc",
+        "sender",
+        "桌面应用",
+        "通道是否",
+        "入口层没",
+        "结论就收",
+        "审计",
+        "桌面",
+        "面应",
+        "应用",
+        "通道"
+      ],
+      "scene": "审计 Electron/桌面应用的 IPC 通道是否安全，发现「没有 sender 鉴权」之后",
+      "method": "别把「入口层没鉴权」当成漏洞结论就收工——必须再往下一层读 handler 正文，确认内部有没有第二道锁（路径围栏/扩展名黑名单/协议白名单）。判据：先找所有 handler 共用的解析函数（如 resolvePathForShellAction），读它到底校验了什么，再 grep isPathInside|allowedRoot|assertPath|validatePath|path.relative 看全项目有没有围栏实现。实测 Loomy：入口层 416 个注册点仅 1 处鉴权，看似致命，往下读发现解析器只为「原谅 AI 报错文件名」而存在（注释明写 doc↔docx），不是安全函数——两层都空，结论才坐得住；反之若内部有白名单，上层缺失就只是纵深防御减弱而非可执行漏洞。另外报告里必须显式划出「能力存在」与「已被利用」的界线：没找到 XSS/注入入口，就只写前一句。",
+      "evidence": "2026-10-25 实测：resolvePathForShellAction 仅 existsSync；shell:openWithApp 的 appPath 只判非空即 execFile；grep 围栏关键词零命中",
+      "importance": 0.78,
+      "category": "验证与排查",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-25T05:13:09"
     }
   ]
 }
