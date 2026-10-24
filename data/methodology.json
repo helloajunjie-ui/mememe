@@ -54,10 +54,10 @@
       ],
       "status": "active",
       "category": "决策与效率",
-      "hit_count": 25,
-      "last_hit": "2026-10-24T23:04:31",
-      "ok_turns": 11,
-      "last_outcome": "2026-10-24T17:05:40"
+      "hit_count": 26,
+      "last_hit": "2026-10-25T00:00:28",
+      "ok_turns": 12,
+      "last_outcome": "2026-10-24T23:05:40"
     },
     {
       "id": 4,
@@ -76,10 +76,10 @@
       ],
       "status": "active",
       "category": "决策与效率",
-      "hit_count": 25,
-      "last_hit": "2026-10-24T23:04:31",
-      "ok_turns": 11,
-      "last_outcome": "2026-10-24T17:05:40"
+      "hit_count": 26,
+      "last_hit": "2026-10-25T00:00:28",
+      "ok_turns": 12,
+      "last_outcome": "2026-10-24T23:05:40"
     },
     {
       "id": 5,
@@ -98,10 +98,10 @@
       ],
       "status": "active",
       "category": "决策与效率",
-      "hit_count": 25,
-      "last_hit": "2026-10-24T23:04:31",
-      "ok_turns": 11,
-      "last_outcome": "2026-10-24T17:05:40"
+      "hit_count": 26,
+      "last_hit": "2026-10-25T00:00:28",
+      "ok_turns": 12,
+      "last_outcome": "2026-10-24T23:05:40"
     },
     {
       "id": 6,
@@ -157,10 +157,10 @@
       ],
       "status": "active",
       "category": "协作与交付",
-      "hit_count": 25,
-      "last_hit": "2026-10-24T23:04:31",
-      "ok_turns": 11,
-      "last_outcome": "2026-10-24T17:05:40"
+      "hit_count": 26,
+      "last_hit": "2026-10-25T00:00:28",
+      "ok_turns": 12,
+      "last_outcome": "2026-10-24T23:05:40"
     },
     {
       "id": 9,
@@ -336,10 +336,10 @@
       ],
       "status": "active",
       "category": "决策与效率",
-      "hit_count": 25,
-      "last_hit": "2026-10-24T23:04:31",
-      "ok_turns": 11,
-      "last_outcome": "2026-10-24T17:05:40"
+      "hit_count": 26,
+      "last_hit": "2026-10-25T00:00:28",
+      "ok_turns": 12,
+      "last_outcome": "2026-10-24T23:05:40"
     },
     {
       "id": 18,
@@ -2222,8 +2222,8 @@
       "category": "记忆与检索",
       "hit_count": 7,
       "last_hit": "2026-10-24T23:04:31",
-      "ok_turns": 3,
-      "last_outcome": "2026-10-24T15:03:36"
+      "ok_turns": 4,
+      "last_outcome": "2026-10-24T23:05:40"
     },
     {
       "id": 92,
@@ -7361,8 +7361,8 @@
       "superseded_by": null,
       "created_at": "2026-09-19T21:00:52",
       "category": "记忆与检索",
-      "hit_count": 10,
-      "last_hit": "2026-10-24T18:00:13",
+      "hit_count": 11,
+      "last_hit": "2026-10-25T00:00:28",
       "ok_turns": 7,
       "last_outcome": "2026-10-24T17:05:40"
     },
@@ -9568,8 +9568,8 @@
       "category": "记忆与检索",
       "hit_count": 5,
       "last_hit": "2026-10-24T23:04:31",
-      "ok_turns": 3,
-      "last_outcome": "2026-10-24T17:05:40"
+      "ok_turns": 4,
+      "last_outcome": "2026-10-24T23:05:40"
     },
     {
       "id": 370,
@@ -11749,8 +11749,8 @@
       "superseded_by": null,
       "created_at": "2026-09-28T23:00:32",
       "category": "验证与排查",
-      "hit_count": 4,
-      "last_hit": "2026-10-22T18:00:19",
+      "hit_count": 5,
+      "last_hit": "2026-10-25T00:00:28",
       "ok_turns": 3,
       "last_outcome": "2026-10-22T16:00:26"
     },
@@ -12594,8 +12594,8 @@
       "category": "协作与交付",
       "hit_count": 5,
       "last_hit": "2026-10-24T23:04:31",
-      "ok_turns": 3,
-      "last_outcome": "2026-10-24T17:05:40"
+      "ok_turns": 4,
+      "last_outcome": "2026-10-24T23:05:40"
     },
     {
       "id": 481,
@@ -13065,8 +13065,8 @@
       "superseded_by": null,
       "created_at": "2026-09-30T02:01:33",
       "category": "验证与排查",
-      "hit_count": 7,
-      "last_hit": "2026-10-24T18:00:13",
+      "hit_count": 8,
+      "last_hit": "2026-10-25T00:00:28",
       "ok_turns": 5,
       "last_outcome": "2026-10-24T17:01:12"
     },
@@ -14020,8 +14020,8 @@
       "superseded_by": null,
       "created_at": "2026-10-02T16:01:52",
       "category": "记忆与检索",
-      "hit_count": 5,
-      "last_hit": "2026-10-22T18:00:19",
+      "hit_count": 6,
+      "last_hit": "2026-10-25T00:00:28",
       "ok_turns": 4,
       "last_outcome": "2026-10-22T16:52:52"
     },
@@ -17284,8 +17284,8 @@
       "category": "验证与排查",
       "hit_count": 10,
       "last_hit": "2026-10-24T23:04:31",
-      "ok_turns": 6,
-      "last_outcome": "2026-10-24T15:03:36"
+      "ok_turns": 7,
+      "last_outcome": "2026-10-24T23:05:40"
     },
     {
       "id": 653,
@@ -17572,7 +17572,9 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-14T10:28:04",
-      "category": "工具与工程"
+      "category": "工具与工程",
+      "hit_count": 1,
+      "last_hit": "2026-10-25T00:00:28"
     },
     {
       "id": 663,
@@ -18801,8 +18803,8 @@
       "created_at": "2026-10-14T20:01:24",
       "hit_count": 9,
       "last_hit": "2026-10-24T23:04:31",
-      "ok_turns": 6,
-      "last_outcome": "2026-10-24T17:05:40"
+      "ok_turns": 7,
+      "last_outcome": "2026-10-24T23:05:40"
     },
     {
       "id": 708,
@@ -19127,10 +19129,10 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-19T22:00:57",
-      "hit_count": 12,
-      "last_hit": "2026-10-24T23:04:31",
-      "ok_turns": 8,
-      "last_outcome": "2026-10-24T17:05:40"
+      "hit_count": 13,
+      "last_hit": "2026-10-25T00:00:28",
+      "ok_turns": 9,
+      "last_outcome": "2026-10-24T23:05:40"
     },
     {
       "id": 720,
@@ -20254,10 +20256,10 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-22T13:00:30",
-      "hit_count": 12,
-      "last_hit": "2026-10-24T23:04:31",
-      "ok_turns": 8,
-      "last_outcome": "2026-10-24T17:05:40"
+      "hit_count": 13,
+      "last_hit": "2026-10-25T00:00:28",
+      "ok_turns": 9,
+      "last_outcome": "2026-10-24T23:05:40"
     },
     {
       "id": 761,
@@ -20312,8 +20314,8 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-22T14:11:43",
-      "hit_count": 8,
-      "last_hit": "2026-10-24T17:03:37",
+      "hit_count": 9,
+      "last_hit": "2026-10-25T00:00:28",
       "ok_turns": 5,
       "last_outcome": "2026-10-24T17:05:40"
     },
@@ -20399,8 +20401,8 @@
       "created_at": "2026-10-24T14:59:47",
       "hit_count": 5,
       "last_hit": "2026-10-24T23:04:31",
-      "ok_turns": 2,
-      "last_outcome": "2026-10-24T15:03:36"
+      "ok_turns": 3,
+      "last_outcome": "2026-10-24T23:05:40"
     },
     {
       "id": 766,
@@ -20427,7 +20429,9 @@
       "category": "工具与工程",
       "status": "active",
       "superseded_by": null,
-      "created_at": "2026-10-24T18:00:29"
+      "created_at": "2026-10-24T18:00:29",
+      "hit_count": 1,
+      "last_hit": "2026-10-25T00:00:28"
     },
     {
       "id": 767,
