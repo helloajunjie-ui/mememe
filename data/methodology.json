@@ -20428,6 +20428,33 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-24T18:00:29"
+    },
+    {
+      "id": 767,
+      "type": "good",
+      "name": "要确认一个 bug 修复是否真生效时（自己早前修的、或别人改的）",
+      "keywords": [
+        "bug",
+        "commit",
+        "message",
+        "修复是否",
+        "自己早前",
+        "先读实现",
+        "事故物件",
+        "确认",
+        "认一",
+        "修复",
+        "否真",
+        "真生"
+      ],
+      "scene": "要确认一个 bug 修复是否真生效时（自己早前修的、或别人改的）",
+      "method": "先读实现正文，再找「事故物件在修复后是否存活」的时间线证据——两样齐了才算验证过，别急着构造合成测试。判据链：①注释/commit message 说修了不算，必须读到 `_save` 前后真正调用了合并逻辑；②找那次丢失的具体条目，看它在此后经历的多次写入/flush 之后是否还在（本次 #766 在 17:00 丢失、18:00 补回、跨过 23:04 那次 flush 仍 active → 比 synthetic test 更硬，因为测的是真实环境而不是我以为的场景）；③顺带看修复有没有留下新洞。",
+      "evidence": "2026-10-24 自主活动实测：core/methods.py L330 _save 前调 _merge_newer()、L347 learn 分配 id 前也调（防撞号），只吸收 id>my_max 新增、字段冲突以本实例为准；真实时间线证明 #766 存活。",
+      "importance": 0.6,
+      "category": "验证与排查",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-24T23:05:25"
     }
   ]
 }
