@@ -163,3 +163,5 @@ data/archive/
 # 第三方绿色二进制工具（30个/235MB，不入版本库；随本地备份/克隆走）
 # suyue 2026-10-25 由共建者投放到 Q\ 后收编
 tools/bin/q/
+# 方法论命中遥测（纯计数，每轮都变；正文 data/methodology.json 才受版本控制）
+data/method_hits.json

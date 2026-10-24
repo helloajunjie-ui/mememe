@@ -57,6 +57,7 @@ _PRIVATE_FILES = [
     "data/memory.db",
     "data/self.yaml",
     "data/methodology.json",
+    "data/method_hits.json",
     "data/registry.json",
     "data/snapshots.json",
     "data/env_profile.json",

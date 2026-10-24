@@ -17,6 +17,13 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 _PATH = "data/methodology.json"
+_HITS_FILE = "method_hits.json"
+# 纯遥测字段（每轮注入/结算都会变）：2026-10-25 起单独存 method_hits.json，
+# 不再混进 methodology.json——否则每 5 分钟的命中记账都要把 1MB 正文整份重写，
+# git 工作区永不干净、diff 全是计数噪音、数据文件也没有可读的回滚点。
+# 例外：status 不在此列（dormant/active 是语义字段，决定要不要进世界书目录）。
+_TELEMETRY_FIELDS = ("hit_count", "last_hit", "ok_turns", "bad_turns",
+                     "last_outcome", "dormant_at", "revived_at")
 _DORMANT_CHECKED = False   # 每进程只做一次 dormant 巡检
 
 # 世界书召回：2026-10-22 起默认 BM25 全文（旧关键词子串版保留，_USE_BM25=False 可回滚）
@@ -202,11 +209,20 @@ class MethodStore:
 
     def __init__(self, path: str = _PATH):
         self.path = path
+        # 遥测副文件跟正文同目录（换库路径时自动跟随，测试实例互不干扰）
+        self._hits_path = str(Path(path).with_name(_HITS_FILE))
+        # 正文写盘缓存：启动时先取磁盘现状，这样「只有遥测变化」时首次
+        # flush 也不会白重写 1MB（body 相同即跳过）。
+        try:
+            self._last_main_json = Path(path).read_text(encoding="utf-8")
+        except OSError:
+            self._last_main_json = None
         self.data = self._load()
         # 2026-10-24：记录加载时的文件 mtime。_save 前据此判断"是否有别的实例写过"，
         # 有则先合并新增条目再写，避免用旧快照覆盖别人的写入（见 _merge_newer）。
         self._known_mtime = self._file_mtime()
         self._migrate()
+        self._load_hits()   # 遥测从 sidecar 贴回内存（_migrate 之后才能覆盖默认值）
         self._hits_dirty = False
         self._last_flush = 0.0
         self._bm25_cache = None
@@ -287,6 +303,41 @@ class MethodStore:
                 return {}
         return {}
 
+    def _read_hits(self) -> Dict:
+        try:
+            with open(self._hits_path, "r", encoding="utf-8") as f:
+                d = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return d if isinstance(d, dict) else {}
+
+    def _apply_hits(self, only_ids=None) -> int:
+        """把 sidecar 里的遥测字段贴回内存条目（以 sidecar 为准）。
+
+        正文里可能残留迁移前的旧计数，sidecar 有值就覆盖——否则旧的 hit_count
+        会压过新计数，dormant 判定跟着失真。
+        """
+        hits = self._read_hits()
+        if not hits:
+            return 0
+        sel = None if only_ids is None else {str(i) for i in only_ids}
+        n = 0
+        for m in self.data.get("methods", []) or []:
+            mid = str(m.get("id"))
+            if sel is not None and mid not in sel:
+                continue
+            rec = hits.get(mid)
+            if not isinstance(rec, dict):
+                continue
+            for k, v in rec.items():
+                if k in _TELEMETRY_FIELDS:
+                    m[k] = v
+                    n += 1
+        return n
+
+    def _load_hits(self) -> int:
+        return self._apply_hits()
+
     def _file_mtime(self) -> int:
         try:
             return Path(self.path).stat().st_mtime_ns
@@ -336,6 +387,7 @@ class MethodStore:
             mid = m.get("id")
             if mid and mid not in mine and mid > my_max:
                 self.data.setdefault("methods", []).append(m)
+                self._apply_hits([mid])   # 磁盘条目已不含遥测，从 sidecar 补回
                 added += 1
         if added:
             self._bm25_cache = None
@@ -343,27 +395,69 @@ class MethodStore:
         return added
 
     def _save(self) -> None:
+        """落盘：正文（methodology.json）与遥测（method_hits.json）分开写。
+
+        2026-10-25：纯遥测不再写进正文文件——否则每轮注入的命中记账都会把
+        1MB 的 methodology.json 整份重写，git 工作区永不干净、diff 全是计数
+        噪音、数据文件也没有可读的回滚点。现在正文只在"方法论本身变了"时才写。
+        """
         try:
             self._merge_newer()
-            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-            # 原子写：先写同目录临时文件再 os.replace 替换。直接以 "w" 截断重写时，
-            # 别的 MethodStore 实例（method_learn 工具 / 另一进程）正好读盘就会读到
-            # 半截 JSON，_load 静默返回 {}，随后整份 dump 把对方新增条目覆盖掉
-            # ——2026-10-24 事故的同类根因。原子替换让读方永远看不到半截文件。
-            tmp = f"{self.path}.tmp{os.getpid()}"
-            try:
-                with open(tmp, "w", encoding="utf-8") as f:
-                    json.dump(self.data, f, ensure_ascii=False, indent=2)
-                os.replace(tmp, self.path)
-            finally:
-                if os.path.exists(tmp):
-                    try:
-                        os.remove(tmp)
-                    except OSError:
-                        pass
-            self._known_mtime = self._file_mtime()
+            self._write_hits()
+            self._write_main()
         except OSError:
             pass
+
+    def _write_hits(self) -> None:
+        """遥测写 sidecar（小文件，随便写；原子替换防半截 JSON）。"""
+        hits = {}
+        for m in self.data.get("methods", []) or []:
+            rec = {k: m[k] for k in _TELEMETRY_FIELDS if k in m}
+            if rec:
+                hits[str(m.get("id"))] = rec
+        tmp = f"{self._hits_path}.tmp{os.getpid()}"
+        try:
+            Path(self._hits_path).parent.mkdir(parents=True, exist_ok=True)
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(hits, f, ensure_ascii=False, indent=1, sort_keys=True)
+            os.replace(tmp, self._hits_path)
+        finally:
+            if os.path.exists(tmp):
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+
+    def _write_main(self) -> None:
+        """正文写盘：剥掉遥测字段；内容没变就不重写（不碰 mtime，git 保持干净）。
+
+        原子写：先写同目录临时文件再 os.replace 替换。直接以 "w" 截断重写时，
+        别的 MethodStore 实例（method_learn 工具 / 另一进程）正好读盘就会读到
+        半截 JSON，_load 静默返回 {}，随后整份 dump 把对方新增条目覆盖掉
+        ——2026-10-24 事故的同类根因。原子替换让读方永远看不到半截文件。
+        """
+        main = dict(self.data)
+        main["methods"] = [
+            {k: v for k, v in m.items() if k not in _TELEMETRY_FIELDS}
+            for m in (self.data.get("methods") or [])
+        ]
+        body = json.dumps(main, ensure_ascii=False, indent=2)
+        if body == self._last_main_json and os.path.exists(self.path):
+            return
+        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+        tmp = f"{self.path}.tmp{os.getpid()}"
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(body)
+            os.replace(tmp, self.path)
+        finally:
+            if os.path.exists(tmp):
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+        self._known_mtime = self._file_mtime()
+        self._last_main_json = body
 
     def learn(self, type_: str, scene: str, method: str,
               evidence: str = "", importance: float = 0.6,
