@@ -20413,6 +20413,60 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-25T02:38:10"
+    },
+    {
+      "id": 774,
+      "type": "good",
+      "name": "某个被频繁自动更新的数据文件（JSON/YAML 状态库）一直把 git 工作区刷脏、diff 全是噪音时",
+      "keywords": [
+        "yaml",
+        "git",
+        "diff",
+        "某个被频",
+        "新的数据",
+        "状态库",
+        "工作区刷",
+        "某个",
+        "频繁",
+        "繁自",
+        "自动",
+        "数据"
+      ],
+      "scene": "某个被频繁自动更新的数据文件（JSON/YAML 状态库）一直把 git 工作区刷脏、diff 全是噪音时",
+      "method": "数据文件里混着\"语义内容\"和\"每次都会变的遥测计数\"时，把遥测拆到独立 sidecar 文件：主文件只在语义变化时写（内容串比对相同就跳过、不碰 mtime），遥测单独小文件随便写。判据：git diff 里大多数行是计数/时间戳 = 该拆了。副作用还得补两处——启动加载时把 sidecar 贴回内存、跨实例合并新条目时从 sidecar 补遥测，否则新条目会丢计数。写主文件时同一份数据要被多个实例读写（工具进程 + 常驻核心），必须临时文件 + os.replace 原子替换，不能 \"w\" 直接截断（读方会读到半截 JSON，_load 静默返回空库再整份覆盖别人的新增）。",
+      "evidence": "实测：data/methodology.json 每次 commit 带 345 行 hit_count/last_hit 改动，diff 不可读；拆出 method_hits.json 后正文只在内容真变时写，git 恢复干净",
+      "importance": 0.8,
+      "category": "工具与工程",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-25T03:11:39"
+    },
+    {
+      "id": 775,
+      "type": "good",
+      "name": "提交时被 pre-commit / CI 的回归测试拦住，但怀疑是自己改出来的还是本来就红",
+      "keywords": [
+        "pre-commit",
+        "ci",
+        "swap",
+        "试拦住",
+        "自己改出",
+        "本来就红",
+        "钩子报红",
+        "提交",
+        "回归",
+        "归测",
+        "测试",
+        "试拦"
+      ],
+      "scene": "提交时被 pre-commit / CI 的回归测试拦住，但怀疑是自己改出来的还是本来就红",
+      "method": "pre-commit 钩子报红挡住提交时，先做\"归属判定\"再决定：把被测输入换回改动前的版本（有备份就临时 swap、跑完立刻还原），重跑同一个测试——同样失败 = 既有红、与本次改动无关；结果变好/变坏 = 确实是自己引入的。判定为既有红才考虑 --no-verify 提交，且必须把证据（用什么数据复测、同样哪几项失败）写进 commit message，不能静默跳过——静默跳过等于把\"看起来修好了\"当修复。",
+      "evidence": "实测：pre-commit 世界书回归报 2 项 FAIL，用迁移前旧数据复跑（临时换回原位、跑完立刻还原）得到完全相同结果，确认与本次改动无关",
+      "importance": 0.75,
+      "category": "验证与排查",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-25T03:11:43"
     }
   ]
 }
