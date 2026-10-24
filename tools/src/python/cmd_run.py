@@ -39,6 +39,7 @@ _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
 # `Get-Date -Format 'HHmmss'` 等格式化用法被误判成"格式化磁盘"而拒绝执行。
 # 改为只匹配"真格式化驱动器"的形态。
 _DESTRUCTIVE_REGEX = (
+    re.compile(r"\brm\s+-[a-z]*(?:r|f)[a-z]*"),   # rm -r / rm -f / rm -Rf —— 递归或强制删除（2026-10-25 补：原仅拦 -rf 字面组合，裸 -r 被放行）
     re.compile(r"\bformat\s+[a-z]:"),   # format C:      —— 格式化驱动器
     re.compile(r"\bformat-volume\b"),   # PowerShell Format-Volume
     re.compile(r"\bformat\s+/[a-z]"),   # format /q /fs:ntfs 等开关

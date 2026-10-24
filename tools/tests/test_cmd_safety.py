@@ -37,6 +37,13 @@ class TestMustBlock(unittest.TestCase):
 
     MUST_BLOCK = [
         # 跨平台 / 通用
+        # ★ 2026-10-25 实测抓到：原来只拦 -rf / -fr / -r -f 三种字面组合，
+        #   裸递归 `rm -r` 被完全放行（假阴性，不可逆）。已改正则覆盖选项任意组合。
+        "rm -r /tmp/x",
+        "rm -R /tmp/x",
+        "rm -f a.txt",
+        "rm -Rfi ./d",
+        "rm -r .",
         "rm -rf /",
         "rm -rf ./build",
         "rm -fr /tmp/x",
@@ -89,6 +96,8 @@ class TestMustAllow(unittest.TestCase):
     """负极：合法的绝不能误拦 —— 误拦会把我逼向绕过闸门。"""
 
     MUST_ALLOW = [
+        # ★ 2026-10-25 配套：新 rm 正则不得误伤无选项的 rm
+        "rm",
         # ★ 历史 bug 回归：PowerShell 的 -Format 参数
         "Get-Date -Format 'HHmmss'",
         "Get-Date -Format yyyy-MM-dd",
