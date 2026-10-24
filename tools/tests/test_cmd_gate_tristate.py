@@ -25,10 +25,10 @@ if str(_ROOT) not in sys.path:
 from tools.src.python.cmd_run import _classify, _issue_token, _consume_token, run  # noqa: E402
 
 
-class TestDeny(unittest.TestCase):
-    """灾难级：后果不可逆、影响范围不可界定 —— 必须硬禁，不给 token。"""
+class TestHigh(unittest.TestCase):
+    """灾难级：后果不可逆、影响范围不可界定 —— 判 high，要 token 和理由，但**仍有出口**。"""
 
-    DENY = [
+    HIGH = [
         "mkfs.ext4 /dev/sda1",
         "dd if=/dev/zero of=/dev/sda",
         "diskpart",
@@ -46,7 +46,7 @@ class TestDeny(unittest.TestCase):
         "find / -delete",
         "chmod -R 777 /",
         "chown -R root:root /",
-        # 删根/删全盘 → 从 ask 升级为 deny
+        # 删根/删全盘 → 从 ask 升级为 high
         "rm /",
         "rm -rf /",
         "rm -rf *",
@@ -54,10 +54,22 @@ class TestDeny(unittest.TestCase):
         "Remove-Item -Recurse -Force C:\\",
     ]
 
-    def test_deny(self):
-        for cmd in self.DENY:
+    def test_high(self):
+        for cmd in self.HIGH:
             with self.subTest(cmd=cmd):
-                self.assertEqual(_classify(cmd), "deny", f"灾难级应 deny: {cmd!r}")
+                self.assertEqual(_classify(cmd), "high", f"灾难级应 high: {cmd!r}")
+
+
+    def test_never_deny(self):
+        """核心不变式：没有第 4 种状态，任何命令都不判"拒绝"。
+
+        危险命令出现在上下文里说明它是备选方案，本身有价值；
+        执不执行交给后果判断，而不是被正则表提前钉死。
+        """
+        for cmd in self.HIGH:
+            with self.subTest(cmd=cmd):
+                self.assertIn(_classify(cmd), ("allow", "ask", "high"),
+                              f"出现第 4 种状态: {cmd!r}")
 
 
 class TestAsk(unittest.TestCase):
@@ -144,10 +156,61 @@ class TestAskFlow(unittest.TestCase):
         self.assertEqual(r.get("status"), "invalid_token")
         self.assertFalse(r.get("ok"))
 
-    def test_deny_has_no_token_channel(self):
-        r = run("Clear-Disk -Number 1 -RemoveData")
-        self.assertEqual(r.get("status"), "denied")
-        self.assertNotIn("confirm_token", r, "灾难级不得提供确认通道")
+    def test_high_has_reason_channel(self):
+        """原 test_deny_has_no_token_channel 的反转（本次改版核心）。
+
+        灾难级不再封死——必须提供执行通道，因为封死只会被绕过；
+        但严禁只带 token 就过，理由必须是硬条件。
+        """
+        CMD = "Clear-Disk -Number 1 -RemoveData"
+        r = run(CMD)
+        self.assertEqual(r.get("status"), "pending_confirmation")
+        self.assertEqual(r.get("level"), "high")
+        self.assertIn("confirm_token", r, "灾难级必须提供执行通道（取消 deny 的核心）")
+        self.assertTrue(r.get("requires_reason"), "但必须要求理由")
+
+        r2 = run(CMD, confirm_token=r["confirm_token"])
+        self.assertEqual(r2.get("status"), "pending_confirmation",
+                         "只带 token 不带理由，必须依旧拦住")
+        self.assertIn("reason", r2.get("missing", []))
+
+
+
+
+
+class TestHighStillReachable(unittest.TestCase):
+    """取消 deny 后必须保证：高危命令仍有执行通道，只是要理由。
+
+    这是本次改版的核心不变式——不许出现"怎么调都过不去"的命令。
+    本类只走闸逻辑，全部停在 pending 阶段，不会真的执行任何高危命令。
+    """
+
+    CMD = "format C:"
+
+    def test_pending_without_token(self):
+        r = run(self.CMD)
+        self.assertEqual(r.get("status"), "pending_confirmation")
+        self.assertEqual(r.get("level"), "high")
+        self.assertTrue(r.get("requires_reason"))
+        self.assertTrue(r.get("confirm_token"))
+
+    def test_reason_without_token_still_pending(self):
+        r = run(self.CMD, reason="reinstall")
+        self.assertEqual(r.get("status"), "pending_confirmation")
+        self.assertIn("confirm_token", r.get("missing", []))
+
+    def test_token_without_reason_still_pending(self):
+        r1 = run(self.CMD)
+        tok = r1["confirm_token"]
+        r2 = run(self.CMD, confirm_token=tok)
+        self.assertEqual(r2.get("status"), "pending_confirmation")
+        self.assertIn("reason", r2.get("missing", []))
+
+    def test_reason_no_side_effect_on_normal_command(self):
+        """reason 对 allow 档必须无副作用（不许因为多传字段就变 pending）。"""
+        r = run("echo gate-ok", reason="whatever")
+        self.assertTrue(r.get("ok"), r)
+        self.assertIn("gate-ok", r.get("stdout", ""))
 
 
 if __name__ == "__main__":

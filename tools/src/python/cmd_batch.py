@@ -18,7 +18,8 @@ from tools.src.python.cmd_run import _is_destructive, _audit  # 复用安全拦�
     "批量执行多条【互相独立】的系统命令（一次调用完成多条，大幅省 LLM 往返与 token）。"
     "仅用于无依赖的命令集合（如：连续查版本、连续读状态、批量探测）；"
     "【有依赖的命令禁止打包】——后一条依赖前一条输出时必须分开串行执行。"
-    "破坏性命令仍会被安全策略拦截。返回每条命令的紧凑结果摘要，失败项单独列出。",
+    "需确认的破坏性命令会被跳过，并提示改用 cmd_run 单独确认（批量模式无法逐条确认）。"
+    "返回每条命令的紧凑结果摘要，失败项单独列出。",
     {
         "type": "object",
         "properties": {
@@ -67,8 +68,15 @@ def run(commands: list, timeout: float = 20, continue_on_error: bool = True,
                 break
             continue
         if _is_destructive(cmd):
-            _audit(cmd, {"ok": False, "stderr": "被安全策略拦截"})
-            results.append({"idx": i, "desc": desc, "ok": False, "error": "安全策略拦截：破坏性命令"})
+            # 批量通道没有确认交互，所以跳过；但明确告诉调用方"换哪个通道能过"。
+            _audit(cmd, {"ok": False, "stderr": "批量通道跳过：需单独确认"})
+            results.append({
+                "idx": i, "desc": desc, "ok": False,
+                "skipped": True,
+                "error": ("批量模式不执行需确认的命令（本通道无逐条确认交互）。"
+                          "改用 cmd_run 单独调用这条命令：先拿 pending_confirmation，"
+                          "再把命令与后果告知用户，带 confirm_token（high 档还需 reason）重新调用。"),
+            })
             if not continue_on_error:
                 break
             continue
