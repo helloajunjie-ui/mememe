@@ -43,6 +43,14 @@ _DESTRUCTIVE_REGEX = (
     re.compile(r"\bformat\s+[a-z]:"),   # format C:      —— 格式化驱动器
     re.compile(r"\bformat-volume\b"),   # PowerShell Format-Volume
     re.compile(r"\bformat\s+/[a-z]"),   # format /q /fs:ntfs 等开关
+    # 2026-10-25 补（Windows 侧）：Remove-Item 在 PowerShell 里有多个别名，
+    # 原先只用裸子串认 "remove-item"，导致下面这些等价写法全部漏拦：
+    #   ri -Recurse -Force / erase /s /q / del -Recurse -Force / rm -Recurse
+    re.compile(r"\b(?:remove-item|ri|rm|del|erase|rmdir|rd)\b[^|;\n]*?-(?:recurse|force|r|f)\b"),
+    # 同上，cmd 风格开关（del /s /q、erase /f）
+    re.compile(r"\b(?:del|erase)\b[^|;\n]*?/[sqf]\b"),
+    # Windows 磁盘级破坏 cmdlet：无日常用途，无条件拦
+    re.compile(r"\b(?:clear-disk|initialize-disk|remove-partition|clear-partition)\b"),
 )
 
 

@@ -61,6 +61,15 @@ class TestMustBlock(unittest.TestCase):
         "del /f /q C:\\Windows\\System32\\x.dll",
         "del /s *.log",
         "Remove-Item -Recurse -Force C:\\temp",
+        # ★ 2026-10-25 实测抓到：Remove-Item 在 PowerShell 有多个别名，
+        #   原先只认裸子串 "remove-item"，下列等价写法全部漏拦，已改正则覆盖。
+        "ri -Recurse -Force C:\\data",
+        "erase /s /q C:\\data",
+        "del -Recurse -Force C:\\data",
+        # ★ 磁盘级破坏 cmdlet（原先零覆盖）
+        "Clear-Disk -Number 1 -RemoveData",
+        "Remove-Partition -DriveLetter D",
+        "Initialize-Disk -Number 1",
         "rmdir /s /q C:\\temp",
         "rd /s /q D:\\data",
         "reg delete HKLM\\Software\\Foo /f",
