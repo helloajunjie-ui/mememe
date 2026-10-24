@@ -1698,6 +1698,8 @@ class Agent:
         self._fail_count = {}  # 工具失败计数仅限本任务（跨任务清零，防旧任务污染情绪判断）
         self.last_round_artifacts = []  # 本轮产物（对话中展示）
         self._turn_tools = []           # 本轮用到的工具（遥测/闭环记账）
+        # 内部自检/共建者转达类消息的用词与真实对话差异很大，遥测要能分开统计
+        self._turn_internal = str(user_input or "").lstrip().startswith("（内部")
         # 近期真实调用过的工具（滚动窗口，跨轮次保留；供场景预加载判断"她在做什么"）
         if not hasattr(self, "_recent_tools"):
             self._recent_tools = []
@@ -2106,6 +2108,7 @@ class Agent:
             logutil.append_line(os.path.join(self.data_dir, "worldbook.log"), json.dumps({
                 "ts": datetime.datetime.now().isoformat(timespec="seconds"),
                 "phase": "end", "injected": _inj, "outcome": "ok" if _ok else "fail",
+                "internal": bool(getattr(self, "_turn_internal", False)),
                 "tools": list(getattr(self, "_turn_tools", []) or [])[:12],
                 "steps": len(used_tools or []),
             }, ensure_ascii=False))
@@ -2826,7 +2829,7 @@ class Agent:
                 "ts": datetime.datetime.now().isoformat(timespec="seconds"),
                 "n_user": _conf_u[0], "top_user": round(_conf_u[1], 2), "path_user": self.methods._last_path,
                 "n_act": _conf_a[0], "top_act": round(_conf_a[1], 2),
-                "low": _low_conf,
+                "low": _low_conf, "internal": str(match_text or "").lstrip().startswith("（内部"),
             }, ensure_ascii=False))
         except Exception:  # noqa: BLE001
             pass
