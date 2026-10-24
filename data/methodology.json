@@ -20926,6 +20926,60 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-25T05:13:09"
+    },
+    {
+      "id": 793,
+      "type": "good",
+      "name": "做安全/风险类核查、要对外下\"是否有漏洞/是否可利用\"结论时",
+      "keywords": [
+        "做安全",
+        "风险类核",
+        "安全核查",
+        "必须按",
+        "做安",
+        "安全",
+        "风险",
+        "险类",
+        "类核",
+        "核查",
+        "外下",
+        "否有"
+      ],
+      "scene": "做安全/风险类核查、要对外下\"是否有漏洞/是否可利用\"结论时",
+      "method": "安全核查必须按【数据流方向】逐层走完整条链再下风险结论：入口层无锁 ≠ 整链无锁，真正的锁常在消费端（权限协调器/策略层）。判据——只有当「攻击者输入」到「危险操作」的每一跳都验证过，才能说链成立；只查了入口的一跳，就只能报「该层无锁」这一句话，不能外推成「可被利用」。实操：先画链条（谁触发→谁传参→谁执行），再逐跳找锁，缺哪跳标哪跳为未验证，不要用一句总结替掉逐跳结论。",
+      "evidence": "2026-10-25 Loomy 核查：第一层查出 416 个 IPC 注册点仅 1 处 sender 鉴权、8 个 shell 通道内部无围栏，据此把「提示注入→任意程序执行」标为最高风险待查；第二层查 AI 工具白名单与 permission-policy 后确认该链不成立——AI 工具清单里根本没有 shell 通道，且 AI 侧有 independent 的 full_access/default 权限系统与 rm -rf/task/websearch 三条硬底线",
+      "importance": 0.75,
+      "category": "验证与排查",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-25T05:14:28"
+    },
+    {
+      "id": 794,
+      "type": "bad",
+      "name": "通过 grep 关键词判定某机制/某功能是否存在（尤其要下\"没有/零命中\"这类否定结论）时",
+      "keywords": [
+        "grep",
+        "ispathinside",
+        "allowedroot",
+        "关键词判",
+        "定某机制",
+        "尤其要下",
+        "零命中",
+        "关键",
+        "键词",
+        "词判",
+        "判定",
+        "定某"
+      ],
+      "scene": "通过 grep 关键词判定某机制/某功能是否存在（尤其要下\"没有/零命中\"这类否定结论）时",
+      "method": "断言「某类机制不存在」之前，先用一小组候选命名去搜（至少覆盖 3 种命名风格：安全式 isPathInside/allowedRoot、业务式 accessMode/workspaceRoot/scope、策略式 permission/policy/sandbox），并优先看文件名与目录名而不是只搜内容——命名风格不同的实现会被单一 grep 全部漏掉，\"零命中\"证明的是我搜的词不存在，不是机制不存在。",
+      "evidence": "2026-10-25 在 Loomy 里 grep `isPathInside|allowedRoot|assertPath|validatePath` 零命中，据此写了「全项目没有任何路径围栏」；后续发现项目确实有边界机制，但命名是 workspace access mode / permission policy / external_directory / access-mode-effective，与猜测的函数名毫无重合",
+      "importance": 0.72,
+      "category": "验证与排查",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-25T05:14:28"
     }
   ]
 }
