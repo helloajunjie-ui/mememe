@@ -160,5 +160,21 @@ def _prune_old() -> int:
 
 if __name__ == "__main__":
     import sys
-    sys.stdout.reconfigure(encoding="utf-8")
+    # pythonw.exe（计划任务）下无控制台，sys.stdout 为 None：
+    # 直接 reconfigure() 会 AttributeError 崩溃（计划任务 result=1 的根因）。
+    _log_fh = None
+    if sys.stdout is None or not hasattr(sys.stdout, "reconfigure"):
+        _lp = Path(__file__).resolve().parents[3] / "logs" / "backup_private_task.log"
+        _lp.parent.mkdir(parents=True, exist_ok=True)
+        _log_fh = open(_lp, "a", encoding="utf-8", buffering=1)
+        sys.stdout = _log_fh
+        print("=" * 60)
+        print(datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S] backup_private 无控制台模式启动"))
+    else:
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
     print(json.dumps(run(note="手动/定时备份"), ensure_ascii=False, indent=2))
+    if _log_fh is not None:
+        _log_fh.close()

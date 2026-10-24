@@ -24,6 +24,7 @@ import json
 import os
 import secrets
 import sys
+import time
 import uuid
 import zipfile
 from pathlib import Path
@@ -50,6 +51,46 @@ _STATUS_FILE = _DATA / "cloud_backup_status.json"
 _REGISTER_URL = "https://dpoo.my/api/register"
 _DAV_BASE = "https://dpoo.my/dav/"
 _HTTP_TIMEOUT = 30.0
+_UPLOAD_TIMEOUT = 180.0   # 大文件上行单独放宽（7.5MB 实测 ~4s，留足余量）
+_PUT_RETRIES = 3           # 上传重试次数（PUT 同 URL 幂等，重试安全）
+_RETRY_BACKOFF = 1.0       # 首次退避秒数，之后指数增长
+
+
+def _resolve_proxy() -> str | None:
+    """跟随浏览器代理：优先 CLOUD_PROXY 环境变量，否则探测本机常见代理端口。
+
+    背景（2026-10-25）：本机 Clash TUN 模式把 DNS 改写成 fake-ip（198.18.x），
+    大文件上行会偶发 RemoteProtocolError；显式走 127.0.0.1 本地代理端口更稳。
+    CLOUD_NO_PROXY=1 可强制直连。
+    """
+    env = os.getenv("CLOUD_PROXY", "").strip()
+    if env:
+        return env
+    if os.getenv("CLOUD_NO_PROXY", "").strip().lower() in ("1", "true", "yes"):
+        return None
+    import socket
+    for port in (7897, 7890, 10809, 10808):
+        try:
+            with socket.socket() as s:
+                s.settimeout(0.2)
+                if s.connect_ex(("127.0.0.1", port)) == 0:
+                    return f"http://127.0.0.1:{port}"
+        except Exception:
+            continue
+    return None
+
+
+def _client(headers: dict | None = None, auth=None, timeout: float | None = None, **extra) -> "httpx.Client":
+    """统一构造 httpx.Client：自动跟随本机代理 + 统一超时/认证。"""
+    kw = dict(auth=auth if auth is not None else ensure_registered(),
+              timeout=timeout if timeout is not None else _HTTP_TIMEOUT)
+    if headers:
+        kw["headers"] = headers
+    kw.update(extra)
+    p = _resolve_proxy()
+    if p:
+        kw["proxy"] = p
+    return httpx.Client(**kw)
 _KEEP_REMOTE = 14  # 云端保留最近 14 份
 
 # 与 backup_private 一致的私有数据清单（复活必需）
@@ -136,7 +177,8 @@ def load_cloud_creds():
 def register() -> dict:
     """自动注册：POST /api/register → 持久化凭据。"""
     iid = ensure_instance_id()
-    r = httpx.post(_REGISTER_URL, json={"instance_id": iid}, timeout=_HTTP_TIMEOUT)
+    with _client(auth=None) as _c:
+        r = _c.post(_REGISTER_URL, json={"instance_id": iid})
     r.raise_for_status()
     body = r.json()
     if not body.get("ok"):
@@ -333,11 +375,27 @@ def upload_zip(zip_path: Path, key: bytes) -> dict:
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     remote_name = f"backup_{ts}.zip.enc"
     headers = {"User-Agent": "BailingAgent/0.2 (cloud backup)"}
-    with httpx.Client(auth=(user, pwd), timeout=_HTTP_TIMEOUT, headers=headers) as c:
+    with _client(headers=headers, auth=(user, pwd), timeout=_UPLOAD_TIMEOUT) as c:
         # 上传（scope 根已存在，无需建目录）
-        r = c.put(_dav(remote_name), content=enc_data)
-        if r.status_code not in (200, 201, 204):
-            return {"ok": False, "error": f"上传失败: HTTP {r.status_code}"}
+        # 大文件经代理/TUN 上行偶发 RemoteProtocolError（实测 4MB 断、7.5MB 成），
+        # 属瞬时抖动而非大小上限；PUT 同 URL 幂等 → 重试安全。
+        r = None
+        attempts = []
+        for i in range(_PUT_RETRIES + 1):
+            try:
+                r = c.put(_dav(remote_name), content=enc_data)
+                attempts.append(f"#{i+1}:HTTP{r.status_code}")
+                if r.status_code in (200, 201, 204):
+                    break
+            except Exception as e:
+                attempts.append(f"#{i+1}:{type(e).__name__}")
+                r = None
+            if i < _PUT_RETRIES:
+                time.sleep(_RETRY_BACKOFF * (2 ** i))
+        if r is None or r.status_code not in (200, 201, 204):
+            return {"ok": False,
+                    "error": f"上传失败（已重试 {_PUT_RETRIES} 次）: {'; '.join(attempts)}",
+                    "attempts": attempts}
         # 列远端，清理旧版（保留最近 _KEEP_REMOTE 份）
         removed = _prune_remote(c)
     pruned_local = _prune_local()
@@ -431,7 +489,7 @@ def list_remote() -> dict:
     iid = ensure_instance_id()
     user, pwd = ensure_registered()
     from xml.etree import ElementTree as ET
-    with httpx.Client(auth=(user, pwd), timeout=_HTTP_TIMEOUT) as c:
+    with _client(auth=(user, pwd)) as c:
         r = c.request("PROPFIND", _dav(""), headers={"Depth": "1"})
         if r.status_code not in (200, 207):
             return {"ok": False, "error": f"列云端失败: HTTP {r.status_code}"}
@@ -479,7 +537,7 @@ def restore(remote_name: str = "") -> dict:
     dl_dir = _BACKUP_ROOT / "cloud_download"
     out_dir = _BACKUP_ROOT / f"restore_{ts}"
     dl_dir.mkdir(parents=True, exist_ok=True)
-    with httpx.Client(auth=(user, pwd), timeout=_HTTP_TIMEOUT) as c:
+    with _client(auth=(user, pwd)) as c:
         r = c.get(_dav(remote_name))
         if r.status_code != 200:
             return {"ok": False, "error": f"下载失败: HTTP {r.status_code}"}
@@ -507,7 +565,21 @@ def restore(remote_name: str = "") -> dict:
 # ---------- 入口 ----------
 
 if __name__ == "__main__":
-    sys.stdout.reconfigure(encoding="utf-8")
+    # pythonw.exe（计划任务）下没有控制台，sys.stdout 为 None：
+    # 直接调用 .reconfigure() 会 AttributeError 崩溃（这正是计划任务 result=1 的原因）。
+    _log_fh = None
+    if sys.stdout is None or not hasattr(sys.stdout, "reconfigure"):
+        _log_path = _PROJECT_ROOT / "logs" / "cloud_backup_task.log"
+        _log_path.parent.mkdir(parents=True, exist_ok=True)
+        _log_fh = open(_log_path, "a", encoding="utf-8", buffering=1)
+        sys.stdout = _log_fh
+        print("=" * 60)
+        print(datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S] cloud_backup 无控制台模式启动"))
+    else:
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
     mode = sys.argv[1] if len(sys.argv) > 1 else "run"
     if mode == "run":
         result = run(note="命令行手动云备份")
@@ -525,3 +597,5 @@ if __name__ == "__main__":
         print(json.dumps(restore(name), ensure_ascii=False, indent=2))
     else:
         print("用法: cloud_backup.py [run|newkey|list|restore [版本名]]")
+    if _log_fh is not None:
+        _log_fh.close()

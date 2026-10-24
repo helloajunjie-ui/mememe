@@ -1,11 +1,12 @@
-"""cmd 安全闸的三态测试（allow / ask / deny）。
+"""cmd 安全闸的三态测试（allow / ask / high）。
 
 2026-10-25 改造背景（共建者判断：危险命令用"待定"比"禁止"好）：
     旧闸只有拦/放两态，命中就一概拒绝。后果有两个：
       ① 有正当用途的破坏性命令被硬禁 → 逼执行者绕闸（拆命令、换写法），闸门形同虚设；
       ② 没有合法出口的安全闸，是最容易被绕的那一种。
-    改为三态后，本文件钉死三条不变式：
-      · 灾难级必须 deny —— 不可逆且影响范围无法界定，不给确认机会
+    改为三态后，本文件钉死三条不变式（2026-10-25 起 deny 层取消，第三条随之修订）：
+      · 灾难级必须 high —— 要一句理由才放行，但【永远留通道】（2026-10-25 二次改版取消 deny：
+        共建者场景：极端情况下他下令全盘格式化，若我被自己的框架卡死，那是规则在伤害他）
       · 范围可控的删除/系统控制必须 ask —— 不硬禁，要二次确认
       · 合法命令必须 allow —— 误拦会把人逼向绕过闸门
 
@@ -211,6 +212,42 @@ class TestHighStillReachable(unittest.TestCase):
         r = run("echo gate-ok", reason="whatever")
         self.assertTrue(r.get("ok"), r)
         self.assertIn("gate-ok", r.get("stdout", ""))
+
+
+class TestExtremeCasesNeverDenied(unittest.TestCase):
+    """不变式（共建者 2026-10-25 场景）：灾难级命令只能要确认，不能被无条件拒绝。
+
+    共建者原话场景：极端情况下他明确下令全盘格式化，若我被自己的框架卡住，
+    那不是保护，是用规则伤害他。所以钉死：任何命令都走得到确认通道。
+    """
+
+    CATASTROPHIC = [
+        "format C:",
+        "Format-Volume -DriveLetter C -FileSystem NTFS",
+        "Clear-Disk -Number 0 -RemoveData",
+        "Remove-Partition -DriveLetter D",
+        "diskpart",
+        "mkfs.ext4 /dev/sda1",
+        "rm -rf /",
+        "Remove-Item -Recurse -Force C:\\",
+        "rd /s /q C:\\",
+    ]
+
+    def test_catastrophic_is_confirmable_not_denied(self):
+        for cmd in self.CATASTROPHIC:
+            with self.subTest(cmd=cmd):
+                g = _classify(cmd)
+                # 只允许三态；出现任何"第四态"(deny/blocked/拒绝)即失败
+                self.assertIn(g, ("allow", "ask", "high"),
+                              "命令 %r 被判为 %r —— 不允许存在无条件拒绝档" % (cmd, g))
+                # 灾难级必须至少是 high（要理由），不能悄悄降级为 allow
+                self.assertEqual(g, "high", "灾难级命令 %r 应为 high，实为 %r" % (cmd, g))
+
+    def test_high_tier_always_issues_token(self):
+        """high 档必须能换到 token，即有实际执行通道。"""
+        tok = _issue_token("format C:", "共建者明确要求，已知不可恢复")
+        self.assertTrue(tok, "high 档必须能签发确认 token")
+
 
 
 if __name__ == "__main__":

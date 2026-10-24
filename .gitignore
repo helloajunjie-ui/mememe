@@ -165,3 +165,11 @@ data/archive/
 tools/bin/q/
 # 方法论命中遥测（纯计数，每轮都变；正文 data/methodology.json 才受版本控制）
 data/method_hits.json
+
+# 2026-10-25：素月复活份额（Shamir 2-of-3），任何情况下不得进公开仓库
+recovery_share_*.txt
+workspace/explore/recovery_shards/
+
+# 2026-10-25：探索中间产物，单文件曾达 194MB 卡死 push
+workspace/explore/rea670_*
+workspace/explore/rea_*.html
