@@ -202,7 +202,10 @@ class MethodStore:
 
     def __init__(self, path: str = _PATH):
         self.path = path
-        self.data: Dict = self._load()
+        self.data = self._load()
+        # 2026-10-24：记录加载时的文件 mtime。_save 前据此判断"是否有别的实例写过"，
+        # 有则先合并新增条目再写，避免用旧快照覆盖别人的写入（见 _merge_newer）。
+        self._known_mtime = self._file_mtime()
         self._migrate()
         self._hits_dirty = False
         self._last_flush = 0.0
@@ -284,11 +287,51 @@ class MethodStore:
                 return {}
         return {}
 
+    def _file_mtime(self) -> int:
+        try:
+            return Path(self.path).stat().st_mtime_ns
+        except OSError:
+            return 0
+
+    def _merge_newer(self) -> int:
+        """多写入者合并（2026-10-24 修复静默回滚）。
+
+        method_learn 工具会 new 一个自己的 MethodStore，与核心实例各持全量内存副本；
+        核心实例的命中记账 flush 会用旧快照整份覆盖文件，导致新增条目丢失。
+        这里在写盘（以及分配新 id）前先看一眼磁盘：若 mtime 与本实例上次读写时不同，
+        说明有别的写入者动过，把「id 大于本实例最大 id」的新增条目吸收进来。
+
+        只吸收新增、不做字段级合并——已存在条目的字段冲突以本实例为准
+        （丢一次命中计数不致命，丢整条新增才是真损失）；本实例删掉的条目也不会被复活。
+        """
+        cur = self._file_mtime()
+        if cur == getattr(self, "_known_mtime", None):
+            return 0
+        self._known_mtime = cur
+        try:
+            disk = self._load()
+        except Exception:
+            return 0
+        mine = {m.get("id") for m in self.data.get("methods", [])}
+        my_max = max(mine) if mine else 0
+        added = 0
+        for m in (disk.get("methods") or []):
+            mid = m.get("id")
+            if mid and mid not in mine and mid > my_max:
+                self.data.setdefault("methods", []).append(m)
+                added += 1
+        if added:
+            self._bm25_cache = None
+            self._tool_cache = None
+        return added
+
     def _save(self) -> None:
         try:
+            self._merge_newer()
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
             with open(self.path, "w", encoding="utf-8") as f:
                 json.dump(self.data, f, ensure_ascii=False, indent=2)
+            self._known_mtime = self._file_mtime()
         except OSError:
             pass
 
@@ -300,6 +343,8 @@ class MethodStore:
         世界书字段：name=词条名（默认取 scene 首段），keywords=触发关键词（默认从 scene+method 自动提取）。"""
         type_ = type_ if type_ in ("good", "bad") else "good"
         importance = max(0.0, min(1.0, float(importance)))
+        # 2026-10-24：先合并别人的新增，再算 max(id)+1；否则会撞号并覆盖对方条目。
+        self._merge_newer()
         methods = self.data.setdefault("methods", [])
         # 2026-10-22：查重。同一 (type, scene, method) 已存在就不再追加——
         # 历史库里已积累 123 对高相似条目，重复入库只会让世界书越滚越大。
