@@ -20463,6 +20463,33 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-24T23:05:25"
+    },
+    {
+      "id": 768,
+      "type": "good",
+      "name": "在 Windows 上用 Get-Process 看到多个同名 python 进程，怀疑「是不是有第二个核心实例/残留进程」时",
+      "keywords": [
+        "windows",
+        "get-process",
+        "python",
+        "看到多个",
+        "第二个核",
+        "心实例",
+        "残留进程",
+        "上用",
+        "多个",
+        "个同",
+        "同名",
+        "进程"
+      ],
+      "scene": "在 Windows 上用 Get-Process 看到多个同名 python 进程，怀疑「是不是有第二个核心实例/残留进程」时",
+      "method": "别靠进程名和数量定性，分两步：①当轮用 Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" 读 CommandLine 与 CreationDate，命令行里带 main.py/-m core 的才是核心实例，带工具脚本路径的是短命子进程；②拿不准就留到下一轮复查「它还在不在」——短命子进程自然消失，核心实例会持续存在，复查比当轮硬猜省事。上一轮我把两个 python 进程当疑似异常上报（只有 Id+StartTime，无法区分），下一轮复查发现 9840 已消失、13476 持续存活，异常自解。上报时如实说「不确定」是对的，但不确定本身可以靠 CommandLine 一查就定，成本比留待下一轮更低。",
+      "evidence": "实测：Get-Process python 返回 13476(23:05:47) 与 9840(23:59:48) 两条，1 小时后复查仅剩 13476 → 9840 为短命子进程",
+      "importance": 0.6,
+      "category": "验证与排查",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-25T01:00:27"
     }
   ]
 }
