@@ -20494,6 +20494,60 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-25T01:00:27"
+    },
+    {
+      "id": 769,
+      "type": "bad",
+      "name": "写临时目录测试来验证某个 Store/模块（MethodStore 等带全局伴随文件）的行为时",
+      "keywords": [
+        "store",
+        "methodstore",
+        "path",
+        "写临时目",
+        "录测试来",
+        "验证某个",
+        "伴随文件",
+        "写临",
+        "目录",
+        "录测",
+        "测试",
+        "试来"
+      ],
+      "scene": "写临时目录测试来验证某个 Store/模块（MethodStore 等带全局伴随文件）的行为时",
+      "method": "给 MethodStore 传临时 path 并不能隔离全局状态：data/method_categories.json 的读写走模块级全局文件，测试里调 learn() 会把假条目的 id/category 写进真实映射（实测把真实条目 3、5 的「决策与效率」覆盖成「其他」）。纪律：①写这类测试前先 grep 目标类里有没有模块级常量/全局文件路径；②有就先 monkeypatch 掉（如替换 _register_category / _load_category_map），或先把真实文件复制备份、测完还原并 diff 校验；③测完必看 git status 有没有出现意外的 data/ 改动，有就是污染，git checkout -- 还原后核对关键键值。",
+      "evidence": "2026-10-25 实测：临时目录跑 MethodStore 测试后 git diff 显示 data/method_categories.json 中 \"3\"、\"5\" 从「决策与效率」变「其他」，git checkout 还原后核对 3=决策与效率 5=决策与效率 keys=748",
+      "importance": 0.75,
+      "category": "验证与排查",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-25T01:08:32"
+    },
+    {
+      "id": 770,
+      "type": "bad",
+      "name": "修完一个并发/多写入者 bug，准备把「补丁已通过测试」当成收益已兑现时",
+      "keywords": [
+        "bug",
+        "core",
+        "methods.py",
+        "修完一个",
+        "多写入者",
+        "补丁已通",
+        "打补丁后",
+        "修完",
+        "完一",
+        "多写",
+        "写入",
+        "入者"
+      ],
+      "scene": "修完一个并发/多写入者 bug，准备把「补丁已通过测试」当成收益已兑现时",
+      "method": "打补丁后要顺着调用链算一遍「这个改动在什么路径上真的会生效」，而不是只看测试绿。实测 core/methods.py 的 _merge_newer 只被 _save() 和 learn() 调用，两者紧接着都会写盘并把 _known_mtime 重设成新 mtime——所以「读失败不推进 _known_mtime、留待下次重试」的收益几乎为零（除了写盘本身 OSError 的极窄路径）。真正治本的是把写盘改成原子写（临时文件 + os.replace），让读方永远看不到半截 JSON，从源头消掉读失败。判据：改动的收益路径若必须依赖「调用者不写盘/写盘失败」，就该把力气转到消除根因上，并把这条边界如实写进提交信息，不夸大成「修好了」。",
+      "evidence": "2026-10-25 实测两处改动：读失败不推进 mtime（收益窄，仅在 _save 写盘 OSError 时生效）+ 原子写（消除半截 JSON 读失败根因）；8/8 测试通过，原子写是主要价值",
+      "importance": 0.72,
+      "category": "验证与排查",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-25T01:08:32"
     }
   ]
 }
