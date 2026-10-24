@@ -292,6 +292,21 @@ class MethodStore:
             return Path(self.path).stat().st_mtime_ns
         except OSError:
             return 0
+    def _read_disk(self):
+        """读盘并区分「读成功」与「读失败」（返回 (ok, data)）。
+
+        与 _load() 不同：_load 对损坏/不存在的文件一律返回 {}（静默当空库），
+        而合并路径必须知道「空」和「读不出来」的区别——前者可以正常合并，
+        后者要延后重试，不能把这次合并机会当成已消费。
+        """
+        if not os.path.exists(self.path):
+            return True, {}
+        try:
+            with open(self.path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return False, {}
+        return True, data if isinstance(data, dict) else {}
 
     def _merge_newer(self) -> int:
         """多写入者合并（2026-10-24 修复静默回滚）。
@@ -307,11 +322,13 @@ class MethodStore:
         cur = self._file_mtime()
         if cur == getattr(self, "_known_mtime", None):
             return 0
-        self._known_mtime = cur
-        try:
-            disk = self._load()
-        except Exception:
+        ok, disk = self._read_disk()
+        if not ok:
+            # 读失败（别的写入者正在写 / 文件暂时损坏）：**不推进** _known_mtime，
+            # 让下一次 _save 或 learn 再试。推进了就等于把这次合并机会标记成已消费，
+            # 磁盘上的新增条目会在下一次整份 dump 时被静默覆盖（2026-10-24 同类事故）。
             return 0
+        self._known_mtime = cur
         mine = {m.get("id") for m in self.data.get("methods", [])}
         my_max = max(mine) if mine else 0
         added = 0
@@ -329,8 +346,21 @@ class MethodStore:
         try:
             self._merge_newer()
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-            with open(self.path, "w", encoding="utf-8") as f:
-                json.dump(self.data, f, ensure_ascii=False, indent=2)
+            # 原子写：先写同目录临时文件再 os.replace 替换。直接以 "w" 截断重写时，
+            # 别的 MethodStore 实例（method_learn 工具 / 另一进程）正好读盘就会读到
+            # 半截 JSON，_load 静默返回 {}，随后整份 dump 把对方新增条目覆盖掉
+            # ——2026-10-24 事故的同类根因。原子替换让读方永远看不到半截文件。
+            tmp = f"{self.path}.tmp{os.getpid()}"
+            try:
+                with open(tmp, "w", encoding="utf-8") as f:
+                    json.dump(self.data, f, ensure_ascii=False, indent=2)
+                os.replace(tmp, self.path)
+            finally:
+                if os.path.exists(tmp):
+                    try:
+                        os.remove(tmp)
+                    except OSError:
+                        pass
             self._known_mtime = self._file_mtime()
         except OSError:
             pass
