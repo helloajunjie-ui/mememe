@@ -21547,6 +21547,33 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-25T09:09:29"
+    },
+    {
+      "id": 816,
+      "type": "good",
+      "name": "核实 Windows 计划任务/定时备份是否真实生效时（schtasks 解析诡异、任务\"看着不存在\"）",
+      "keywords": [
+        "windows",
+        "schtasks",
+        "query",
+        "计划任务",
+        "定时备份",
+        "解析诡异",
+        "看着不存",
+        "核实",
+        "计划",
+        "划任",
+        "备份",
+        "否真"
+      ],
+      "scene": "核实 Windows 计划任务/定时备份是否真实生效时（schtasks 解析诡异、任务\"看着不存在\"）",
+      "method": "核实\"计划任务到底会不会按时跑、上次结果如何\"时，不要用 schtasks /Query /FO CSV 接 ConvertFrom-Csv——中文 Windows 下 CSV 编码与列名对不上，解析出来全是空字段，看着像任务不存在；直接用 PowerShell 原生 Get-ScheduledTask | ForEach-Object { Get-ScheduledTaskInfo -TaskName $_.TaskName } 取 State/Triggers.StartBoundary/LastRunTime/LastTaskResult/NextRunTime。另外\"注册成功\"≠\"会跑\"：必须看到 State=Ready + 触发边界正确 + LastTaskResult=0 三项同时成立；若以往成功全部来自手动触发，则自动触发链仍属未验证状态，要等它自己跑过一次再算数。",
+      "evidence": "实测：schtasks /Query /TN \"\\BailingCloudBackup\" /V /FO CSV | ConvertFrom-Csv 在中文 Windows 下返回全空列；改用 Get-ScheduledTask + Get-ScheduledTaskInfo 一次拿到 State/Trigger/LastRun/LastResult/NextRun 全部真实值",
+      "importance": 0.65,
+      "category": "验证与排查",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-25T09:15:55"
     }
   ]
 }
