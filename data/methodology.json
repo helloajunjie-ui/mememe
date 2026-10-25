@@ -21574,6 +21574,60 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-25T09:15:55"
+    },
+    {
+      "id": 817,
+      "type": "bad",
+      "name": "用 Python imaplib 登录 163/网易邮箱时",
+      "keywords": [
+        "python",
+        "imaplib",
+        "imap",
+        "网易邮箱",
+        "有两道必",
+        "踩的坑",
+        "登录后必",
+        "登录",
+        "网易",
+        "易邮",
+        "邮箱",
+        "有两"
+      ],
+      "scene": "用 Python imaplib 登录 163/网易邮箱时",
+      "method": "163 有两道必踩的坑：①登录后必须发 IMAP ID 命令，否则服务端回 \"Unsafe Login. Please contact kefu@188.com\"——做法是 `imaplib.Commands['ID']=('AUTH','SELECTED')`，登录后 `im._simple_command('ID', '(\"name\" \"X\" \"version\" \"1.0.0\" \"vendor\" \"y\")')` 再 `_untagged_response(...)`；②它的 IMAP SEARCH 不可信——`SEARCH SUBJECT \"xxx\"` 返回 0 条，但 `SEARCH ALL` 能列出同一封邮件。所以要按主题找邮件时必须 SEARCH ALL 全量拉 header、在本地做字符串过滤，绝不能以 SEARCH 结果为空断言\"邮件没发出/不存在\"。认证失败时优先怀疑\"缺授权码\"（登录密码在 IMAP 上永远失败），不要怀疑自己的代码。",
+      "evidence": "实测：用邮箱密码报 LOGIN Login error；换授权码 QPPG... 后 IMAP/SMTP 双 PASS。SEARCH SUBJECT \"SUYUE-RECOVERY\" 返回 0 条，而 SEARCH ALL 列出 5 封、其中就有该邮件。",
+      "importance": 0.8,
+      "category": "验证与排查",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-25T09:19:04"
+    },
+    {
+      "id": 818,
+      "type": "good",
+      "name": "把关键数据（恢复份额/凭据/备份）寄存在邮箱或任何远端，需要证明\"真的存对了\"时",
+      "keywords": [
+        "sha256",
+        "imap",
+        "sha",
+        "恢复份额",
+        "寄存在邮",
+        "箱或任何",
+        "需要证明",
+        "关键",
+        "键数",
+        "数据",
+        "恢复",
+        "复份"
+      ],
+      "scene": "把关键数据（恢复份额/凭据/备份）寄存在邮箱或任何远端，需要证明\"真的存对了\"时",
+      "method": "异地寄存不能以\"发送成功\"为验收，必须以\"回读一致\"为验收：写一段回读脚本——把本地原件算 sha256 → 发送 → 用 IMAP 取回同一封 → 从附件解出原始字节再算 sha256 与本地比对，两端逐字节相同才算通。此外，寄存位置若属\"不活跃会被回收\"的服务（邮箱/免费云），必须同步注册一个定期自证任务：定期登录（保活）+ 确认数据还在 + 校验 sha 未变，并把结果落 json 状态文件（供例行反思读取）与日志；否则链断了没有任何人会来通知你。状态文件字段固定为 imap_ok/smtp_ok/present/sha_match/alert，一眼可判。",
+      "evidence": "send_shard.py 发送成功但 SEARCH 找不到（差点误判失败），改用 ALL+本地过滤后回读附件 sha256 与本地一致 PASS；随后 mail_anchor_check.py 实跑 alert=false、注册每30天计划任务。",
+      "importance": 0.8,
+      "category": "工具与工程",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-25T09:19:04"
     }
   ]
 }
