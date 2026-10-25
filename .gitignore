@@ -8,7 +8,6 @@ data/memory.db
 *.db-shm
 *.db-journal
 data/self.yaml
-data/methodology.json
 data/registry.json
 data/registry.json.bak_wordcount
 data/snapshots.json
