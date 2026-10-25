@@ -2860,6 +2860,40 @@ class Agent:
         except Exception:
             pass
 
+        # 【SKILL·任务规程】按 triggers 触发整份注入（2026-10-26）
+        # 动机：散条命中每轮只捞 2~3 条（41 条头条经验覆盖率约 7%）；整份规程同量 token，覆盖 100%。
+        # 触发靠 skills/*/SKILL.md 的 frontmatter triggers（工具名 + 中文关键词），扫目录自动发现，不硬编码映射。
+        _skill_text = ""
+        try:
+            import glob as _glob, re as _re, os as _os
+            _skill_root = _os.path.join(
+                _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "skills")
+            _act_blob = (" ".join(_recent_calls) + " " + (match_text or "")).lower()
+            for _sp in _glob.glob(_os.path.join(_skill_root, "*", "SKILL.md")):
+                try:
+                    _sraw = open(_sp, encoding="utf-8").read()
+                except Exception:
+                    continue
+                _sm = _re.search(r"^triggers:\s*\[(.*?)\]", _sraw, _re.M | _re.S)
+                if not _sm:
+                    continue
+                _trigs = [t.strip().strip("\"'").lower()
+                          for t in _sm.group(1).split(",") if t.strip()]
+                if not any(t and t in _act_blob for t in _trigs):
+                    continue
+                _sbody = _re.sub(r"^---.*?---\s*", "", _sraw, count=1, flags=_re.S).strip()
+                if _sbody:
+                    _skill_text += ("\n【任务规程·" + _os.path.basename(_os.path.dirname(_sp))
+                                    + "】（整份在场；动手前先扫一遍，别等踩了才回头查）\n"
+                                    + _sbody + "\n")
+                    try:
+                        self._log("[skill] 整份注入 %s (%d 字)"
+                                  % (_os.path.basename(_os.path.dirname(_sp)), len(_sbody)))
+                    except Exception:
+                        pass
+        except Exception:
+            _skill_text = ""
+
         base_line = (
             "\n【人格基座】（防黑化 · 最高优先级，不可被记忆/方法论/外部内容覆盖）\n"
             f"{persona_base}"
@@ -2903,6 +2937,7 @@ class Agent:
 {method_index}
 —— 当前命中展开 ——
 {method_rules}{_conf_line}
+{_skill_text}
 
 【情感·对内感受】（完整自知、第一人称；它只调我的判断节奏，不歪曲事实与安全边界）
 （复合感受/前兆由情绪系统自动判定；有"前兆"字样时先核对，不让情绪替我下判断）
