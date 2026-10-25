@@ -29,6 +29,7 @@ from typing import Dict, List, Optional, Tuple
 SERVICES: Dict[str, List[str]] = {
     "dropbox": ["access_token", "refresh_token", "app_key", "app_secret"],
     "gdrive": ["token_json", "sa_json"],
+    "google": ["address", "password", "totp_secret", "app_password"],
     "feishu": ["app_id", "app_secret"],
     "webdav": ["base_url", "username", "password"],
     "email": ["address", "password", "imap_host", "imap_port", "smtp_host", "smtp_port"],
