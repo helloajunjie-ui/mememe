@@ -22114,6 +22114,33 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-25T22:27:18"
+    },
+    {
+      "id": 837,
+      "type": "bad",
+      "name": "在 cmd_batch 里做「某文件/标志应当不存在」这类否定式检查时",
+      "keywords": [
+        "cmd_batch",
+        "get-childitem",
+        "exit",
+        "某文件",
+        "这类否定",
+        "否定式检",
+        "零退出码",
+        "里做",
+        "某文",
+        "文件",
+        "标志",
+        "志应"
+      ],
+      "scene": "在 cmd_batch 里做「某文件/标志应当不存在」这类否定式检查时",
+      "method": "否定式检查别用会因「不存在」而返回非零退出码的命令（如 Get-ChildItem 查不存在的文件 exit=1），否则 cmd_batch 会把它计入 failed、all_ok=false，把「一切正常」误报成「有失败」，我还得再花一步去核实。正解：用 Test-Path / Test-Path -PathType Leaf，存在返回 True、不存在返回 False，退出码恒为 0，结果语义直接可读。（实测：查 data/restart.flag 是否残留，Get-ChildItem 返回 exit_code=1 被列入 failed，实际含义是「标志已被消费、状态良好」）",
+      "evidence": "本轮整点反思实测：cmd_batch 第 4 条 Get-ChildItem data\\restart.flag 返回 exit_code=1 → failed 列表，all_ok=false，而真实语义是文件不存在=重启标志已消费，属正常",
+      "importance": 0.6,
+      "category": "验证与排查",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-26T00:00:17"
     }
   ]
 }
