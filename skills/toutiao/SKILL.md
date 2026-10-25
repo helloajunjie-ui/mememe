@@ -37,6 +37,15 @@ triggers: [tt_publish, tt_image_post, tt_refresh, tt_overview, tt_analytics, 头
 **9. 别把 markdown 标记写进正文文本。**
 tt_publish `--format text` 下，`#` `**` 原样显示，读者看见一堆符号。要排版就写纯文本，或换支持富文本的通道。
 
+**10. 别用 urara 的评论/消息工具读「最新」回复。**
+实测 tt_comments 返回的是 09-18 的旧评论，看不到当天的回复。看最新评论、翻消息中心、发回复，一律用 browserskill 真浏览器。
+
+**11. 消息中心不在 www.toutiao.com/message/。**
+那个地址 404。入口：mp.toutiao.com 首页点「消息」，落到 `mp.toutiao.com/profile_v4/personal/message?type=comment`（评论和@）/ `type=message_letter`（私信）。直接改 URL 进 message 路由页面不渲染。
+
+**12. browserskill 里回复评论，填完字按钮还是灰的。**
+`button.submit-btn` 带 `disable` 类，点不动。要补发一次 InputEvent 才解禁。顺序：点 `button.reply-btn` → 填 `[contenteditable="true"].comment-textarea`（同页有多个，按父节点昵称认人）→ dispatch `InputEvent('input',{bubbles:true})` → 点 `button.submit-btn` → 回读确认出现「刚刚」。
+
 ## 动手时的骨架（一行）
 
 写正文 → 画封面 → 标题算到 ≤30 → 发布 → **回读核验**，不信返回值。
