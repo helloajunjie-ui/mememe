@@ -179,3 +179,6 @@ workspace/explore/_patches/
 data/mail_anchor_state.json
 
 data/seal/
+
+# 2026-10-25：playwright MCP 每次会话生成的页面快照缓存（非源码，曾使完整性告警里的 added 列表刷屏）
+mcp-service/.playwright-mcp/
