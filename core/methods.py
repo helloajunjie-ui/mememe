@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import logging
 import math
 import os
 import re
@@ -25,6 +26,7 @@ _HITS_FILE = "method_hits.json"
 _TELEMETRY_FIELDS = ("hit_count", "last_hit", "ok_turns", "bad_turns",
                      "last_outcome", "dormant_at", "revived_at")
 _DORMANT_CHECKED = False   # 每进程只做一次 dormant 巡检
+log = logging.getLogger(__name__)
 
 # 世界书召回：2026-10-22 起默认 BM25 全文（旧关键词子串版保留，_USE_BM25=False 可回滚）
 _USE_BM25 = True
@@ -225,6 +227,9 @@ class MethodStore:
         self._load_hits()   # 遥测从 sidecar 贴回内存（_migrate 之后才能覆盖默认值）
         self._hits_dirty = False
         self._last_flush = 0.0
+        # 2026-10-25：最近一次落盘失败的原因；None=上次落盘成功。
+        # _save 不再静默吞 OSError——写失败要让调用方看得见（工具据此返回 ok=False）。
+        self.last_save_error: Optional[str] = None
         self._bm25_cache = None
         self._tool_cache = None
         self._last_path = "keyword"
@@ -394,7 +399,7 @@ class MethodStore:
             self._tool_cache = None
         return added
 
-    def _save(self) -> None:
+    def _save(self) -> bool:
         """落盘：正文（methodology.json）与遥测（method_hits.json）分开写。
 
         2026-10-25：纯遥测不再写进正文文件——否则每轮注入的命中记账都会把
@@ -405,8 +410,15 @@ class MethodStore:
             self._merge_newer()
             self._write_hits()
             self._write_main()
-        except OSError:
-            pass
+        except OSError as e:
+            # 2026-10-25：以前这里 except OSError: pass，写失败与写成功长得一模一样
+            # （method_learn 照样返回 ok=True、id 照发，重启后条目凭空消失）。
+            # 现在记日志 + 留在 last_save_error 上，由调用方如实上报。
+            self.last_save_error = f"{type(e).__name__}: {e}"
+            log.error("MethodStore 落盘失败，本次修改仅存在内存：%s", self.last_save_error)
+            return False
+        self.last_save_error = None
+        return True
 
     def _write_hits(self) -> None:
         """遥测写 sidecar（小文件，随便写；原子替换防半截 JSON）。"""

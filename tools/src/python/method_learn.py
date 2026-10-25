@@ -43,6 +43,12 @@ def run(type: str, scene: str, method: str, evidence: str = "", importance: floa
 
     ms = MethodStore()
     mid = ms.learn(type, scene, method, evidence, importance, category=category)
+    # 2026-10-25：落盘失败必须如实上报，不能拿内存里的 id 当成功凭证。
+    _err = getattr(ms, "last_save_error", None)
+    if _err:
+        return {"ok": False, "saved": False, "method_id": mid,
+                "error": f"条目已进内存但落盘失败：{_err}",
+                "note": "本次沉淀未持久化，重启后会丢失——检查磁盘空间/文件权限后重试。"}
     kind = "正面方法" if type == "good" else "反面教训"
     return {
         "ok": True,
