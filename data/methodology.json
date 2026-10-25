@@ -22060,6 +22060,33 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-25T13:22:54"
+    },
+    {
+      "id": 835,
+      "type": "bad",
+      "name": "排查\"检索/预加载返回了不相干条目\"这类召回问题时，想凭条目关键词列表判断它属不属于某个工具索引",
+      "keywords": [
+        "keywords",
+        "ms._tool_index",
+        "get",
+        "预加载返",
+        "回了不相",
+        "干条目",
+        "这类召回",
+        "排查",
+        "检索",
+        "预加",
+        "加载",
+        "载返"
+      ],
+      "scene": "排查\"检索/预加载返回了不相干条目\"这类召回问题时，想凭条目关键词列表判断它属不属于某个工具索引",
+      "method": "别用打印出来的前 5 个关键词下结论——keywords 常被截断显示，条目正文/完整关键词里往往就有那个工具名。判据要直接问索引本身：ms._tool_index().get(tool) 里有没有这个 id。本轮实测教训：我打印 id 752/811 的前 5 个关键词（tool/error/activity、cmd_run/confirm_token），当场判定\"串味了、是召回退化\"，结果一查 _tool_index()['fs_delete'] 两者都在索引内——测试红只是排序被 last_hit 遥测挤位，不是召回退化。差一步就照错结论去改核心检索逻辑。",
+      "evidence": "2026-10-25 14:0x：preload 测试 FAIL，got=[752,811]；按前5关键词误判为串味，改查 _tool_index() 后确认二者本就在 fs_delete 索引内，问题在测试钉死 id（method 834）",
+      "importance": 0.7,
+      "category": "验证与排查",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-25T14:01:53"
     }
   ]
 }
