@@ -43,6 +43,7 @@ _MIN_REQ = {
     "gdrive": [("token_json",), ("sa_json",)],
     "feishu": [("app_id", "app_secret")],
     "webdav": [("base_url", "username")],
+    "email": [("address", "password")],
 }
 
 

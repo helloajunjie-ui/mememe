@@ -21520,6 +21520,33 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-25T09:00:47"
+    },
+    {
+      "id": 815,
+      "type": "bad",
+      "name": "接入第三方邮箱/API 前，认证失败时",
+      "keywords": [
+        "qq",
+        "imap",
+        "smtp",
+        "接入第三",
+        "方邮箱",
+        "认证失败",
+        "登录密码",
+        "接入",
+        "入第",
+        "第三",
+        "三方",
+        "方邮"
+      ],
+      "scene": "接入第三方邮箱/API 前，认证失败时",
+      "method": "登录密码认证失败时先判定「服务方是否要求专用凭据」，不要立刻怀疑自己的代码或去找浏览器自动化。163/QQ/企业邮箱的 IMAP/SMTP 都需要「授权码」（网页设置里单独生成），Gmail 需要应用专用密码——这类设计门槛必须由账号持有人去后台开通，任何代码改动都绕不过。判据：报错是 Login error/password error 且账号在网页能登 → 99% 是缺授权码。此时应立即停下向持有人要授权码，而不是换工具重试。",
+      "evidence": "163 IMAP/SMTP 用登录密码实测双失败，误判为代码问题后转去找 playwright MCP，连搜 3 次触发死循环熔断",
+      "importance": 0.8,
+      "category": "验证与排查",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-25T09:09:29"
     }
   ]
 }

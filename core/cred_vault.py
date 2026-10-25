@@ -31,6 +31,7 @@ SERVICES: Dict[str, List[str]] = {
     "gdrive": ["token_json", "sa_json"],
     "feishu": ["app_id", "app_secret"],
     "webdav": ["base_url", "username", "password"],
+    "email": ["address", "password", "imap_host", "imap_port", "smtp_host", "smtp_port"],
 }
 
 # 账户名合法字符（小写字母/数字/中划线/下划线/点）
