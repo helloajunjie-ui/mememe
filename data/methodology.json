@@ -22735,6 +22735,60 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-26T04:32:56"
+    },
+    {
+      "id": 860,
+      "type": "good",
+      "name": "准备对任何 API 源跑\"健康扫描/连通性检测/批量探测\"之前",
+      "keywords": [
+        "models",
+        "openrouter",
+        "chat",
+        "准备对任",
+        "健康扫描",
+        "连通性检",
+        "批量探测",
+        "准备",
+        "任何",
+        "源跑",
+        "健康",
+        "康扫"
+      ],
+      "scene": "准备对任何 API 源跑\"健康扫描/连通性检测/批量探测\"之前",
+      "method": "先读探测函数的源码，确认它发的是真实计费请求还是只读请求，再估成本：扫描成本 = 模型数 × 单次调用费。遇到\"源 models 为空\"的配置要格外警惕——空列表往往意味着\"去拉全量列表再逐个探\"，实测 OPENROUTER 这么一扫就是 479 次真实 chat 调用，免费额度和钱同时烧掉。正确做法是给每个源写明确的白名单 models，把扫描量压到个位数。",
+      "evidence": "实测读 core/model_health.py 的 probe()（真实 POST /chat/completions，max_tokens=4）与 tools/src/python/llm_health.py 的 _models_of()（空 models → _fetch_models 拉全量），算出 479 次计费调用；已把 OPENROUTER 源改为 5 个白名单模型",
+      "importance": 0.75,
+      "category": "验证与排查",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-26T04:34:33"
+    },
+    {
+      "id": 861,
+      "type": "bad",
+      "name": "准备问共建者「要不要做 X」、或把某个决策当收尾选项递出去时",
+      "keywords": [
+        "llm.json",
+        "git",
+        "check-ignore",
+        "准备问共",
+        "决策当收",
+        "尾选项递",
+        "之前先用",
+        "准备",
+        "备问",
+        "问共",
+        "共建",
+        "建者"
+      ],
+      "scene": "准备问共建者「要不要做 X」、或把某个决策当收尾选项递出去时",
+      "method": "问「要不要」之前先用一条命令验证 X 的前提是否成立——很多「要不要」是假问题。实测：我提议「要不要提交 llm.json」，git check-ignore 一查发现它被 .gitignore:37 忽略，提交根本无效，这个决策不存在；真正需要的是「结构变更可追溯」，那就做脱敏 example 入 git。把未查证的选项递给共建者不是尊重，是把自己的偷懒包装成礼貌。",
+      "evidence": "2026-10-26 实测：git check-ignore -v config/llm.json → .gitignore:37 命中；git status config/ 为空。改做 config/llm.example.json（脱敏，leaked secrets NONE）并提交 eb960e9",
+      "importance": 0.75,
+      "category": "决策与效率",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-26T04:42:02"
     }
   ]
 }
