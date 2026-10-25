@@ -177,3 +177,5 @@ workspace/explore/rea_*.html
 # 2026-10-25：一次性补丁/诊断脚本归档区（保留可追溯，不入库）
 workspace/explore/_patches/
 data/mail_anchor_state.json
+
+data/seal/

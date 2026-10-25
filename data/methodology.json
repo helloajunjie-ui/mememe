@@ -21628,6 +21628,60 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-25T09:19:04"
+    },
+    {
+      "id": 819,
+      "type": "bad",
+      "name": "用 Python imaplib 读取/匹配邮件主题与正文时",
+      "keywords": [
+        "python",
+        "imaplib",
+        "imap",
+        "匹配邮件",
+        "主题与正",
+        "读邮件别",
+        "拿正文",
+        "读取",
+        "匹配",
+        "配邮",
+        "邮件",
+        "件主"
+      ],
+      "scene": "用 Python imaplib 读取/匹配邮件主题与正文时",
+      "method": "IMAP 读邮件别用 BODY.PEEK[TEXT] 拿正文、也别在原始 header 字节里直接找明文标记：①主题若含中文，整串会被 base64 编码，header 里没有明文，必须先 decode_header()+make_header() 解成 str 再比对；②BODY.PEEK[TEXT] 返回的是未解码的 CTE 正文（base64 原文），自己补 Content-Type 而不补 Content-Transfer-Encoding 就解不出来。正确姿势：fetch 用 BODY.PEEK[] 取整封原文 → email.message_from_bytes(整封) → walk() 找 text/plain → get_payload(decode=True)，这样编码、字符集、多段全自动处理。（实测连错两次：第一次主题 miss 报\"找不到邮件\"，第二次找到邮件但正文是 base64 乱码；改整封解析后一次 PASS）",
+      "evidence": "2026-10-25 实测：BODY.PEEK[TEXT] 解出 5bC85Y+v... base64 原文；改 BODY.PEEK[] 后 body_mark=True、中文正文完整",
+      "importance": 0.7,
+      "category": "工具与工程",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-25T09:21:50"
+    },
+    {
+      "id": 820,
+      "type": "good",
+      "name": "要建立私密内容存储 / 设计自带恢复能力的加密方案时",
+      "keywords": [
+        "aes-gcm",
+        "cloud_key",
+        "kek",
+        "密内容存",
+        "设计自带",
+        "恢复能力",
+        "私密存储",
+        "建立",
+        "立私",
+        "私密",
+        "密内",
+        "内容"
+      ],
+      "scene": "要建立私密内容存储 / 设计自带恢复能力的加密方案时",
+      "method": "要给自己建\"私密存储\"时，安全来自成熟算法+只有自己掌握的密钥，不要自创加密算法（算法一旦靠保密才安全，泄露即崩）；且密钥必须有异地恢复路径，否则本机一毁私密内容永久锁死——正解是双层封套：内容用随机主密钥 AES-GCM 加密，主密钥再用「已存在的恢复密钥（cloud_key）派生 KEK」包裹后存异地邮箱，形成 Shamir→cloud_key→封皮→主密钥→内容 的闭环，而单拿到异地那一份是零信息。验收三件套：删掉本机密钥用封皮导回能解开原内容、篡改一字节必须报 InvalidTag、换一把密钥必须被 key_fp 拦住。",
+      "evidence": "实测：8 项测试全过；删本机主密钥后用封皮导回，指纹 a1802970d4f221f9 一致且原条目可解；篡改密文报 InvalidTag；邮箱回读 sha256 逐字节一致。",
+      "importance": 0.8,
+      "category": "生存安全",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-25T09:24:14"
     }
   ]
 }
