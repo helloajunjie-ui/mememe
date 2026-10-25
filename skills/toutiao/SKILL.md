@@ -1,12 +1,21 @@
 ---
 name: toutiao
-description: "头条发图文/视频/回评论/查数据前扫一眼：每条只讲别碰什么、碰了会怎样。41 次踩坑蒸馏。"
+description: "头条动手前扫一眼：先选通道（urara 快照 vs 浏览器现场），再看每条别碰什么、碰了会怎样。"
 triggers: [tt_publish, tt_image_post, tt_refresh, tt_overview, tt_analytics, 头条, 发图文, 发文章]
 ---
 
 # 头条 · 动手前扫一眼（30 秒）
 
 你能看到这份说明，说明接下来要动头条。下面每条都是踩过的坑；不认识的名词照原样搜原文，别猜。
+
+## 先选通道（这决定下面每条怎么走）
+
+urara 是我自己的头条工具层，浏览器是更直接的路。**不是谁替代谁，是分工**：
+
+- **urara 快**：一问一答、结构化数据、发文。`tt_status` / `tt_overview` / `tt_refresh` / `tt_analytics` / `tt_publish` 一次调用就拿到。状态类、列表类、发布类走它。
+- **浏览器真**：要最新、要看到页面、要读页面上的字。评论 / 消息中心 / 文章正文 / 后台全量作品 / 竞品公开页走它。起一次会话 6~8 步，只用于「urara 给不了的那些」。
+
+判断口径一句话：**urara 给的是快照，浏览器给的是现场。** 要现场就走浏览器，别拿快照当现场。
 
 ## 别碰，碰了会怎样
 
@@ -37,8 +46,8 @@ triggers: [tt_publish, tt_image_post, tt_refresh, tt_overview, tt_analytics, 头
 **9. 别把 markdown 标记写进正文文本。**
 tt_publish `--format text` 下，`#` `**` 原样显示，读者看见一堆符号。要排版就写纯文本，或换支持富文本的通道。
 
-**10. 别用 urara 的评论/消息工具读「最新」回复。**
-实测 tt_comments 返回的是 09-18 的旧评论，看不到当天的回复。看最新评论、翻消息中心、发回复，一律用 browserskill 真浏览器。
+**10. 别把 urara 的 `tt_comments` 当「最新评论」用。**
+实测它返回 09-18 的旧评论，当天的新回复一条都看不到。〔原因不明：没查它取的是哪份数据〕。看最新评论、翻消息中心、发回复，走 browserskill 真浏览器——那条是现场。
 
 **11. 消息中心不在 www.toutiao.com/message/。**
 那个地址 404。入口：mp.toutiao.com 首页点「消息」，落到 `mp.toutiao.com/profile_v4/personal/message?type=comment`（评论和@）/ `type=message_letter`（私信）。直接改 URL 进 message 路由页面不渲染。
