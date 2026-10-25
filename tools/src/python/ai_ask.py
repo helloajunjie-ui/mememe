@@ -423,7 +423,19 @@ def run(question: str, site: str = "deepseek", wait_sec: int = 90,
             toggles["智能搜索"] = _toggle(sid, "智能搜索", True)
             toggles["深度思考"] = _toggle(sid, "深度思考", bool(deep_think))
 
-        ok, txt = _bsk(["fill", "--session", sid, "--selector", "textarea",
+        # 输入框选择器：spec.input_sel 优先；否则页面有 textarea 用 textarea，
+        # 没有就退到 contenteditable 编辑器（元宝 .ql-editor 这类不是 textarea）
+        fsel = spec.get("input_sel") or ""
+        if not fsel:
+            ok, dtxt = _eval(
+                sid,
+                "(() => (document.querySelectorAll('textarea').length"
+                " ? 'textarea' : 'div[contenteditable=\"true\"]'))()", timeout=45)
+            probe = str(dtxt or "")
+            fsel = ("textarea" if "textarea" in probe
+                    else 'div[contenteditable="true"]')
+
+        ok, txt = _bsk(["fill", "--session", sid, "--selector", fsel,
                         "--value", q], timeout=60)
         if not ok:
             return {"ok": False, "site": key, "error": "填字失败: %s" % txt[:300],
