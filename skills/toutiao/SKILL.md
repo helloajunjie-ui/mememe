@@ -16,7 +16,7 @@ triggers: [tt_publish, tt_image_post, tt_refresh, tt_overview, tt_analytics, 头
 **2. 别走 urara 发布 CLI 的「文件上传」分支**（即 tt_publish 传 file 参数那条路）。
 内部 click 全挂 `.catch(()=>{})`，选择器没匹配也返回 `success=true`。**假成功**——以为发了，实际什么都没发。走传 title + content 的图文链路。
 
-**3. 别用 net_fetch 抓 toutiao.com 的页面。**
+**3. 别用 net_fetch 抓 toutiao.com 的文章页。**
 返回 http 200，但 title / text 全空。不是抓取失败，是正文 JS 渲染。会误判成「文章没内容」→ 以为白发了。读正文只能真浏览器（bsk）跑 `document.body.innerText`。
 
 **4. 别把 content list 返回的 articleBase.content / abstractText 当正文。**
@@ -25,11 +25,11 @@ triggers: [tt_publish, tt_image_post, tt_refresh, tt_overview, tt_analytics, 头
 **5. 别数记忆/上下文里显示的「已发篇数」。**
 窗口会载入往期档案，同一个数字会翻倍。真数要拉产出清单读 publish_time 时间戳。
 
-**6. 别拿作品列表页上显示的单篇阅读数当指标。**
-常返 0 占位。看着像零阅读，其实没取到数。指标走 tt_analytics 的 works / fans。
+**6. 别拿作品列表页上显示的单篇阅读数当指标。**〔偶发：看到 0 先怀疑没取到，别当成零阅读〕
+页面常返 0 占位。指标走 tt_analytics 的 works / fans。
 
-**7. 同一账号别并发同时起多个浏览器实例。**
-静默失败：stdout 0 字节，真错误只在 stderr（未登录 / auth-guard）。极容易误判成「还在跑」白等半天。串行，或错峰 ≥1 秒。
+**7. 同一账号别并发起浏览器实例。**〔多因：同时起 ≥2 个、且共用同一 user-data-dir / profile〕
+静默失败：stdout 0 字节，真错误只在 stderr（未登录 / auth-guard），极易误判成「还在跑」白等。串行；非并发不可就错峰 ≥10s，或先读 stderr 判断真实状态再决定重发。
 
 **8. 别先发布再改标题。**
 标题按字符算（中文 / ASCII / emoji 各算 1），上限 30。超了不是报错，是静默截断。改标题 = 删了重发，展现和推荐全部归零。发之前算准。
@@ -47,4 +47,12 @@ tt_publish `--format text` 下，`#` `**` 原样显示，读者看见一堆符�
 - 发布核验：#251 #295 #298 #308 #331
 - 读正文：#307 #336 #661
 - 标题 / 封面 / 配额：#776 #777
+- 并发 / profile：#321 #322
 - 全量：method_find(keyword="头条")
+
+## 做完之后
+
+按这份做完，无论顺不顺，回一遍 `skills/_SPEC.md` 的「回写」五条：
+没防住的原地改、新坑加新条、过时的直接删（不留废弃标注）、随机/多因的补触发条件。
+
+上次核对：2026-10-26
