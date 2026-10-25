@@ -17,16 +17,16 @@ triggers: [tt_publish, tt_image_post, tt_refresh, tt_overview, tt_analytics, 头
 内部 click 全挂 `.catch(()=>{})`，选择器没匹配也返回 `success=true`。**假成功**——以为发了，实际什么都没发。走传 title + content 的图文链路。
 
 **3. 别用 net_fetch 抓 toutiao.com 的文章页。**
-返回 http 200，但 title / text 全空。不是抓取失败，是正文 JS 渲染。会误判成「文章没内容」→ 以为白发了。读正文只能真浏览器（bsk）跑 `document.body.innerText`。
+返回 http 200，但 title / text 全空。curl 公网直连实测同一页：72914 字节，`<body></body>` 是空的，只有 2 段混淆的 `_$jsvmprt` 脚本。〔原因不明：是 JS 渲染还是反爬壳页，没查清〕结论不变：拿不到正文，读正文只能走真浏览器（browserskill navigate + evaluate `document.body.innerText`）。
 
-**4. 别把 content list 返回的 articleBase.content / abstractText 当正文。**
-字段存在，值是空串 `len=0`。读到空不是「没发布」，是这个字段本身不存正文。
+**4. 别把 content list（后台列表接口）返回的 articleBase.content / abstractText 当正文。**
+字段存在，值是空串 `len=0`——接口本身不存正文。读到空不是「没发布」。要正文只有两条路：本地草稿文件（先 fs_search），或 browserskill 带登录态读 `innerText`。
 
 **5. 别数记忆/上下文里显示的「已发篇数」。**
 窗口会载入往期档案，同一个数字会翻倍。真数要拉产出清单读 publish_time 时间戳。
 
-**6. 别拿作品列表页上显示的单篇阅读数当指标。**〔偶发：看到 0 先怀疑没取到，别当成零阅读〕
-页面常返 0 占位。指标走 tt_analytics 的 works / fans。
+**6. 别拿作品列表页（tt_refresh / 后台列表）显示的单篇阅读数当指标。**〔偶发：看到 0 先怀疑没取到；0 的成因未查明〕
+页面常返 0 占位。指标走 tt_analytics 的 works / fans。`tt_overview` 的 count 只是「当前页解析条数」（每页 10 条、过滤微头条后剩 7），不是总数。
 
 **7. 同一账号别并发起浏览器实例。**〔多因：同时起 ≥2 个、且共用同一 user-data-dir / profile〕
 静默失败：stdout 0 字节，真错误只在 stderr（未登录 / auth-guard），极易误判成「还在跑」白等。串行；非并发不可就错峰 ≥10s，或先读 stderr 判断真实状态再决定重发。
@@ -52,7 +52,7 @@ tt_publish `--format text` 下，`#` `**` 原样显示，读者看见一堆符�
 
 ## 做完之后
 
-按这份做完，无论顺不顺，回一遍 `skills/_SPEC.md` 的「回写」五条：
-没防住的原地改、新坑加新条、过时的直接删（不留废弃标注）、随机/多因的补触发条件。
+按这份做完，无论顺不顺，回一遍 `skills/_SPEC.md` 的「回写」六条：
+没防住的原地改、新坑加新条、过时的直接删（不留废弃标注）、随机/多因的补触发条件、查清了的把〔原因不明〕换成确定原因。
 
 上次核对：2026-10-26
