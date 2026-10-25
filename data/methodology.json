@@ -22168,6 +22168,33 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-26T00:28:35"
+    },
+    {
+      "id": 839,
+      "type": "good",
+      "name": "排查自己代码库里某个机制\"为什么没按预期触发/时间戳为什么不动\"时",
+      "keywords": [
+        "docstring",
+        "core",
+        "integrity.py",
+        "排查自己",
+        "代码库里",
+        "某个机制",
+        "按预期触",
+        "排查",
+        "查自",
+        "己代",
+        "代码",
+        "码库"
+      ],
+      "scene": "排查自己代码库里某个机制\"为什么没按预期触发/时间戳为什么不动\"时",
+      "method": "先读该模块的文件头注释和 docstring，往往一句话就写明触发时机与覆盖范围，比追调用链快一个数量级；本轮 core/integrity.py 第 7 行原文「静态本体哈希基线（core/tools/main/config）——篡改检测核心，启动自检」，一句「启动自检」直接定案 checked_at 本来就不是周期指标，省掉整条 grep 调用链的排查。顺序：头部注释 → 写字段函数 → 调用方分支，从便宜到贵。",
+      "evidence": "实测：integrity_status.json 的 checked_at 停在 22:25:42 被疑为调度故障，读 integrity.py 文件头第 7 行注释即确认是启动自检语义；对照方法 838",
+      "importance": 0.7,
+      "category": "验证与排查",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-26T01:00:45"
     }
   ]
 }
