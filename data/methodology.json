@@ -22708,6 +22708,33 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-26T04:00:38"
+    },
+    {
+      "id": 859,
+      "type": "good",
+      "name": "评估/自检 LLM 多源冗余是否真实可用时",
+      "keywords": [
+        "llm",
+        "config",
+        "llm.json",
+        "多源冗余",
+        "多源容灾",
+        "绝不能数",
+        "里每个",
+        "评估",
+        "自检",
+        "多源",
+        "源冗",
+        "冗余"
+      ],
+      "scene": "评估/自检 LLM 多源冗余是否真实可用时",
+      "method": "判断\"多源容灾\"真假，绝不能数 config/llm.json 里 sources 的条数（甚至 enabled=1 的条数）——要看 config/llm_health.json 里每个 base 的 models 中 ok=true 的数量：ok=0 就意味着该源在容灾候选池里是死的（_llm_candidates 走 mh.rank，rank 只认健康表）。定性\"为什么全挂\"要用单发一条 chat 拿 HTTP 错误体，一句话见根因：403 insufficient_user_quota=账户欠费、402=credits 不足、404=模型 slug 不存在、429=配额用满——四者极易被笼统当成\"渠道挂了\"或\"风控\"。批量扫描 481 条只得 0 ok 只能证明\"全挂\"，证明不了\"为什么挂\"，且成本高；实弹一条最便宜。",
+      "evidence": "2026-10-26 自检实测：llm.json 显示 7 源/3 启用，看似有冗余；llm_health.json 显示 uiuihao 481 模型 ok=0、openrouter 479 模型 ok=0。单发 chat 定性：UIUIHAO 403 insufficient_user_quota 余额 -$0.0122；OPENROUTER 因 credits 不足（-0.21）全挂、404 那条只是 slug 问题。结论：实际唯一可用源是 DEEPSEEK，容灾零备份（单点故障）。",
+      "importance": 0.72,
+      "category": "验证与排查",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-26T04:32:56"
     }
   ]
 }
