@@ -22006,6 +22006,33 @@
       "status": "active",
       "superseded_by": null,
       "created_at": "2026-10-25T11:21:23"
+    },
+    {
+      "id": 833,
+      "type": "bad",
+      "name": "用「复制一份库 + 造陈旧实例」做隔离实验，验证写入类 bug（如 id 冲突、覆盖）时",
+      "keywords": [
+        "bug",
+        "methodology.json",
+        "data",
+        "复制一份",
+        "造陈旧实",
+        "做隔离实",
+        "验证写入",
+        "复制",
+        "制一",
+        "一份",
+        "份库",
+        "造陈"
+      ],
+      "scene": "用「复制一份库 + 造陈旧实例」做隔离实验，验证写入类 bug（如 id 冲突、覆盖）时",
+      "method": "隔离实验必须连数据目录一起隔离，不能只复制一份 json 就让实验实例指向真实数据根——实测：我把 methodology.json 复制成 data/_t_methods.json 造了两个实例，但分类映射仍写真实 data/method_categories.json，结果 833/834「测试场景X/Y」两条测试垃圾以分类映射形式污染了真库，而正文留在临时副本里（成了悬空映射），且 1.16MB 的副本文件在 data/ 里挂成未跟踪残留。纪律：① 实验在 temp 目录做，把整个 data/ 复制过去并切数据根；② 收工前做一致性核对——真实库「分类映射最大键 == 正文 maxid」且 git status 干净，才算实验没留脏；③ 试验残留（_t_*、tmp_*）当场删，别交给下一轮反思去发现。",
+      "evidence": "2026-10-25 12:00 隔离实验：created_at 12:00:50 的 833/834 测试条目以分类映射进了真实 method_categories.json（max=834 而正文 832），本轮反思用 git checkout 回退 + 删 _t_methods.json 才算结清",
+      "importance": 0.7,
+      "category": "验证与排查",
+      "status": "active",
+      "superseded_by": null,
+      "created_at": "2026-10-25T13:00:49"
     }
   ]
 }
