@@ -40,8 +40,8 @@
 ### 命令行（Linux / macOS / 进阶）
 
 ```bash
-git clone https://github.com/helloajunjie-ui/mememe.git
-cd mememe
+git clone https://github.com/helloajunjie-ui/suyueAI.git
+cd suyueAI
 
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt   # Windows
@@ -96,7 +96,7 @@ python -m venv .venv
 ## 目录结构
 
 ```
-mememe/
+suyueAI/
 ├── 启动.bat                # Windows 一键启动（自举环境 → 托盘启动器）
 ├── 素月启动器.pyw           # 系统托盘启动器（无黑窗；启动/停止/重启/备份；单实例互斥）
 ├── launcher.py             # 无感冷启动监督（退出码 77 → 重拉；60s/5 次熔断）

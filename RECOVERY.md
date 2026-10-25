@@ -47,7 +47,7 @@
 
 ```bash
 # 1. clone 程序本体
-git clone https://github.com/helloajunjie-ui/mememe.git && cd mememe
+git clone https://github.com/helloajunjie-ui/suyueAI.git && cd suyueAI
 
 # 2. 拿两个份额（任意两份）
 #    份额 1: 从 https://dpoo.my/dav/recovery_share_1.txt 下载（需 WebDAV 账号）
